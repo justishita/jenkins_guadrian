@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Node.js
+node_modules/
+
+# Logs
+*.log
