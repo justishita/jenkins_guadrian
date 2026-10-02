@@ -1,2 +1,32 @@
+# Jenkins core rejects legacy CLI-over-remoting requests (remoting=true).
 jenkins:
   systemMessage: "JenkinsGuardian local instance"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: "${JENKINS_URL}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "github-ssh"
+              secret: "${GITHUB_TOKEN}"
+              description: "GitHub access token"
+          - string:
+              scope: GLOBAL
+              id: "agent-webhook-secret"
+              secret: "${WEBHOOK_SHARED_SECRET}"
+              description: "Agent webhook shared secret"

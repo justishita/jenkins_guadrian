@@ -1,1 +1,16 @@
-# Add pinned Jenkins plugins here.
+workflow-aggregator
+git
+github
+github-branch-source
+configuration-as-code
+credentials-binding
+junit
+timestamper
+pipeline-stage-view
+workflow-api
+pipeline-graph-view
+job-dsl
+prometheus
+http_request
+ws-cleanup
+build-timeout

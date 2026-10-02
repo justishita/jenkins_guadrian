@@ -33,6 +33,8 @@ services:
 
   jenkins:
     build: ./jenkins
+    env_file:
+      - .env
     ports:
       - "8080:8080"
       - "50000:50000"
