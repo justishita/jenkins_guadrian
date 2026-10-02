@@ -1,0 +1,9 @@
+database_url: null
+database_timeout_seconds: 3
+enable_slow: false
+enable_cpu: false
+enable_leak: false
+slow_max_delay_seconds: 10
+cpu_max_seconds: 5
+leak_chunk_bytes: 1048576
+leak_max_bytes: 67108864
