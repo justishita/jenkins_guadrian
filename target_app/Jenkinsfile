@@ -1,1 +1,152 @@
-// Sample pipeline placeholder; P1 owns the target application pipeline.
+def postAgentWebhook(String endpointPath, String result = '') {
+	withCredentials([string(credentialsId: 'agent-webhook-secret', variable: 'WEBHOOK_TOKEN')]) {
+		withEnv(["WEBHOOK_PATH=${endpointPath}", "WEBHOOK_RESULT=${result}"]) {
+			sh(label: 'Notify agent API', script: '''
+				payload="$(jq -n \
+					--arg job_name "${JOB_NAME:-}" \
+					--arg build_number "${BUILD_NUMBER:-}" \
+					--arg build_url "${BUILD_URL:-}" \
+					--arg branch "${BRANCH_NAME:-${GIT_BRANCH:-}}" \
+					--arg git_commit "${GIT_COMMIT:-}" \
+					--arg failed_stage "${FAILED_STAGE:-}" \
+					--arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+					--arg incident_id "${INCIDENT_ID:-}" \
+					--arg remediation_attempt "${REMEDIATION_ATTEMPT:-0}" \
+					--arg result "${WEBHOOK_RESULT:-}" \
+					'{
+						job_name: $job_name,
+						build_number: $build_number,
+						build_url: $build_url,
+						branch: $branch,
+						git_commit: $git_commit,
+						failed_stage: $failed_stage,
+						timestamp: $timestamp,
+						incident_id: $incident_id,
+						remediation_attempt: $remediation_attempt
+					} + (if $result == "" then {} else {result: $result} end)')" || payload='{}'
+
+				curl --silent --show-error --max-time 10 --retry 3 \
+					--request POST \
+					--header "X-Webhook-Token: ${WEBHOOK_TOKEN}" \
+					--header 'Content-Type: application/json' \
+					--data "$payload" \
+					"http://agent-api:8000${WEBHOOK_PATH}" || true
+			''')
+		}
+	}
+}
+
+pipeline {
+	agent any
+
+	options {
+		timestamps()
+		timeout(time: 15, unit: 'MINUTES')
+		buildDiscarder(logRotator(numToKeepStr: '50'))
+		disableConcurrentBuilds()
+	}
+
+	parameters {
+		string(name: 'INCIDENT_ID', defaultValue: '', description: 'Incident ID for re-validation')
+		string(name: 'REMEDIATION_ATTEMPT', defaultValue: '0', description: 'Remediation attempt number')
+	}
+
+	environment {
+		FAILED_STAGE = ''
+	}
+
+	stages {
+		stage('Checkout') {
+			steps {
+				catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+					script { env.FAILED_STAGE = 'Checkout' }
+					checkout scm
+					script { env.FAILED_STAGE = '' }
+				}
+			}
+		}
+
+		stage('Setup') {
+			when { expression { !env.FAILED_STAGE } }
+			steps {
+				dir('target_app') {
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+						script { env.FAILED_STAGE = 'Setup' }
+						sh 'python3 -m venv .venv && .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt'
+						script { env.FAILED_STAGE = '' }
+					}
+				}
+			}
+		}
+
+		stage('Lint') {
+			when { expression { !env.FAILED_STAGE } }
+			steps {
+				dir('target_app') {
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+						script { env.FAILED_STAGE = 'Lint' }
+						sh '.venv/bin/flake8 --exit-zero app tests'
+						script { env.FAILED_STAGE = '' }
+					}
+				}
+			}
+		}
+
+		stage('Test') {
+			when { expression { !env.FAILED_STAGE } }
+			steps {
+				dir('target_app') {
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+						script { env.FAILED_STAGE = 'Test' }
+						sh 'mkdir -p reports && .venv/bin/pytest -q --junitxml=reports/junit.xml'
+						script { env.FAILED_STAGE = '' }
+					}
+				}
+			}
+		}
+
+		stage('Build') {
+			when { expression { !env.FAILED_STAGE } }
+			steps {
+				dir('target_app') {
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+						script { env.FAILED_STAGE = 'Build' }
+						sh '.venv/bin/python -m compileall app'
+						script { env.FAILED_STAGE = '' }
+					}
+				}
+			}
+		}
+
+		stage('Deploy') {
+			when { expression { !env.FAILED_STAGE } }
+			steps {
+				dir('target_app') {
+					catchError(buildResult: 'FAILURE', stageResult: 'FAILURE', catchInterruptions: false) {
+						script { env.FAILED_STAGE = 'Deploy' }
+						sh 'bash deploy/deploy.sh'
+						script { env.FAILED_STAGE = '' }
+					}
+				}
+			}
+		}
+	}
+
+	post {
+		always {
+			dir('target_app') {
+				junit testResults: 'reports/junit.xml', allowEmptyResults: true
+			}
+		}
+		failure {
+			script { postAgentWebhook('/webhooks/jenkins') }
+		}
+		success {
+			script {
+				if (params.INCIDENT_ID?.trim()) {
+					postAgentWebhook('/webhooks/jenkins/validation', 'SUCCESS')
+				}
+			}
+		}
+	}
+}

@@ -9,6 +9,7 @@ RUN apt-get update \
 		git \
 		curl \
 		jq \
+		docker-cli \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& mkdir -p /var/jenkins_conf \
 	&& chown jenkins:jenkins /var/jenkins_conf
