@@ -85,7 +85,8 @@ TIMEOUT_RE = re.compile(
     re.IGNORECASE,
 )
 AUTH_SIGNAL_RE = re.compile(
-    r"\b(?:401|403)\b|permission denied|authentication failed|invalid token",
+    r"\b(?:401|403)\b|permission denied|authentication failed|invalid token|"
+    r"could not read username|publickey|access denied",
     re.IGNORECASE,
 )
 
@@ -399,7 +400,8 @@ def parse_build(
         ]
         failed_stage = failed_stages[-1] if failed_stages else None
 
-    cleaned_text = CARRIAGE_RETURN_PROGRESS_RE.sub("", strip_ansi(text))
+    normalized_text = strip_ansi(text).replace("\r\n", "\n")
+    cleaned_text = CARRIAGE_RETURN_PROGRESS_RE.sub("", normalized_text)
     lines = cleaned_text.splitlines()
     error_blocks = extract_error_blocks(cleaned_text)
     junit_failures = parse_junit_failures(junit_xml) if junit_xml is not None else []
