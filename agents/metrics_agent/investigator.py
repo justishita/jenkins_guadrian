@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from common.models import FailureTaxonomy
+
 from .anomaly import detect
 from .evidence import EvidenceItem, EvidenceRecord, ToolCall, item_content, redact
 from .hypotheses import Finding, synthesize
@@ -20,7 +22,6 @@ from .planner import QueryPlanner
 from .prometheus_tool import PrometheusError, PrometheusTool, PrometheusUnavailableError
 from .sanity import check
 from .store import EvidenceWriter
-from .taxonomy import FailureTaxonomy
 from .window import InvestigationWindow, build_window
 
 logger = logging.getLogger(__name__)

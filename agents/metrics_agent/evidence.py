@@ -5,27 +5,13 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .taxonomy import FailureTaxonomy
+from common.models import FailureTaxonomy
+from common.redaction import redact
 
 SCHEMA_VERSION = "0.1-stub"
 AGENT_NAME = "metrics_agent"
-
-try:  # P3 owns the real implementation; until it exists we cannot claim redaction ran.
-    from common.redaction import redact as _redact
-
-    REDACTION_AVAILABLE = True
-except ImportError:
-    REDACTION_AVAILABLE = False
-
-    def _redact(text: str) -> str:
-        return text
-
-
-def redact(text: str) -> str:
-    """Pass free text through the shared redactor before it is stored."""
-    return _redact(text)
 
 
 class RootCauseHypothesis(BaseModel):
@@ -65,7 +51,14 @@ class EvidenceRecord(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     recommended_next_steps: list[str] = Field(default_factory=list)
     failed_stage: str | None = None
-    redaction_applied: bool = REDACTION_AVAILABLE
+    # Every free-text field is passed through common.redaction.redact() when it is built.
+    redaction_applied: bool = True
+
+    @field_validator("failed_stage")
+    @classmethod
+    def _redact_failed_stage(cls, value: str | None) -> str | None:
+        # failed_stage comes from the incoming event, so treat it as untrusted free text.
+        return redact(value) if value else value
 
     def to_json_dict(self) -> dict[str, Any]:
         """Plain JSON-ready dict (UTC ISO-8601 timestamps) for schema validation and storage."""

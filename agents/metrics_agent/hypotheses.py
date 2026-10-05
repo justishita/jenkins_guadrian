@@ -3,11 +3,12 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+from common.models import FailureTaxonomy
+
 from .anomaly import Detection
 from .evidence import RootCauseHypothesis, redact
 from .queries import QuerySpec
 from .sanity import SanityIssue
-from .taxonomy import FailureTaxonomy
 
 # Confidence for "metrics looked normal": we learned something, but not the cause.
 NORMAL_METRICS_CONFIDENCE = 0.2

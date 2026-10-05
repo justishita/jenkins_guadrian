@@ -10,7 +10,7 @@ from agents.metrics_agent.evidence import (
     RootCauseHypothesis,
 )
 from agents.metrics_agent.store import EvidenceValidationError, LocalJsonEvidenceWriter
-from agents.metrics_agent.taxonomy import FailureTaxonomy
+from common.models import FailureTaxonomy
 
 
 def valid_record(**overrides: object) -> EvidenceRecord:
@@ -78,3 +78,17 @@ def test_failure_taxonomy_matches_decisions_doc_exactly() -> None:
         "deployment_failure",
         "unknown",
     }
+
+
+def test_free_text_secrets_are_redacted_before_they_reach_evidence() -> None:
+    from agents.metrics_agent.evidence import item_content
+
+    content = item_content({"error": "login failed password=hunter2 Authorization: Bearer abc.def.ghi"})
+    assert "hunter2" not in content and "abc.def.ghi" not in content
+    assert "[REDACTED]" in content
+
+
+def test_failed_stage_from_the_event_is_redacted_and_record_declares_redaction() -> None:
+    record = valid_record(failed_stage="Deploy api_key=sk-12345")
+    assert "sk-12345" not in record.failed_stage  # type: ignore[operator]
+    assert record.redaction_applied is True

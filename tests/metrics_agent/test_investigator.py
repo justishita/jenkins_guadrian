@@ -23,7 +23,7 @@ from agents.metrics_agent.queries import (
     QuerySpec,
 )
 from agents.metrics_agent.store import LocalJsonEvidenceWriter
-from agents.metrics_agent.taxonomy import FailureTaxonomy
+from common.models import FailureTaxonomy
 from tests.metrics_agent.helpers import (
     FAILURE_TIME,
     NOW,
