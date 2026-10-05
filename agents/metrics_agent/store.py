@@ -13,7 +13,7 @@ from typing import Protocol
 
 from jsonschema import Draft7Validator
 
-from .evidence import EvidenceRecord
+from common.models import Evidence
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class EvidenceValidationError(ValueError):
 
 
 class EvidenceWriter(Protocol):
-    def write(self, record: EvidenceRecord) -> None: ...
+    def write(self, record: Evidence) -> None: ...
 
 
 class LocalJsonEvidenceWriter:
@@ -39,8 +39,8 @@ class LocalJsonEvidenceWriter:
         self._directory = directory
         self._validator = Draft7Validator(json.loads(schema_path.read_text(encoding="utf-8")))
 
-    def write(self, record: EvidenceRecord) -> None:
-        payload = record.to_json_dict()
+    def write(self, record: Evidence) -> None:
+        payload = record.model_dump(mode="json", exclude_none=True)
         errors = sorted(self._validator.iter_errors(payload), key=lambda e: list(e.path))
         if errors:
             raise EvidenceValidationError("; ".join(f"{list(e.path)}: {e.message}" for e in errors))

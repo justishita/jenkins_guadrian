@@ -1,32 +1,45 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
-from agents.metrics_agent.evidence import (
-    EvidenceItem,
-    EvidenceRecord,
-    RootCauseHypothesis,
-)
+from agents.metrics_agent.evidence import item_content, make_evidence, metric_item
 from agents.metrics_agent.store import EvidenceValidationError, LocalJsonEvidenceWriter
-from common.models import FailureTaxonomy
+from common.models import Evidence, EvidenceHypothesis, FailureTaxonomy
+
+EVIDENCE_ID = "metric-latency_p95"
+EVIDENCE_TIME = datetime(2026, 10, 5, 9, 30, tzinfo=timezone.utc)
 
 
-def valid_record(**overrides: object) -> EvidenceRecord:
-    data: dict[str, object] = {
+def valid_record(**overrides: Any) -> Evidence:
+    kwargs: dict[str, Any] = {
         "incident_id": uuid4(),
         "status": "completed",
         "failure_type": FailureTaxonomy.TIMEOUT,
         "summary": "latency spike",
-        "root_cause_hypotheses": [
-            RootCauseHypothesis(hypothesis="p95 spiked", failure_type=FailureTaxonomy.TIMEOUT, confidence=0.8)
-        ],
-        "evidence_items": [EvidenceItem(id="metric-latency_p95", content="{}")],
         "confidence": 0.8,
+        "hypotheses": [
+            EvidenceHypothesis(
+                hypothesis="p95 spiked",
+                failure_type=FailureTaxonomy.TIMEOUT,
+                confidence=0.8,
+                supporting_evidence=[EVIDENCE_ID],
+            )
+        ],
+        "items": [metric_item(EVIDENCE_ID, EVIDENCE_TIME,{"outcome": "anomalous"})],
     }
-    data.update(overrides)
-    return EvidenceRecord.model_validate(data)
+    kwargs.update(overrides)
+    return make_evidence(**kwargs)
+
+
+def test_builds_the_shared_evidence_model_for_the_metrics_agent() -> None:
+    record = valid_record()
+    assert isinstance(record, Evidence)
+    assert record.agent == "metrics_agent"
+    assert record.evidence_items[0].kind == "metric"
 
 
 def test_writes_schema_valid_json_with_utc_z_timestamp(tmp_path: Path) -> None:
@@ -64,6 +77,14 @@ def test_confidence_outside_unit_interval_rejected() -> None:
         valid_record(confidence=1.5)
 
 
+def test_hypothesis_citing_missing_evidence_is_rejected_by_the_shared_contract() -> None:
+    bad = EvidenceHypothesis(
+        hypothesis="x", failure_type=FailureTaxonomy.TIMEOUT, confidence=0.5, supporting_evidence=["metric-ghost"]
+    )
+    with pytest.raises(ValueError, match="unknown evidence IDs"):
+        valid_record(hypotheses=[bad])
+
+
 def test_failure_taxonomy_matches_decisions_doc_exactly() -> None:
     assert {t.value for t in FailureTaxonomy} == {
         "code_test_failure",
@@ -81,14 +102,13 @@ def test_failure_taxonomy_matches_decisions_doc_exactly() -> None:
 
 
 def test_free_text_secrets_are_redacted_before_they_reach_evidence() -> None:
-    from agents.metrics_agent.evidence import item_content
-
     content = item_content({"error": "login failed password=hunter2 Authorization: Bearer abc.def.ghi"})
     assert "hunter2" not in content and "abc.def.ghi" not in content
     assert "[REDACTED]" in content
 
 
-def test_failed_stage_from_the_event_is_redacted_and_record_declares_redaction() -> None:
-    record = valid_record(failed_stage="Deploy api_key=sk-12345")
-    assert "sk-12345" not in record.failed_stage  # type: ignore[operator]
+def test_event_derived_text_is_redacted_and_record_declares_redaction() -> None:
+    record = valid_record(failed_stage="Deploy api_key=sk-12345", summary="boom token=abc123")
+    assert "sk-12345" not in (record.failed_stage or "")
+    assert "abc123" not in record.summary
     assert record.redaction_applied is True

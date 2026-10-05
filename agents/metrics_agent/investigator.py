@@ -12,10 +12,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from common.models import FailureTaxonomy
+from common.models import Evidence, EvidenceItem, FailureTaxonomy, ToolCallRecord
 
 from .anomaly import detect
-from .evidence import EvidenceItem, EvidenceRecord, ToolCall, item_content, redact
+from .evidence import make_evidence, metric_item
 from .hypotheses import Finding, synthesize
 from .models import IncidentCreatedEvent
 from .planner import QueryPlanner
@@ -61,7 +61,7 @@ class Investigator:
         self._clock = clock
         self._sleep = sleep
 
-    def investigate(self, event: IncidentCreatedEvent) -> EvidenceRecord:
+    def investigate(self, event: IncidentCreatedEvent) -> Evidence:
         """Investigate one incident and persist exactly one evidence record."""
         try:
             record = self._investigate(event)
@@ -80,7 +80,7 @@ class Investigator:
         )
         return record
 
-    def _investigate(self, event: IncidentCreatedEvent) -> EvidenceRecord:
+    def _investigate(self, event: IncidentCreatedEvent) -> Evidence:
         cfg = self._config
         now = self._clock()
         failure_time = event.timestamp or event.received_at or now
@@ -91,7 +91,7 @@ class Investigator:
             return self._failed(event, f"Invalid investigation window: {exc}", [])
 
         findings: list[Finding] = []
-        tool_calls: list[ToolCall] = []
+        tool_calls: list[ToolCallRecord] = []
         for spec in self._planner.plan(event):
             started = time.perf_counter()
             args = {
@@ -124,16 +124,16 @@ class Investigator:
                 findings.append(Finding(spec, issues=sanity.issues))
 
         verdict = synthesize(findings)
-        return EvidenceRecord(
+        return make_evidence(
             incident_id=event.incident_id,
             status=verdict.status,
             failure_type=verdict.failure_type,
             summary=verdict.summary,
-            root_cause_hypotheses=verdict.hypotheses,
-            evidence_items=[self._item(f, window) for f in findings],
-            tool_calls=tool_calls,
             confidence=verdict.confidence,
-            recommended_next_steps=verdict.next_steps,
+            hypotheses=verdict.hypotheses,
+            items=[self._item(f, window) for f in findings],
+            tool_calls=tool_calls,
+            next_steps=verdict.next_steps,
             failed_stage=event.failed_stage,
         )
 
@@ -148,8 +148,8 @@ class Investigator:
         return self._clock()
 
     @staticmethod
-    def _call(args: dict[str, str], started: float, ok: bool) -> ToolCall:
-        return ToolCall(
+    def _call(args: dict[str, str], started: float, ok: bool) -> ToolCallRecord:
+        return ToolCallRecord(
             tool="prometheus.query_range",
             args=args,
             duration_ms=round((time.perf_counter() - started) * 1000, 2),
@@ -166,37 +166,33 @@ class Investigator:
             outcome = "anomalous"
         else:
             outcome = "normal"
-        return EvidenceItem(
-            id=finding.evidence_id,
-            timestamp=window.end,
-            content=item_content(
-                {
-                    "metric": finding.spec.name,
-                    "promql": finding.spec.promql,
-                    "unit": finding.spec.unit,
-                    "outcome": outcome,
-                    "window": {
-                        "baseline_start": window.baseline_start,
-                        "start": window.start,
-                        "end": window.end,
-                    },
-                    "detection": finding.detection.model_dump(mode="json") if finding.detection else None,
-                    "issues": [str(i) for i in finding.issues],
-                    "error": finding.error,
-                }
-            ),
+        return metric_item(
+            finding.evidence_id,
+            window.end,
+            {
+                "metric": finding.spec.name,
+                "promql": finding.spec.promql,
+                "unit": finding.spec.unit,
+                "outcome": outcome,
+                "window": {
+                    "baseline_start": window.baseline_start,
+                    "start": window.start,
+                    "end": window.end,
+                },
+                "detection": finding.detection.model_dump(mode="json") if finding.detection else None,
+                "issues": [str(i) for i in finding.issues],
+                "error": finding.error,
+            },
         )
 
     @staticmethod
-    def _failed(event: IncidentCreatedEvent, reason: str, tool_calls: list[ToolCall]) -> EvidenceRecord:
-        return EvidenceRecord(
+    def _failed(event: IncidentCreatedEvent, reason: str, tool_calls: list[ToolCallRecord]) -> Evidence:
+        return make_evidence(
             incident_id=event.incident_id,
             status="failed",
             failure_type=FailureTaxonomy.UNKNOWN,
-            summary=redact(reason),
-            root_cause_hypotheses=[],
-            evidence_items=[],
-            tool_calls=tool_calls,
+            summary=reason,
             confidence=0.0,
+            tool_calls=tool_calls,
             failed_stage=event.failed_stage,
         )

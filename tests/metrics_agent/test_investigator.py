@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import pytest
 
-from agents.metrics_agent.evidence import EvidenceRecord
 from agents.metrics_agent.investigator import InvestigationConfig, Investigator
 from agents.metrics_agent.models import IncidentCreatedEvent, QueryResult
 from agents.metrics_agent.planner import CatalogPlanner
@@ -23,7 +22,7 @@ from agents.metrics_agent.queries import (
     QuerySpec,
 )
 from agents.metrics_agent.store import LocalJsonEvidenceWriter
-from common.models import FailureTaxonomy
+from common.models import Evidence, FailureTaxonomy
 from tests.metrics_agent.helpers import (
     FAILURE_TIME,
     NOW,
@@ -71,9 +70,9 @@ class FakeTool:
 
 class MemoryWriter:
     def __init__(self) -> None:
-        self.records: list[EvidenceRecord] = []
+        self.records: list[Evidence] = []
 
-    def write(self, record: EvidenceRecord) -> None:
+    def write(self, record: Evidence) -> None:
         self.records.append(record)
 
 
@@ -83,7 +82,7 @@ def event(**overrides: object) -> IncidentCreatedEvent:
     return IncidentCreatedEvent.model_validate(data)
 
 
-def run(tool: FakeTool, ev: IncidentCreatedEvent | None = None) -> tuple[EvidenceRecord, MemoryWriter]:
+def run(tool: FakeTool, ev: IncidentCreatedEvent | None = None) -> tuple[Evidence, MemoryWriter]:
     writer = MemoryWriter()
     investigator = Investigator(
         tool,  # type: ignore[arg-type]

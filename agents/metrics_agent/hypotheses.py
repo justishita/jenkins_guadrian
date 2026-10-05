@@ -3,10 +3,10 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from common.models import FailureTaxonomy
+from common.models import EvidenceHypothesis, FailureTaxonomy
+from common.redaction import redact
 
 from .anomaly import Detection
-from .evidence import RootCauseHypothesis, redact
 from .queries import QuerySpec
 from .sanity import SanityIssue
 
@@ -40,7 +40,7 @@ class Synthesis:
     failure_type: FailureTaxonomy
     confidence: float
     summary: str
-    hypotheses: list[RootCauseHypothesis]
+    hypotheses: list[EvidenceHypothesis]
     next_steps: list[str]
 
 
@@ -73,7 +73,7 @@ def synthesize(findings: list[Finding]) -> Synthesis:
         confidence=confidence,
         summary=f"Metrics do not explain this failure: {reason}.",
         hypotheses=[
-            RootCauseHypothesis(
+            EvidenceHypothesis(
                 hypothesis=f"No metric anomaly found ({reason}).",
                 failure_type=FailureTaxonomy.UNKNOWN,
                 confidence=confidence,
@@ -84,11 +84,11 @@ def synthesize(findings: list[Finding]) -> Synthesis:
     )
 
 
-def _hypothesis(finding: Finding) -> RootCauseHypothesis:
+def _hypothesis(finding: Finding) -> EvidenceHypothesis:
     detection = finding.detection
     assert detection is not None
     text = f"{finding.spec.name}: {detection.detail}"
-    return RootCauseHypothesis(
+    return EvidenceHypothesis(
         hypothesis=redact(text),
         failure_type=finding.spec.failure_type,
         confidence=detection.confidence,
