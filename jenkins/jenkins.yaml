@@ -30,3 +30,6 @@ credentials:
               id: "agent-webhook-secret"
               secret: "${WEBHOOK_SHARED_SECRET}"
               description: "Agent webhook shared secret"
+
+jobs:
+  - file: /var/jenkins_conf/jobs.groovy

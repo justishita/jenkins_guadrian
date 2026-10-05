@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvidenceSchemaStub",
+  "description": "Temporary stub schema for Week 1/2 until Person 3 delivers the official common/evidence_schema.json",
+  "schema_version": "0.1-stub",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "incident_id",
+    "agent",
+    "created_at",
+    "status",
+    "failure_type",
+    "summary",
+    "root_cause_hypotheses",
+    "evidence_items",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["0.1-stub"]
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "agent": {
+      "type": "string",
+      "enum": ["jenkins_agent", "metrics_agent", "code_agent"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed", "insufficient_evidence"]
+    },
+    "failure_type": {
+      "type": "string",
+      "enum": [
+        "code_test_failure",
+        "build_compilation_failure",
+        "dependency_regression",
+        "timeout",
+        "resource_exhaustion",
+        "infra_network_failure",
+        "config_error",
+        "auth_failure",
+        "flaky_test",
+        "deployment_failure",
+        "unknown"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "root_cause_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["hypothesis", "failure_type", "confidence"],
+        "properties": {
+          "hypothesis": { "type": "string" },
+          "failure_type": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "supporting_evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "contradicting_evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "evidence_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "source", "content"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["log_excerpt", "metric", "commit", "test_result"]
+          },
+          "source": { "type": "string" },
+          "timestamp": { "type": "string" },
+          "content": { "type": "string" },
+          "location": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": { "type": "string" },
+          "args": { "type": "object" },
+          "duration_ms": { "type": "number" },
+          "ok": { "type": "boolean" }
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "recommended_next_steps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "failed_stage": { "type": "string" },
+    "failing_tests": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "error_signature": { "type": "string" },
+    "log_truncated": { "type": "boolean" },
+    "redaction_applied": { "type": "boolean" },
+    "flaky_score": { "type": "number" }
+  }
+}

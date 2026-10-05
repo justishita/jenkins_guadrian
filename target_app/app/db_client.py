@@ -1,8 +1,10 @@
 """Order storage backed by PostgreSQL when a dependency URL is configured."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
+
+UTC = timezone.utc
 from uuid import UUID, uuid4
 
 import asyncpg
