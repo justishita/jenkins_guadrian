@@ -1,5 +1,7 @@
 """Validated runtime settings for the Jenkins investigation worker."""
 
+from typing import Literal
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,8 +11,13 @@ class JenkinsAgentSettings(BaseSettings):
 
     RABBITMQ_URL: SecretStr
     DATABASE_URL: SecretStr
-    GEMINI_API_KEY: SecretStr
+    GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    OPENAI_API_KEY: SecretStr | None = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    LLM_PROVIDER: Literal["gemini", "openai"] = "gemini"
+    LLM_OFFLINE: bool = False
+    LLM_REQUESTS_PER_MINUTE: float = Field(default=10.0, gt=0)
     EXCHANGE_NAME: str = "incidents"
     QUEUE_NAME: str = "jenkins_agent.incident.created"
     ROUTING_KEY: str = "incident.created"

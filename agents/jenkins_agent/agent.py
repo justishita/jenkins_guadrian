@@ -991,9 +991,22 @@ async def run(settings: JenkinsAgentSettings) -> None:
         await store.connect()
         agent = JenkinsInvestigationAgent(
             LLMClient(
-                api_key=settings.GEMINI_API_KEY.get_secret_value(),
-                model_name=settings.GEMINI_MODEL,
+                api_key=(
+                    settings.GEMINI_API_KEY.get_secret_value()
+                    if settings.LLM_PROVIDER == "gemini" and settings.GEMINI_API_KEY
+                    else settings.OPENAI_API_KEY.get_secret_value()
+                    if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY
+                    else None
+                ),
+                model_name=(
+                    settings.GEMINI_MODEL
+                    if settings.LLM_PROVIDER == "gemini"
+                    else settings.OPENAI_MODEL
+                ),
+                provider=settings.LLM_PROVIDER,
                 timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+                requests_per_minute=settings.LLM_REQUESTS_PER_MINUTE,
+                offline=settings.LLM_OFFLINE,
             ),
             store,
             per_call_timeout=settings.PER_CALL_TIMEOUT_SECONDS,
