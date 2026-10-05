@@ -1,5 +1,5 @@
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -136,3 +136,33 @@ def test_without_an_audit_log_the_agent_still_investigates(tmp_path: Path) -> No
     evidence = asyncio.run(MetricsAgent(investigator).run_event(ev))
     assert evidence.agent == "metrics_agent"
     assert not (tmp_path / "audit").exists()
+
+
+def test_tool_call_records_carry_the_time_each_query_was_issued(tmp_path: Path) -> None:
+    class AdvancingClock:
+        """Each reading is one second later, so every query gets its own issue time."""
+
+        def __init__(self) -> None:
+            self.now = NOW
+
+        def __call__(self) -> datetime:
+            self.now += timedelta(seconds=1)
+            return self.now
+
+    store = FileEvidenceStore(tmp_path / "evidence")
+    investigator = Investigator(
+        FakeTool(),  # type: ignore[arg-type]
+        CatalogPlanner(),
+        SharedStoreEvidenceWriter(store),
+        InvestigationConfig(settle=timedelta(0)),
+        clock=AdvancingClock(),
+        sleep=lambda _seconds: None,
+    )
+    ev = event()
+    evidence = asyncio.run(MetricsAgent(investigator, FileAuditLog(tmp_path / "audit")).run_event(ev))
+
+    issued = [call.args["issued_at"] for call in evidence.tool_calls]
+    assert len(set(issued)) == len(issued) > 1  # distinct, one per query
+    records = [r for r in trail(tmp_path, ev.incident_id) if r.event_type == "tool_call"]
+    assert [r.created_at.isoformat() for r in records] == issued
+    assert [r.created_at for r in records] == sorted(r.created_at for r in records)

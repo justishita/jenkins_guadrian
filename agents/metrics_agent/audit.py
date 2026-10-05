@@ -6,25 +6,47 @@ Prometheus query, `hypothesis_formed`, `evidence_written`, and `agent_completed`
 derived from the finished evidence, so the trail always agrees with what was stored.
 """
 
+from datetime import datetime
+from typing import Any
+
 from common.audit import AuditLog, AuditRecord
 from common.models import Evidence
 
 from .evidence import AGENT_NAME
 
 
+def _issued_at(args: dict[str, Any]) -> datetime | None:
+    """When a query was issued, from `issued_at` in the tool-call args (absent on old evidence)."""
+    value = args.get("issued_at")
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def tool_call_records(evidence: Evidence) -> list[AuditRecord]:
-    return [
-        AuditRecord(
-            incident_id=evidence.incident_id,
-            actor=AGENT_NAME,
-            event_type="tool_call",
-            summary=call.tool,
-            payload={"args": call.args},
-            duration_ms=call.duration_ms,
-            ok=call.ok,
+    """One record per query, stamped with the time the query was issued, not written."""
+    records: list[AuditRecord] = []
+    for call in evidence.tool_calls:
+        extra: dict[str, Any] = {}
+        issued_at = _issued_at(call.args)
+        if issued_at is not None:
+            extra["created_at"] = issued_at
+        records.append(
+            AuditRecord(
+                incident_id=evidence.incident_id,
+                actor=AGENT_NAME,
+                event_type="tool_call",
+                summary=call.tool,
+                payload={"args": call.args},
+                duration_ms=call.duration_ms,
+                ok=call.ok,
+                **extra,
+            )
         )
-        for call in evidence.tool_calls
-    ]
+    return records
 
 
 def hypothesis_record(evidence: Evidence) -> AuditRecord:

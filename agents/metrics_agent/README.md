@@ -17,6 +17,16 @@
 Investigation errors become `status: failed` evidence; the consumer never dies on a bad incident.
 The agent waits `INVESTIGATION_SETTLE_SECONDS` (default 30) after a very recent failure so Prometheus has scraped it.
 
+## Audit trail
+
+Each investigation is recorded through the shared `common.audit` layer as `agent_started`, one `tool_call`
+per Prometheus query, `hypothesis_formed`, `evidence_written`, and `agent_completed` (or `agent_failed`).
+`tool_call` records carry the time the query was issued (`issued_at` in the tool call's `args`, also visible
+in the evidence), not the time they were written. The trail is PostgreSQL when `DATABASE_URL` is set,
+otherwise JSON lines under `data/audit/`. A broken audit log never blocks the investigation.
+
+To run the Postgres round-trip test: `TEST_DATABASE_URL=postgresql+asyncpg://user:pw@localhost:5432/db pytest tests/metrics_agent/test_audit_postgres.py`.
+
 ## Run
 
 `docker compose up -d metrics-agent`. Evidence lands in `./data/evidence/<incident_id>/metrics_agent.json`

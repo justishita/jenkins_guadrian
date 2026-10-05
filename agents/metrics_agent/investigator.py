@@ -99,6 +99,8 @@ class Investigator:
                 "start": window.baseline_start.isoformat(),
                 "end": window.end.isoformat(),
                 "step": cfg.step,
+                # When the query was issued; the audit trail uses it as the record's own time.
+                "issued_at": self._clock().isoformat(),
             }
             try:
                 result = self._tool.query_range(spec.promql, window.baseline_start, window.end, cfg.step)
