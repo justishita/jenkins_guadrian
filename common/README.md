@@ -1,8 +1,8 @@
 # Common Contracts and Utilities
 
-**Owner:** P3 owns the shared evidence schema and redaction contract. Shared
-LLM access is implemented in `llm_client.py`; agents consume shared contracts
-and utilities here.
+**Owner:** P3 owns the shared evidence schema, the audit trail and the redaction
+contract. Shared LLM access is implemented in `llm_client.py`; agents consume
+shared contracts and utilities here.
 
 ## LLM client
 
@@ -36,3 +36,39 @@ atomically and increment its stored `version` on each retry for the same
 incident and agent. The Jenkins-agent container bind-mounts this directory so
 evidence remains available on the host. `PostgresEvidenceStore` implements
 the same interface for deployments that opt into PostgreSQL storage.
+
+## Evidence schema
+
+`evidence_schema.json` is the canonical contract: one document per agent per
+incident, which is how the three agents stay independent of each other. It is
+generated from `common/models.py` and must never be hand-edited:
+
+```bash
+make schema                                         # regenerate and verify
+python scripts/generate_evidence_schema.py --check  # fail if stale
+```
+
+`tests/common/test_evidence_schema.py` fails if the file drifts from the model,
+if the taxonomy enum diverges, or if the wire version changes without the other
+agents being updated with it.
+
+`evidence_schema_stub.json` is the Week 1/2 placeholder this schema replaces.
+Both describe the same `0.1-stub` wire format, so documents written against
+either remain valid; the metrics agent still loads the stub and can be pointed
+at the canonical file through `EVIDENCE_SCHEMA_PATH`. Bumping the version to
+`1.0` is a coordinated change across all three agents in one PR.
+
+## Audit trail
+
+`audit.py` records what happened while an incident was handled - agent runs,
+tool calls, policy verdicts, approvals and outcomes. `FileAuditLog` appends JSON
+lines under `./data/audit/<incident_id>.jsonl` for local runs and the agent
+containers; `PostgresAuditLog` writes the `audit_events` table created by the
+migrations in `migrations/`. `build_audit_log()` picks between them and wraps
+the result in `BestEffortAuditLog`, so losing the trail degrades traceability
+without failing the investigation - the dropped record is logged.
+
+`AuditRecord` redacts its own `summary` and `payload`, including values stored
+under secret-looking keys such as `api_key` or `authorization`, so a caller
+cannot forget. Records are append-only: a later outcome is a later record, never
+an update.
