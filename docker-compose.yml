@@ -148,6 +148,28 @@ services:
     networks:
       - devnet
 
+  jenkins-agent:
+    build:
+      context: .
+      dockerfile: agents/jenkins_agent/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      JENKINS_URL: http://jenkins:8080
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      jenkins:
+        condition: service_healthy
+    networks:
+      - devnet
+
   # Person 3: add the OPA service here.
 
 volumes:
