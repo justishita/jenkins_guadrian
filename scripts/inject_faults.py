@@ -192,7 +192,7 @@ def main() -> None:
         incident_id = publish_incident(rabbit, fault_end)  # 4. only now announce the incident
     logger.info("incident published; the Metrics agent now investigates", extra={"incident_id": incident_id})
     logger.info(
-        "read the result with: docker compose exec metrics-agent cat /app/evidence/%s.metrics_agent.json",
+        "read the result in ./data/evidence/%s/metrics_agent.json",
         incident_id,
     )
 

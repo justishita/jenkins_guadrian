@@ -12,15 +12,16 @@
 4. `sanity.py` – empty / too few samples / stale / out-of-range data means "cannot conclude", never "anomaly".
 5. `anomaly.py` – deterministic detectors: robust z-score spike, sustained increase, availability.
 6. `hypotheses.py` – maps detections to the exact failure taxonomy; no anomaly → `insufficient_evidence` / `unknown`.
-7. `evidence.py` + `store.py` – evidence record shaped like `common/evidence_schema_stub.json`, validated and written through an `EvidenceWriter` (local JSON adapter now; swap for P3's store later).
+7. `evidence.py` + `store.py` – builds the shared `common.models.Evidence` and writes it to the shared Evidence Store (`FileEvidenceStore`) through an `EvidenceWriter`.
 
 Investigation errors become `status: failed` evidence; the consumer never dies on a bad incident.
 The agent waits `INVESTIGATION_SETTLE_SECONDS` (default 30) after a very recent failure so Prometheus has scraped it.
 
 ## Run
 
-`docker compose up -d metrics-agent`. Evidence lands in `/app/evidence/<incident_id>.metrics_agent.json`
-(volume `metrics_agent_evidence`). Config is env-driven; see `config.py`.
+`docker compose up -d metrics-agent`. Evidence lands in `./data/evidence/<incident_id>/metrics_agent.json`
+(bind mount shared with the other agents, so the Coordinator reads everything with `read_all(incident_id)`).
+Config is env-driven; see `config.py`.
 
 ## Demo
 

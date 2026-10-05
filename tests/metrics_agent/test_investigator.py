@@ -6,9 +6,8 @@ from uuid import uuid4
 
 import pytest
 
-from agents.metrics_agent.evidence import EvidenceRecord
 from agents.metrics_agent.investigator import InvestigationConfig, Investigator
-from agents.metrics_agent.models import IncidentCreatedEvent, QueryResult
+from agents.metrics_agent.models import IncidentCreatedEvent
 from agents.metrics_agent.planner import CatalogPlanner
 from agents.metrics_agent.prometheus_tool import (
     PrometheusQueryError,
@@ -22,14 +21,14 @@ from agents.metrics_agent.queries import (
     MEMORY_RSS,
     QuerySpec,
 )
-from agents.metrics_agent.store import LocalJsonEvidenceWriter
-from agents.metrics_agent.taxonomy import FailureTaxonomy
+from agents.metrics_agent.store import SharedStoreEvidenceWriter
+from common.evidence_store import FileEvidenceStore
+from common.models import Evidence, FailureTaxonomy
 from tests.metrics_agent.helpers import (
     FAILURE_TIME,
     NOW,
-    flat,
+    FakeTool,
     make_window,
-    samples,
     step_up,
 )
 
@@ -37,43 +36,11 @@ MIB = 1024 * 1024
 Fn = Callable[[datetime], float]
 
 
-class FakeTool:
-    """Stands in for PrometheusTool; serves a synthetic series per catalog query."""
-
-    def __init__(self, overrides: dict[str, Fn] | None = None, errors: dict[str, Exception] | None = None) -> None:
-        window = make_window()
-        self.defaults: dict[str, Fn] = {
-            AVAILABILITY.promql: flat(1.0),
-            LATENCY_P95.promql: flat(0.007),
-            CPU_RATE.promql: flat(0.002),
-            MEMORY_RSS.promql: flat(80 * MIB),
-        }
-        self.defaults.update(overrides or {})
-        self.errors = errors or {}
-        self.window = window
-        self.calls: list[str] = []
-
-    def query_range(self, promql: str, start: datetime, end: datetime, step: str) -> QueryResult:
-        self.calls.append(promql)
-        if promql in self.errors:
-            raise self.errors[promql]
-        fn = self.defaults[promql]
-        if fn is None:  # type: ignore[comparison-overlap]
-            return QueryResult(promql=promql, result_type="matrix", series=[])
-        from agents.metrics_agent.models import Series
-
-        return QueryResult(
-            promql=promql,
-            result_type="matrix",
-            series=[Series(labels={}, samples=samples(start, end, fn, inclusive_end=True))],
-        )
-
-
 class MemoryWriter:
     def __init__(self) -> None:
-        self.records: list[EvidenceRecord] = []
+        self.records: list[Evidence] = []
 
-    def write(self, record: EvidenceRecord) -> None:
+    def write(self, record: Evidence) -> None:
         self.records.append(record)
 
 
@@ -83,7 +50,7 @@ def event(**overrides: object) -> IncidentCreatedEvent:
     return IncidentCreatedEvent.model_validate(data)
 
 
-def run(tool: FakeTool, ev: IncidentCreatedEvent | None = None) -> tuple[EvidenceRecord, MemoryWriter]:
+def run(tool: FakeTool, ev: IncidentCreatedEvent | None = None) -> tuple[Evidence, MemoryWriter]:
     writer = MemoryWriter()
     investigator = Investigator(
         tool,  # type: ignore[arg-type]
@@ -284,13 +251,13 @@ def test_records_validate_against_shared_schema_for_every_outcome(tmp_path: Path
         investigator = Investigator(
             tool,  # type: ignore[arg-type]
             CatalogPlanner(),
-            LocalJsonEvidenceWriter(tmp_path),
+            SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path)),
             InvestigationConfig(),
             clock=lambda: NOW,
             sleep=lambda _seconds: None,
         )
         investigator.investigate(event())
-    assert len(list(tmp_path.glob("*.metrics_agent.json"))) == len(scenarios)
+    assert len(list(tmp_path.glob("*/metrics_agent.json"))) == len(scenarios)
 
 
 def test_deploy_failure_checks_availability_first() -> None:
