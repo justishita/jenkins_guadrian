@@ -1,0 +1,5 @@
+<testsuite tests="1" failures="1">
+  <testcase classname="tests.test_orders" name="test_create_order" file="tests/test_orders.py" line="28">
+    <failure message="AssertionError: expected status 201">assert response.status_code == 201</failure>
+  </testcase>
+</testsuite>
