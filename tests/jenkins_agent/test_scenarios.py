@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage
 
 from agents.jenkins_agent.agent import (
     AgentState,
+    JenkinsInvestigationTools,
     JenkinsInvestigationAgent,
     LLMAnswer,
     _evidence_from_answer,
@@ -129,9 +130,16 @@ class MockLLM:
 
 
 class ScenarioJenkinsClient:
-    def __init__(self, log: str, *, truncated: bool = False) -> None:
+    def __init__(
+        self,
+        log: str,
+        *,
+        truncated: bool = False,
+        junit_xml: str | None = None,
+    ) -> None:
         self.log = log
         self.truncated = truncated
+        self.junit_xml = junit_xml
 
     async def __aenter__(self):
         return self
@@ -152,7 +160,7 @@ class ScenarioJenkinsClient:
         return {"failCount": 1, "totalCount": 1}
 
     async def get_test_report_xml(self, _job, _number):
-        return None
+        return self.junit_xml
 
     async def get_build_history(self, _job):
         return []
@@ -251,6 +259,31 @@ def test_llm_cannot_relabel_confirmed_test_failure_as_environment_problem() -> N
     assert evidence.root_cause_hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
 
 
+def test_llm_environment_wording_is_replaced_for_assertion_failure() -> None:
+    log, truth = _load_scenario("tc01_unit_test")
+    state = _state(log)
+    answer_data = _mock_answer(truth).model_dump()
+    answer_data["summary"] = "This is an environment problem."
+    answer_data["root_cause_hypotheses"] = [
+        {
+            "hypothesis": "The environment is broken.",
+            "failure_type": FailureTaxonomy.CODE_TEST_FAILURE,
+            "confidence": 0.9,
+        }
+    ]
+    answer = LLMAnswer.model_validate(
+        answer_data
+    )
+
+    evidence = _evidence_from_answer(state, answer)
+
+    _assert_ground_truth(evidence, truth)
+    assert all(
+        "environment" not in hypothesis.hypothesis.casefold()
+        for hypothesis in evidence.root_cause_hypotheses
+    )
+
+
 def test_simultaneous_test_failure_and_lint_warning_remains_test_failure() -> None:
     log, truth = _load_scenario("tc01_unit_test")
     combined_log = log + "\nWARNING flake8: style warning in target_app/app/main.py:8\n"
@@ -272,3 +305,99 @@ def test_truncated_log_lowers_confidence() -> None:
 
     assert truncated.confidence < complete.confidence
     assert llm_truncated.confidence < complete.confidence
+
+
+@pytest.mark.parametrize(
+    ("scenario", "failure_type"),
+    [
+        ("git_checkout_network", FailureTaxonomy.INFRA_NETWORK_FAILURE),
+        ("git_checkout_auth", FailureTaxonomy.AUTH_FAILURE),
+    ],
+)
+def test_checkout_failures_classify_from_console_without_test_results(
+    scenario: str,
+    failure_type: FailureTaxonomy,
+) -> None:
+    log, _ = _load_scenario(scenario)
+    parsed = parse_build(log, failed_stage="Checkout")
+    hypotheses = rule_based_classify(parsed)
+
+    assert hypotheses[0].failure_type is failure_type
+    assert parsed.failing_tests == []
+
+
+@pytest.mark.asyncio
+async def test_checkout_failure_discards_unrelated_test_report_data() -> None:
+    log, _ = _load_scenario("git_checkout_network")
+    junit = (
+        '<testsuite><testcase name="stale_test" file="tests/test_old.py" line="9">'
+        '<failure message="AssertionError">stale</failure></testcase></testsuite>'
+    )
+    store = ScenarioEvidenceStore()
+    agent = JenkinsInvestigationAgent(
+        MockLLM(RuntimeError("use deterministic classification")),
+        store,
+        jenkins_client_factory=lambda: ScenarioJenkinsClient(log, junit_xml=junit),
+        per_call_timeout=2,
+        total_timeout=10,
+        llm_timeout=2,
+    )
+    state: AgentState = {
+        "event": EVENT.model_copy(update={"failed_stage": "Checkout"}),
+        "parsed": parse_build(""),
+        "messages": [],
+        "steps_used": 0,
+        "tool_calls": [],
+        "evidence_items": [],
+    }
+
+    await agent.fetch_context(state)
+
+    assert state["parsed"].failing_tests == []
+    assert state["test_report"] is None
+    assert state["hypotheses"][0].failure_type is FailureTaxonomy.INFRA_NETWORK_FAILURE
+
+
+@pytest.mark.asyncio
+async def test_many_test_failures_send_only_top_five_to_llm() -> None:
+    log, truth = _load_scenario("tc03_many_test_failures")
+    state = _state(log)
+    store = ScenarioEvidenceStore()
+    agent = JenkinsInvestigationAgent(
+        MockLLM(RuntimeError("rules only")),
+        store,
+        jenkins_client_factory=lambda: ScenarioJenkinsClient(log),
+        per_call_timeout=2,
+        total_timeout=10,
+        llm_timeout=2,
+    )
+    await agent.fetch_context(state)
+    context_text = state["messages"][1].content
+    context = json.loads(context_text)
+    tool_text = await JenkinsInvestigationTools(state).get_error_blocks()
+    tool_result = json.loads(tool_text)
+
+    assert context["failing_test_summary"]["total_count"] == truth["failing_test_count"]
+    assert len(context["failing_test_summary"]["top_failures"]) == 5
+    assert context["failing_test_summary"]["top_failures"][0]["name"] == "test_case_00"
+    assert "test_case_05" not in context_text
+    assert tool_result["failing_test_summary"]["total_count"] == 20
+    assert len(tool_result["failing_test_summary"]["top_failures"]) == 5
+    assert "test_case_05" not in tool_text
+    summary = _fallback_evidence(state).summary
+    assert "20 failing tests" in summary
+    assert "test_case_04" in summary
+    assert "and 15 more" in summary
+
+
+def test_crlf_console_is_normalized_before_classification() -> None:
+    log, truth = _load_scenario("tc01_unit_test")
+    crlf_log = log.replace("\n", "\r\n")
+
+    parsed = parse_build(crlf_log, stage_summary=TEST_STAGE)
+    hypotheses = rule_based_classify(parsed)
+    evidence = _fallback_evidence(_state(crlf_log))
+
+    assert hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+    assert parsed.failing_tests[0].name == "test_create_order"
+    assert evidence.failure_type is FailureTaxonomy(truth["expected_failure_type"])

@@ -56,6 +56,15 @@ def make_client(model, **kwargs):
     )
 
 
+def test_client_requires_gemini_key_and_rejects_other_provider(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+        LLMClient()
+    with pytest.raises(ValueError, match="LLM_PROVIDER must be 'gemini'"):
+        LLMClient(provider="openai", api_key="unused")
+
+
 async def _no_sleep(_seconds):
     return None
 

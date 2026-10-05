@@ -13,9 +13,7 @@ class JenkinsAgentSettings(BaseSettings):
     DATABASE_URL: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
-    OPENAI_API_KEY: SecretStr | None = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
-    LLM_PROVIDER: Literal["gemini", "openai"] = "gemini"
+    LLM_PROVIDER: Literal["gemini"] = "gemini"
     LLM_OFFLINE: bool = False
     LLM_REQUESTS_PER_MINUTE: float = Field(default=10.0, gt=0)
     EXCHANGE_NAME: str = "incidents"

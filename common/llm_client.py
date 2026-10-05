@@ -189,34 +189,20 @@ class LLMClient:
         if self.offline or model is not None:
             return
 
-        if self.provider == "gemini":
-            configured_key = api_key or os.getenv("GEMINI_API_KEY")
-            if not configured_key:
-                raise ValueError("GEMINI_API_KEY must be configured for the Gemini provider")
-            from langchain_google_genai import ChatGoogleGenerativeAI
+        if self.provider != "gemini":
+            raise ValueError("LLM_PROVIDER must be 'gemini'")
+        configured_key = api_key or os.getenv("GEMINI_API_KEY")
+        if not configured_key:
+            raise ValueError("GEMINI_API_KEY must be configured for the Gemini provider")
+        from langchain_google_genai import ChatGoogleGenerativeAI
 
-            self.model = ChatGoogleGenerativeAI(
-                model=model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-                google_api_key=configured_key,
-                temperature=0,
-                max_retries=0,
-                timeout=timeout_seconds,
-            )
-        elif self.provider == "openai":
-            configured_key = api_key or os.getenv("OPENAI_API_KEY")
-            if not configured_key:
-                raise ValueError("OPENAI_API_KEY must be configured for the OpenAI provider")
-            from langchain_openai import ChatOpenAI
-
-            self.model = ChatOpenAI(
-                model=model_name or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                api_key=configured_key,
-                temperature=0,
-                max_retries=0,
-                timeout=timeout_seconds,
-            )
-        else:
-            raise ValueError("LLM_PROVIDER must be either 'gemini' or 'openai'")
+        self.model = ChatGoogleGenerativeAI(
+            model=model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            google_api_key=configured_key,
+            temperature=0,
+            max_retries=0,
+            timeout=timeout_seconds,
+        )
 
     def bind_tools(self, tools: Sequence[BaseTool]) -> Any:
         """Return the configured model with the supplied read-only tools bound."""

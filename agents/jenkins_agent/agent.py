@@ -9,6 +9,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections import Counter
 from typing import Any, Protocol, TypedDict
 from uuid import UUID
 
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 MAX_STEPS = 8
 MAX_CALLS_PER_TOOL = 3
 MAX_LOG_LINES_PER_CALL = 300
+MAX_TEST_FAILURES_IN_PROMPT = 5
 MAX_TOOL_OUTPUT_CHARS = 12_000
 MAX_RATE_LIMIT_RETRIES = 2
 SYSTEM_PROMPT = """You are a CI failure analyst investigating one Jenkins incident.
@@ -145,6 +147,87 @@ def _json_text(value: Any, *, limit: int = MAX_TOOL_OUTPUT_CHARS) -> str:
 def _message_content(message: BaseMessage) -> str:
     content = message.content
     return content if isinstance(content, str) else json.dumps(content, default=str)
+
+
+def _failing_test_summary(parsed: ParsedBuild) -> dict[str, Any]:
+    failures = parsed.failing_tests
+    file_counts = Counter(test.file or "unknown" for test in failures)
+    return {
+        "total_count": len(failures),
+        "count_by_file": dict(sorted(file_counts.items())),
+        "top_failures": [
+            {
+                "name": test.name,
+                "file": test.file,
+                "line": test.line,
+                "message": test.message[:500],
+            }
+            for test in failures[:MAX_TEST_FAILURES_IN_PROMPT]
+        ],
+    }
+
+
+def _is_checkout_or_post_failure(stage: str | None) -> bool:
+    normalized = (stage or "").strip().casefold()
+    return normalized == "checkout" or "post" in normalized
+
+
+def _failed_stage_from_summary(stage_summary: Any) -> str | None:
+    raw_stages = (
+        stage_summary.get("stages", [])
+        if isinstance(stage_summary, Mapping)
+        else stage_summary
+    )
+    if not isinstance(raw_stages, Sequence) or isinstance(raw_stages, (str, bytes)):
+        return None
+    for stage in reversed(raw_stages):
+        if not isinstance(stage, Mapping):
+            continue
+        result = str(stage.get("status", stage.get("result", ""))).upper()
+        if result in {"FAILURE", "FAILED"}:
+            name = stage.get("name", stage.get("stage"))
+            return str(name) if name else None
+    return None
+
+
+def _test_failure_count_summary(parsed: ParsedBuild) -> str:
+    failures = parsed.failing_tests
+    if not failures:
+        return ""
+    counts = Counter(test.file or "unknown file" for test in failures)
+    file_counts = ", ".join(f"{path}: {count}" for path, count in sorted(counts.items()))
+    examples = []
+    for test in failures[:MAX_TEST_FAILURES_IN_PROMPT]:
+        location = _format_location(test.file, test.line)
+        examples.append(f"{test.name}" + (f" ({location})" if location else ""))
+    remaining = len(failures) - len(examples)
+    top_five = ", ".join(examples)
+    if remaining:
+        top_five += f", and {remaining} more"
+    return (
+        f"{len(failures)} failing tests across {len(counts)} files "
+        f"({file_counts}). Top failures: {top_five}."
+    )
+
+
+def _llm_error_blocks(parsed: ParsedBuild) -> list[str]:
+    """Avoid sending all individual pytest tracebacks when a failure summary suffices."""
+    if not parsed.failing_tests:
+        return parsed.error_blocks
+    return [
+        block
+        for block in parsed.error_blocks
+        if not re.search(
+            r"^\s*(?:_{3,}\s*.+\s*_{3,}|FAILED\s+.+?\.py::)",
+            block,
+            re.MULTILINE,
+        )
+    ]
+
+
+def _append_test_failure_summary(summary: str, parsed: ParsedBuild) -> str:
+    count_summary = _test_failure_count_summary(parsed)
+    return _append_fact(summary, count_summary) if count_summary else summary
 
 
 def _safe_messages(messages: Sequence[BaseMessage]) -> list[BaseMessage]:
@@ -256,11 +339,24 @@ class JenkinsInvestigationTools:
     async def get_error_blocks(self) -> str:
         """Return extracted console error blocks with their stable evidence IDs."""
         parsed = self.state.get("parsed")
+        if parsed is None:
+            blocks: list[str] = []
+            failures: dict[str, Any] = {
+                "total_count": 0,
+                "count_by_file": {},
+                "top_failures": [],
+            }
+        else:
+            blocks = _llm_error_blocks(parsed)
+            failures = _failing_test_summary(parsed)
         return _json_text(
-            [
+            {
+                "failing_test_summary": failures,
+                "error_blocks": [
                 {"evidence_id": f"error_blocks[{index}]", "content": block}
-                for index, block in enumerate(parsed.error_blocks if parsed else [])
-            ]
+                    for index, block in enumerate(blocks)
+                ],
+            }
         )
 
     async def get_log_range(self, start_line: int, end_line: int) -> str:
@@ -482,10 +578,15 @@ class JenkinsInvestigationAgent:
                 )
 
         console_text = console.text if console is not None else ""
+        failed_stage = event.failed_stage or _failed_stage_from_summary(stages)
+        console_only_failure = _is_checkout_or_post_failure(failed_stage)
+        if console_only_failure:
+            test_report = None
+            junit_xml = None
         parsed = parse_build(
             console_text,
             stage_summary=stages,
-            failed_stage=event.failed_stage,
+            failed_stage=failed_stage,
             junit_xml=junit_xml,
         )
         previous_commit = _build_commit(last_success if isinstance(last_success, dict) else None)
@@ -574,13 +675,22 @@ class JenkinsInvestigationAgent:
                 )
             )
         state["evidence_items"] = evidence_items
+        llm_evidence_ids = [
+            item.id
+            for item in evidence_items
+            if not item.id.startswith("failing_tests[")
+        ]
+        llm_evidence_ids.extend(
+            f"failing_tests[{index}]"
+            for index in range(min(len(parsed.failing_tests), MAX_TEST_FAILURES_IN_PROMPT))
+        )
         context = {
             "incident_id": str(event.incident_id),
             "job_name": event.job_name,
             "build_number": event.build_number,
             "branch": event.branch,
             "git_commit": event.git_commit,
-            "failed_stage": event.failed_stage or parsed.failed_stage,
+            "failed_stage": failed_stage or parsed.failed_stage,
             "build_summary": build_summary,
             "stages": [
                 {"name": stage.name, "result": stage.result, "duration_ms": stage.duration_ms}
@@ -590,12 +700,17 @@ class JenkinsInvestigationAgent:
                 {
                     "failure_type": hypothesis.failure_type.value,
                     "reason": hypothesis.reason,
-                    "matched_evidence_ids": hypothesis.matched_evidence_ids,
+                    "matched_evidence_ids": (
+                        hypothesis.matched_evidence_ids[:MAX_TEST_FAILURES_IN_PROMPT]
+                        if hypothesis.failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+                        else hypothesis.matched_evidence_ids
+                    ),
                     "rule_confidence": hypothesis.rule_confidence,
                 }
                 for hypothesis in hypotheses
             ],
-            "evidence_ids": [item.id for item in evidence_items],
+            "failing_test_summary": _failing_test_summary(parsed),
+            "evidence_ids": llm_evidence_ids,
             "last_success_test_report": last_success_test_report,
         }
         state["messages"] = [
@@ -895,6 +1010,13 @@ def _evidence_from_answer(state: AgentState, answer: LLMAnswer) -> Evidence:
     failure_type = answer.failure_type
     classification_overridden = False
     if (
+        parsed.failing_tests
+        and rule_hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+    ):
+        classification_overridden = answer.failure_type is not FailureTaxonomy.CODE_TEST_FAILURE
+        failure_type = FailureTaxonomy.CODE_TEST_FAILURE
+        rule_hypotheses = [rule_hypotheses[0]]
+    elif (
         rule_hypotheses[0].failure_type is not FailureTaxonomy.UNKNOWN
         and answer.failure_type not in supported_types
     ):
@@ -904,7 +1026,18 @@ def _evidence_from_answer(state: AgentState, answer: LLMAnswer) -> Evidence:
     summary = redact(answer.summary)
     recommended_next_steps = [redact(step) for step in answer.recommended_next_steps]
     evidence_ids = {item.id for item in state.get("evidence_items", [])}
-    if classification_overridden:
+    has_environment_hypothesis = any(
+        any(
+            term in hypothesis.hypothesis.casefold()
+            for term in ("environment", "infrastructure", "network")
+        )
+        for hypothesis in answer.root_cause_hypotheses
+    )
+    if classification_overridden or (
+        failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+        and parsed.failing_tests
+        and has_environment_hypothesis
+    ):
         root_cause_hypotheses = [
             EvidenceHypothesis(
                 hypothesis=redact(hypothesis.reason),
@@ -941,6 +1074,7 @@ def _evidence_from_answer(state: AgentState, answer: LLMAnswer) -> Evidence:
             summary = f"A test assertion failed. {factual_summary}."
         else:
             summary = _append_fact(summary, factual_summary)
+        summary = _append_test_failure_summary(summary, parsed)
         recommendation = "Correct the implementation/test."
         if not any("correct the implementation/test" in step.casefold() for step in recommended_next_steps):
             recommended_next_steps.insert(0, recommendation)
@@ -1028,6 +1162,7 @@ def _fallback_evidence(state: AgentState, *, status: str | None = None) -> Evide
             f"Failing test {failing_test.name}"
             + (f" in {location}" if location else ""),
         )
+        summary = _append_test_failure_summary(summary, parsed)
         recommended_next_steps.insert(0, "Correct the implementation/test.")
     elif primary.failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE:
         compile_error = next(
@@ -1099,16 +1234,10 @@ async def run(settings: JenkinsAgentSettings) -> None:
             LLMClient(
                 api_key=(
                     settings.GEMINI_API_KEY.get_secret_value()
-                    if settings.LLM_PROVIDER == "gemini" and settings.GEMINI_API_KEY
-                    else settings.OPENAI_API_KEY.get_secret_value()
-                    if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY
+                    if settings.GEMINI_API_KEY
                     else None
                 ),
-                model_name=(
-                    settings.GEMINI_MODEL
-                    if settings.LLM_PROVIDER == "gemini"
-                    else settings.OPENAI_MODEL
-                ),
+                model_name=settings.GEMINI_MODEL,
                 provider=settings.LLM_PROVIDER,
                 timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
                 requests_per_minute=settings.LLM_REQUESTS_PER_MINUTE,

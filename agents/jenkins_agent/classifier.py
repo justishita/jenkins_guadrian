@@ -50,7 +50,9 @@ DEPENDENCY_RE = re.compile(
 TIMEOUT_RE = re.compile(r"\btimeout\b|\btimed out\b", re.IGNORECASE)
 NETWORK_RE = re.compile(
     r"connection\s*refused|name resolution|name or service not known|"
-    r"temporary failure in name resolution|\b503\b",
+    r"temporary failure in name resolution|\b503\b|"
+    r"git checkout failed|repository(?: .+)? not found|could not resolve host|"
+    r"failed to connect to .*git",
     re.IGNORECASE,
 )
 CONFIG_RE = re.compile(
