@@ -15,6 +15,9 @@ jenkins:
 unclassified:
   location:
     url: "${JENKINS_URL}"
+  # Local dev only: lets Prometheus scrape /prometheus without credentials.
+  prometheusConfiguration:
+    useAuthenticatedEndpoint: false
 
 credentials:
   system:
