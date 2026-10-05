@@ -136,6 +136,7 @@ services:
     build:
       context: .
       dockerfile: agents/metrics_agent/Dockerfile
+    restart: unless-stopped
     environment:
       PROMETHEUS_URL: http://prometheus:9090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/

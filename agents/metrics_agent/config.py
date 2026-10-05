@@ -14,6 +14,9 @@ class MetricsAgentSettings(BaseSettings):
     PROMETHEUS_MAX_RETRIES: int = Field(default=3, ge=0, le=10)
     PROMETHEUS_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=30)
 
+    RABBITMQ_CONNECT_RETRIES: int = Field(default=8, ge=0, le=20)
+    RABBITMQ_CONNECT_BACKOFF_SECONDS: float = Field(default=1.0, ge=0, le=30)
+
     EXCHANGE_NAME: str = "incidents"
     QUEUE_NAME: str = "metrics_agent.incident.created"
     ROUTING_KEY: str = "incident.created"

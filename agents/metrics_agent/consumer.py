@@ -6,8 +6,11 @@ Investigation logic (PromQL selection, anomaly detection, evidence) arrives in W
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 import aio_pika
+from aio_pika.exceptions import AMQPConnectionError
 from pydantic import ValidationError
 
 from .config import MetricsAgentSettings, load_settings
@@ -15,6 +18,38 @@ from .models import IncidentCreatedEvent
 from .prometheus_tool import PrometheusTool
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+_MAX_BACKOFF_SECONDS = 30.0
+_CONNECT_ERRORS = (OSError, AMQPConnectionError)
+
+
+async def connect_with_retry(
+    connect: Callable[[], Awaitable[T]],
+    retries: int,
+    backoff_seconds: float,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> T:
+    """Call `connect`, retrying connection errors with exponential backoff.
+
+    Makes at most `retries + 1` attempts, then re-raises the last error so a real
+    configuration or network problem is not hidden by endless retrying.
+    """
+    for attempt in range(retries + 1):
+        try:
+            return await connect()
+        except _CONNECT_ERRORS as exc:
+            if attempt == retries:
+                logger.error("rabbitmq unreachable, giving up", extra={"attempts": attempt + 1})
+                raise
+            delay = min(backoff_seconds * (2**attempt), _MAX_BACKOFF_SECONDS)
+            logger.warning(
+                "rabbitmq connection failed, retrying",
+                extra={"attempt": attempt + 1, "retry_in_seconds": delay, "error": str(exc)},
+            )
+            await sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 class MetricsAgent:
@@ -41,7 +76,11 @@ async def run(settings: MetricsAgentSettings) -> None:
     )
     agent = MetricsAgent(tool)
     try:
-        connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
+        connection = await connect_with_retry(
+            lambda: aio_pika.connect_robust(settings.RABBITMQ_URL),
+            retries=settings.RABBITMQ_CONNECT_RETRIES,
+            backoff_seconds=settings.RABBITMQ_CONNECT_BACKOFF_SECONDS,
+        )
         async with connection:
             channel = await connection.channel()
             await channel.set_qos(prefetch_count=1)
