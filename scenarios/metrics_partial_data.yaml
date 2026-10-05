@@ -25,10 +25,10 @@ expected:
   # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
   hypotheses:
     - failure_type: resource_exhaustion
-      mentions: [memory_rss]
+      mentions: [memory_rss, 'cpu_rate stayed normal']
   # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
   supporting_evidence: [metric-memory_rss]
-  contradicting_evidence: []
+  contradicting_evidence: [metric-cpu_rate]
   # The query plan this scenario expects: how many queries, which PromQL (in order), and
   # whether each call succeeded.
   tool_calls:

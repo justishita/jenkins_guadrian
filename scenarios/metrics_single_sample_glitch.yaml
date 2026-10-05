@@ -1,32 +1,31 @@
-id: metrics-memory-leak
-name: Memory Leak
+id: metrics-single-sample-glitch
+name: Single Sample Glitch
 owner: P2
 agent: metrics_agent
 
 scenario: >
-  Resident memory climbs steadily from 80 MiB to 110 MiB over the last four minutes and
-  never comes back down.
+  One scrape shows a latency spike and the next is normal again. A single elevated sample
+  must not be reported as a cause.
 
 incident:
   branch: main
   failed_stage: Test
 
 metrics:
-  memory_rss:
-    fault: {shape: ramp, at: -240, until: 0, level: 115343360}
+  latency_p95:
+    fault: {shape: spike, at: -30, duration: 15, level: 2.0}
 
 expected:
-  status: completed
-  failure_type: resource_exhaustion
-  min_confidence: 0.6
-  max_confidence: 0.95
+  status: insufficient_evidence
+  failure_type: unknown
+  max_confidence: 0.3
   # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
   hypotheses:
-    - failure_type: resource_exhaustion
-      mentions: [memory_rss, rose, 'cpu_rate stayed normal']
+    - failure_type: unknown
+      mentions: ['No metric anomaly found']
   # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
-  supporting_evidence: [metric-memory_rss]
-  contradicting_evidence: [metric-cpu_rate]
+  supporting_evidence: [metric-target_availability, metric-latency_p95, metric-cpu_rate, metric-memory_rss]
+  contradicting_evidence: []
   # The query plan this scenario expects: how many queries, which PromQL (in order), and
   # whether each call succeeded.
   tool_calls:
@@ -43,4 +42,4 @@ expected:
     baseline_start: -900
     incident_start: -300
     end: 60
-  next_steps_mention: [CPU/memory limits]
+  must_not_mention: [latency spike]

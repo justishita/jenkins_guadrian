@@ -1,32 +1,33 @@
-id: metrics-memory-leak
-name: Memory Leak
+id: metrics-recovered-spike
+name: Spike That Already Recovered
 owner: P2
 agent: metrics_agent
 
 scenario: >
-  Resident memory climbs steadily from 80 MiB to 110 MiB over the last four minutes and
-  never comes back down.
+  Latency spiked for a minute almost five minutes before the failure and has been normal
+  since. It is still an anomaly, but the agent must say it recovered and be far less
+  confident than for a spike at the failure.
 
 incident:
   branch: main
   failed_stage: Test
 
 metrics:
-  memory_rss:
-    fault: {shape: ramp, at: -240, until: 0, level: 115343360}
+  latency_p95:
+    fault: {shape: spike, at: -270, duration: 60, level: 2.0}
 
 expected:
   status: completed
-  failure_type: resource_exhaustion
-  min_confidence: 0.6
-  max_confidence: 0.95
+  failure_type: timeout
+  min_confidence: 0.3
+  max_confidence: 0.6
   # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
   hypotheses:
-    - failure_type: resource_exhaustion
-      mentions: [memory_rss, rose, 'cpu_rate stayed normal']
+    - failure_type: timeout
+      mentions: [latency_p95, 'recovered 225s before the failure']
   # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
-  supporting_evidence: [metric-memory_rss]
-  contradicting_evidence: [metric-cpu_rate]
+  supporting_evidence: [metric-latency_p95]
+  contradicting_evidence: []
   # The query plan this scenario expects: how many queries, which PromQL (in order), and
   # whether each call succeeded.
   tool_calls:
@@ -43,4 +44,3 @@ expected:
     baseline_start: -900
     incident_start: -300
     end: 60
-  next_steps_mention: [CPU/memory limits]

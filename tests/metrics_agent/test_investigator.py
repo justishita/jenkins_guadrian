@@ -140,19 +140,46 @@ def test_memory_leak_classified_as_resource_exhaustion() -> None:
     assert record.status == "completed"
 
 
-def test_strongest_anomaly_ranks_first_when_several_fire() -> None:
+def test_latency_with_cpu_becomes_one_corroborated_resource_exhaustion_hypothesis() -> None:
+    window = make_window()
+    both, _ = run(
+        FakeTool({LATENCY_P95.promql: step_up(window, 0.007, 2.0), CPU_RATE.promql: step_up(window, 0.002, 0.9)})
+    )
+    cpu_only, _ = run(FakeTool({CPU_RATE.promql: step_up(window, 0.002, 0.9)}))
+
+    # One cause, not two competing ones: latency is a symptom, cited as support.
+    assert len(both.root_cause_hypotheses) == 1
+    hypothesis = both.root_cause_hypotheses[0]
+    assert hypothesis.failure_type == FailureTaxonomy.RESOURCE_EXHAUSTION
+    assert sorted(hypothesis.supporting_evidence) == ["metric-cpu_rate", "metric-latency_p95"]
+    assert hypothesis.contradicting_evidence == ["metric-memory_rss"]
+    assert "coincides with elevated latency_p95" in hypothesis.hypothesis
+    assert both.confidence > cpu_only.confidence  # corroboration raises confidence
+
+
+def test_independent_causes_are_ranked_strongest_first() -> None:
     window = make_window()
     record, _ = run(
         FakeTool(
             {
-                LATENCY_P95.promql: step_up(window, 0.007, 2.0),
-                CPU_RATE.promql: step_up(window, 0.002, 0.05),
+                AVAILABILITY.promql: step_up(window, 1.0, 0.0),
+                MEMORY_RSS.promql: step_up(window, 80 * MIB, 100 * MIB),
             }
         )
     )
+    types = [h.failure_type for h in record.root_cause_hypotheses]
     confidences = [h.confidence for h in record.root_cause_hypotheses]
-    assert len(confidences) == 2 and confidences == sorted(confidences, reverse=True)
-    assert record.confidence == confidences[0]
+    assert set(types) == {FailureTaxonomy.INFRA_NETWORK_FAILURE, FailureTaxonomy.RESOURCE_EXHAUSTION}
+    assert confidences == sorted(confidences, reverse=True)
+    assert record.confidence == confidences[0] and record.failure_type == types[0]
+
+
+def test_only_anomalous_metrics_carry_confidence_inputs_in_their_evidence() -> None:
+    window = make_window()
+    record, _ = run(FakeTool({CPU_RATE.promql: step_up(window, 0.002, 0.9)}))
+    inputs = {json.loads(i.content)["metric"]: json.loads(i.content)["confidence_inputs"] for i in record.evidence_items}
+    assert set(inputs["cpu_rate"]) == {"strength", "persistence", "quality", "closeness"}
+    assert inputs["latency_p95"] is None and inputs["memory_rss"] is None
 
 
 def test_healthy_system_reports_insufficient_evidence_not_a_false_positive() -> None:

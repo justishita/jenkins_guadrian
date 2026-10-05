@@ -15,8 +15,10 @@ from datetime import datetime, timedelta, timezone
 from common.models import Evidence, EvidenceItem, FailureTaxonomy, ToolCallRecord
 
 from .anomaly import detect
+from .confidence import inputs_from
 from .evidence import make_evidence, metric_item
-from .hypotheses import Finding, synthesize
+from .findings import Finding
+from .hypotheses import synthesize
 from .models import IncidentCreatedEvent
 from .planner import QueryPlanner
 from .prometheus_tool import PrometheusError, PrometheusTool, PrometheusUnavailableError
@@ -38,6 +40,14 @@ class InvestigationConfig:
     settle: timedelta = timedelta(seconds=30)
     min_baseline_samples: int = 8
     min_incident_samples: int = 3
+
+
+_STEP_UNITS = {"s": 1, "m": 60, "h": 3600}
+
+
+def _step_seconds(step: str) -> int:
+    """Seconds in a Prometheus duration like '15s' (config validates the format)."""
+    return int(step[:-1]) * _STEP_UNITS[step[-1]]
 
 
 def _utcnow() -> datetime:
@@ -90,6 +100,7 @@ class Investigator:
         except ValueError as exc:
             return self._failed(event, f"Invalid investigation window: {exc}", [])
 
+        step = timedelta(seconds=_step_seconds(cfg.step))
         findings: list[Finding] = []
         tool_calls: list[ToolCallRecord] = []
         for spec in self._planner.plan(event):
@@ -119,11 +130,13 @@ class Investigator:
                 window,
                 min_baseline=cfg.min_baseline_samples,
                 min_incident=cfg.min_incident_samples,
+                step=step,
             )
             if sanity.ok:
-                findings.append(Finding(spec, detection=detect(spec, sanity.baseline, sanity.incident)))
+                detection = detect(spec, sanity.baseline, sanity.incident, failure_time)
+                findings.append(Finding(spec, detection=detection, quality=sanity.quality))
             else:
-                findings.append(Finding(spec, issues=sanity.issues))
+                findings.append(Finding(spec, issues=sanity.issues, quality=sanity.quality))
 
         verdict = synthesize(findings)
         return make_evidence(
@@ -182,6 +195,9 @@ class Investigator:
                     "end": window.end,
                 },
                 "detection": finding.detection.model_dump(mode="json") if finding.detection else None,
+                "confidence_inputs": (
+                    inputs_from(finding.detection, finding.quality).as_dict() if finding.anomalous else None
+                ),
                 "issues": [str(i) for i in finding.issues],
                 "error": finding.error,
             },

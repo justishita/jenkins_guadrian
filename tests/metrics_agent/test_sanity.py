@@ -68,3 +68,32 @@ def test_most_populated_series_is_used() -> None:
     sparse = Series(labels={"x": "y"}, samples=full.samples[:2])
     outcome = check(QueryResult(promql="q", result_type="matrix", series=[sparse, full]), CPU_RATE, window)
     assert outcome.ok
+
+
+def test_full_coverage_series_has_full_quality() -> None:
+    window = make_window()
+    assert check(result_from(window, flat(0.01)), CPU_RATE, window).quality == 1.0
+
+
+def test_quality_drops_with_missing_samples() -> None:
+    window = make_window()
+    result = result_from(window, flat(0.01))
+    # Keep every other incident sample: half the expected coverage, still enough to analyse.
+    result.series[0].samples = [
+        s for i, s in enumerate(result.series[0].samples) if s.timestamp < window.start or i % 2 == 0
+    ]
+    outcome = check(result, CPU_RATE, window)
+    assert outcome.ok and 0.4 < outcome.quality < 0.7
+
+
+def test_quality_drops_with_non_finite_values() -> None:
+    window = make_window()
+    clean = check(result_from(window, flat(0.01)), CPU_RATE, window)
+    dirty = check(result_from(window, lambda ts: math.nan if ts.second == 0 else 0.01), CPU_RATE, window)
+    assert dirty.quality < clean.quality
+
+
+def test_empty_result_has_zero_quality() -> None:
+    window = make_window()
+    empty = QueryResult(promql="q", result_type="matrix", series=[])
+    assert check(empty, CPU_RATE, window).quality == 0.0

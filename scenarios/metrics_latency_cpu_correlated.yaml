@@ -1,32 +1,35 @@
-id: metrics-memory-leak
-name: Memory Leak
+id: metrics-latency-cpu-correlated
+name: Latency And CPU Together
 owner: P2
 agent: metrics_agent
 
 scenario: >
-  Resident memory climbs steadily from 80 MiB to 110 MiB over the last four minutes and
-  never comes back down.
+  CPU saturates and request latency climbs at the same moment while memory stays normal.
+  The agent should report one resource-exhaustion cause that cites latency as a symptom,
+  not two competing causes, and note that memory does not corroborate it.
 
 incident:
   branch: main
   failed_stage: Test
 
 metrics:
-  memory_rss:
-    fault: {shape: ramp, at: -240, until: 0, level: 115343360}
+  latency_p95:
+    fault: {shape: step, at: -120, level: 2.0}
+  cpu_rate:
+    fault: {shape: step, at: -120, level: 0.9}
 
 expected:
   status: completed
   failure_type: resource_exhaustion
-  min_confidence: 0.6
-  max_confidence: 0.95
+  min_confidence: 0.85
+  max_confidence: 0.97
   # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
   hypotheses:
     - failure_type: resource_exhaustion
-      mentions: [memory_rss, rose, 'cpu_rate stayed normal']
+      mentions: [cpu_rate, 'coincides with elevated latency_p95', 'memory_rss stayed normal']
   # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
-  supporting_evidence: [metric-memory_rss]
-  contradicting_evidence: [metric-cpu_rate]
+  supporting_evidence: [metric-cpu_rate, metric-latency_p95]
+  contradicting_evidence: [metric-memory_rss]
   # The query plan this scenario expects: how many queries, which PromQL (in order), and
   # whether each call succeeded.
   tool_calls:
@@ -44,3 +47,4 @@ expected:
     incident_start: -300
     end: 60
   next_steps_mention: [CPU/memory limits]
+  must_not_mention: [slow endpoints]
