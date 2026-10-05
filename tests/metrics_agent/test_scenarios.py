@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from common.models import Evidence
-from tests.metrics_agent.helpers import FAILURE_TIME
+from tests.metrics_agent.helpers import FAILURE_TIME, validate_against_canonical_schema
 from tests.metrics_agent.scenario_runner import (
     AGENT,
     investigate,
@@ -193,3 +193,10 @@ def test_evidence_satisfies_the_shared_contract_and_is_what_was_stored(
     assert evidence.agent == AGENT
     assert evidence.redaction_applied is True
     assert stored == evidence
+
+    # The JSON that actually reached the store satisfies P3's canonical schema. The store wraps
+    # a document with an integer `version`, which is not part of the contract.
+    path = tmp_path / "evidence" / str(evidence.incident_id) / f"{AGENT}.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document.pop("version")
+    validate_against_canonical_schema(document)
