@@ -7,6 +7,8 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
+from pathlib import Path
 from typing import TypeVar
 
 import aio_pika
@@ -14,8 +16,11 @@ from aio_pika.exceptions import AMQPConnectionError
 from pydantic import ValidationError
 
 from .config import MetricsAgentSettings, load_settings
+from .investigator import InvestigationConfig, Investigator
 from .models import IncidentCreatedEvent
+from .planner import CatalogPlanner
 from .prometheus_tool import PrometheusTool
+from .store import DEFAULT_SCHEMA_PATH, LocalJsonEvidenceWriter
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +58,27 @@ async def connect_with_retry(
 
 
 class MetricsAgent:
-    """Holds the PrometheusTool and handles one incident event."""
+    """Receives incident events and hands them to the Investigator."""
 
-    def __init__(self, prometheus: PrometheusTool) -> None:
-        self.prometheus = prometheus
+    def __init__(self, investigator: Investigator) -> None:
+        self.investigator = investigator
 
     def handle_incident(self, event: IncidentCreatedEvent) -> None:
-        logger.info("ready for investigation", extra={"incident_id": str(event.incident_id)})
+        logger.info("investigating incident", extra={"incident_id": str(event.incident_id)})
+        self.investigator.investigate(event)
+
+
+def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> MetricsAgent:
+    schema_path = Path(settings.EVIDENCE_SCHEMA_PATH) if settings.EVIDENCE_SCHEMA_PATH else DEFAULT_SCHEMA_PATH
+    config = InvestigationConfig(
+        lookback=timedelta(seconds=settings.INVESTIGATION_LOOKBACK_SECONDS),
+        tail=timedelta(seconds=settings.INVESTIGATION_TAIL_SECONDS),
+        settle=timedelta(seconds=settings.INVESTIGATION_SETTLE_SECONDS),
+        baseline=timedelta(seconds=settings.BASELINE_SECONDS),
+        step=settings.QUERY_STEP,
+    )
+    writer = LocalJsonEvidenceWriter(Path(settings.EVIDENCE_DIR), schema_path)
+    return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config))
 
 
 def parse_event(body: bytes) -> IncidentCreatedEvent:
@@ -74,7 +93,7 @@ async def run(settings: MetricsAgentSettings) -> None:
         max_retries=settings.PROMETHEUS_MAX_RETRIES,
         backoff_seconds=settings.PROMETHEUS_BACKOFF_SECONDS,
     )
-    agent = MetricsAgent(tool)
+    agent = build_agent(settings, tool)
     try:
         connection = await connect_with_retry(
             lambda: aio_pika.connect_robust(settings.RABBITMQ_URL),
@@ -95,9 +114,17 @@ async def run(settings: MetricsAgentSettings) -> None:
                     # requeue=False: a malformed message must not loop forever.
                     async with message.process(requeue=False):
                         try:
-                            agent.handle_incident(parse_event(message.body))
+                            event = parse_event(message.body)
                         except (ValueError, ValidationError):
                             logger.exception("dropping malformed incident message")
+                            continue
+                        try:
+                            # Investigation does blocking HTTP; keep the event loop (heartbeats) free.
+                            await asyncio.to_thread(agent.handle_incident, event)
+                        except Exception:  # the consumer must outlive any single bad incident
+                            logger.exception(
+                                "investigation failed", extra={"incident_id": str(event.incident_id)}
+                            )
     finally:
         tool.close()
 

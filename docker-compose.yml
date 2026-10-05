@@ -137,6 +137,8 @@ services:
       context: .
       dockerfile: agents/metrics_agent/Dockerfile
     restart: unless-stopped
+    volumes:
+      - metrics_agent_evidence:/app/evidence
     environment:
       PROMETHEUS_URL: http://prometheus:9090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
@@ -155,6 +157,7 @@ volumes:
   jenkins_home:
   prometheus_data:
   grafana_data:
+  metrics_agent_evidence:
 
 networks:
   devnet:
