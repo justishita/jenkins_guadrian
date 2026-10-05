@@ -174,16 +174,35 @@ async def test_every_tool_call_is_recorded_with_its_duration(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
-async def test_week_two_does_not_classify_the_failure_yet(tmp_path: Path) -> None:
-	"""Retrieval is not a root cause: the agent must not hand the Coordinator a guess."""
+async def test_a_moved_dependency_pin_is_classified_as_a_dependency_regression(
+	tmp_path: Path,
+) -> None:
+	"""The fixture commit moves httpx 0.28.1 -> 0.99.0 and the Test stage failed."""
 	github = routed_github(HEALTHY_ROUTES)
 	agent, _, _ = build(tmp_path, github)
 
 	evidence = await agent.run_event(incident_event())
 
-	assert evidence.failure_type is FailureTaxonomy.UNKNOWN
-	assert evidence.confidence <= 0.4
-	assert evidence.root_cause_hypotheses == []
+	assert evidence.failure_type is FailureTaxonomy.DEPENDENCY_REGRESSION
+	assert evidence.status == "completed"
+	assert evidence.confidence >= 0.5
+	assert evidence.root_cause_hypotheses
+	assert "httpx" in evidence.root_cause_hypotheses[0].hypothesis
+
+
+@pytest.mark.asyncio
+async def test_every_hypothesis_cites_only_evidence_that_exists(tmp_path: Path) -> None:
+	"""The shared contract rejects a dangling citation, so this must hold by construction."""
+	github = routed_github(HEALTHY_ROUTES)
+	agent, _, _ = build(tmp_path, github)
+
+	evidence = await agent.run_event(incident_event())
+	known = {item.id for item in evidence.evidence_items}
+
+	for hypothesis in evidence.root_cause_hypotheses:
+		cited = set(hypothesis.supporting_evidence) | set(hypothesis.contradicting_evidence)
+		assert cited <= known
+		assert hypothesis.supporting_evidence
 
 
 @pytest.mark.asyncio
@@ -195,7 +214,9 @@ async def test_a_commit_that_changed_nothing_reports_insufficient_evidence(tmp_p
 	evidence = await agent.run_event(incident_event())
 
 	assert evidence.status == "insufficient_evidence"
-	assert "unlikely to have a code cause" in evidence.summary
+	assert evidence.failure_type is FailureTaxonomy.UNKNOWN
+	# TC-12: absence of a code change is reported, not explained away.
+	assert "does not explain this failure" in evidence.summary
 	assert await store.read(INCIDENT_ID, AGENT_NAME) is not None
 
 
@@ -207,7 +228,8 @@ async def test_an_unreachable_github_still_produces_an_evidence_document(tmp_pat
 	evidence = await agent.run_event(incident_event())
 
 	assert evidence.status == "failed"
-	assert evidence.confidence == pytest.approx(0.1)
+	assert evidence.confidence == 0.0
+	assert evidence.root_cause_hypotheses == []
 	stored = await store.read(INCIDENT_ID, AGENT_NAME)
 	assert stored is not None and stored.status == "failed"
 

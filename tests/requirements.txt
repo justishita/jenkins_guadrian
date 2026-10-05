@@ -4,3 +4,4 @@ pytest-asyncio>=0.23.0
 respx>=0.21.0
 alembic>=1.13.0
 sqlalchemy[asyncio]>=2.0.29
+PyYAML>=6.0.2

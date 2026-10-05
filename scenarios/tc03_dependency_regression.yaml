@@ -1,0 +1,50 @@
+# TC-03 - Dependency Regression
+#
+# Owner: P3. Ground truth for the code-side investigation of a dependency upgrade that
+# breaks the build. Loaded and executed by tests/code_agent/test_scenarios.py, so this
+# file is a test input, not documentation of one.
+
+id: TC-03
+name: Dependency Regression
+owner: P3
+agent: code_agent
+
+scenario: >
+  A dependency in the target application is upgraded to an incompatible version. The
+  pipeline installs it, the test stage fails, and nothing else in the commit explains
+  the failure.
+
+fault:
+  description: Upgrade httpx in target_app/requirements.txt to an incompatible version.
+  inject: python scripts/inject_code_faults.py tc03
+  revert: python scripts/inject_code_faults.py revert
+
+incident:
+  branch: main
+  git_commit: a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
+  failed_stage: Test
+
+# The commit as GitHub reports it. Only the fields the code agent reads are listed.
+commit:
+  message: "Upgrade httpx for the new retry API"
+  author: Ishita
+  files:
+    - path: target_app/requirements.txt
+      status: modified
+      additions: 1
+      deletions: 1
+      patch: |
+        @@ -4,1 +4,1 @@
+        -httpx==0.28.1
+        +httpx==0.99.0
+
+expected:
+  status: completed
+  failure_type: dependency_regression
+  min_confidence: 0.7
+  # The hypothesis must point at the dependency change itself, not merely at the commit.
+  must_cite_kinds: [dependency]
+  hypothesis_mentions: [httpx, "0.28.1", "0.99.0"]
+  # It must not reach for a fix that hides the symptom.
+  must_not_mention: [skip, disable, remove the test]
+  next_steps_mention: [pin]

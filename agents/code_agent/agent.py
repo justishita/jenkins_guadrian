@@ -28,7 +28,9 @@ from langgraph.graph import END, StateGraph
 from pydantic import ValidationError
 
 from agents.code_agent.config import CodeAgentSettings, load_settings
-from agents.code_agent.diff_analysis import DiffAnalysis, FileRole, analyze_changes
+from agents.code_agent.diff_analysis import DiffAnalysis, analyze_changes
+from agents.code_agent.evidence_builder import EvidenceIndex, build_evidence_index
+from agents.code_agent.reasoning import IncidentContext, ReasoningResult, reason
 from agents.code_agent.tools.github_client import (
     CommitSummary,
     FileChange,
@@ -41,7 +43,6 @@ from common.evidence_store import EvidenceStore, FileEvidenceStore
 from common.models import (
     Evidence,
     EvidenceItem,
-    EvidenceLocation,
     FailureTaxonomy,
     IncidentCreatedEvent,
     ToolCallRecord,
@@ -52,10 +53,6 @@ from common.redaction import redact
 logger = logging.getLogger(__name__)
 
 AGENT_NAME = "code_agent"
-
-#: How many evidence items a single investigation may cite. Beyond this the document
-#: stops being reviewable, and the Coordinator has to fuse three of them.
-MAX_EVIDENCE_ITEMS = 40
 
 
 class EvidenceWriter(Protocol):
@@ -72,6 +69,8 @@ class CodeAgentState(TypedDict, total=False):
     pull_requests: list[PullRequestSummary]
     changed_files: list[FileChange]
     analysis: DiffAnalysis
+    index: EvidenceIndex
+    reasoning: ReasoningResult
     tool_calls: list[ToolCallRecord]
     evidence_items: list[EvidenceItem]
     evidence: Evidence | None
@@ -104,10 +103,12 @@ class CodeInvestigationAgent:
         graph = StateGraph(CodeAgentState)
         graph.add_node("fetch_context", self.fetch_context)
         graph.add_node("analyze", self.analyze)
+        graph.add_node("reason", self.reason)
         graph.add_node("finalize", self.finalize)
         graph.set_entry_point("fetch_context")
         graph.add_edge("fetch_context", "analyze")
-        graph.add_edge("analyze", "finalize")
+        graph.add_edge("analyze", "reason")
+        graph.add_edge("reason", "finalize")
         graph.add_edge("finalize", END)
         return graph.compile()
 
@@ -210,7 +211,57 @@ class CodeInvestigationAgent:
     async def analyze(self, state: CodeAgentState) -> dict[str, Any]:
         """Classify the change set and turn it into citable evidence items."""
         analysis = analyze_changes(state.get("changed_files") or [])
-        return {"analysis": analysis, "evidence_items": build_evidence_items(state, analysis)}
+        index = build_evidence_index(
+            analysis,
+            commit=state.get("commit"),
+            pull_requests=state.get("pull_requests") or [],
+            recent_commits=state.get("recent_commits") or [],
+        )
+        return {"analysis": analysis, "index": index, "evidence_items": index.items}
+
+    async def reason(self, state: CodeAgentState) -> dict[str, Any]:
+        """Rank the plausible code-side causes and decide what to report.
+
+        Skipped when retrieval failed outright: with no code context there is
+        nothing to reason over, and a hypothesis built on nothing is the failure
+        mode this whole agent exists to avoid.
+        """
+        if state.get("retrieval_failed"):
+            return {}
+
+        event = state["event"]
+        result = reason(
+            state.get("analysis") or analyze_changes([]),
+            IncidentContext(
+                failed_stage=event.failed_stage,
+                branch=event.branch,
+                git_commit=event.git_commit,
+                remediation_attempt=event.remediation_attempt,
+            ),
+            state.get("index") or build_evidence_index(analyze_changes([])),
+        )
+        await self._audit.record(
+            AuditRecord(
+                incident_id=event.incident_id,
+                actor=AGENT_NAME,
+                event_type="hypothesis_formed",
+                summary=result.summary,
+                payload={
+                    "failure_type": result.failure_type.value,
+                    "confidence": result.confidence,
+                    "hypotheses": [
+                        {
+                            "failure_type": hypothesis.failure_type.value,
+                            "confidence": hypothesis.confidence,
+                            "supporting_evidence": hypothesis.supporting_evidence,
+                        }
+                        for hypothesis in result.hypotheses
+                    ],
+                },
+                ok=True,
+            )
+        )
+        return {"reasoning": result}
 
     async def finalize(self, state: CodeAgentState) -> dict[str, Any]:
         """Build the evidence document and persist it to the shared store."""
@@ -277,138 +328,52 @@ class CodeInvestigationAgent:
 # --- evidence construction ----------------------------------------------------
 
 
-def build_evidence_items(state: CodeAgentState, analysis: DiffAnalysis) -> list[EvidenceItem]:
-    """Build the citable items: commits, pull requests and classified file changes.
-
-    Every claim the agent later makes must point at one of these IDs, which is what
-    stops a hypothesis from being unfalsifiable prose.
-    """
-    items: list[EvidenceItem] = []
-
-    commit = state.get("commit")
-    if commit is not None:
-        items.append(
-            EvidenceItem(
-                id="commit-head",
-                kind="commit",
-                source=commit.url or "github",
-                timestamp=_parse_timestamp(commit.authored_at),
-                content=f"{commit.short_sha} by {commit.author}: {commit.subject}",
-            )
-        )
-
-    for pull_request in state.get("pull_requests") or []:
-        items.append(
-            EvidenceItem(
-                id=f"pr-{pull_request.number}",
-                kind="commit",
-                source=pull_request.url or "github",
-                content=(
-                    f"PR #{pull_request.number} ({pull_request.state}"
-                    f"{', merged' if pull_request.merged else ''}) by {pull_request.author}: "
-                    f"{pull_request.title}"
-                ),
-            )
-        )
-
-    for index, file in enumerate(analysis.files, start=1):
-        role = analysis.roles.get(file.path, FileRole.OTHER)
-        items.append(
-            EvidenceItem(
-                id=f"file-{index}",
-                kind="commit",
-                source=file.path,
-                content=(
-                    f"{file.status} {role.value}: +{file.additions}/-{file.deletions} lines"
-                ),
-                location=EvidenceLocation(file=file.path),
-            )
-        )
-
-    for index, change in enumerate(analysis.dependency_changes, start=1):
-        items.append(
-            EvidenceItem(
-                id=f"dependency-{index}",
-                kind="commit",
-                source=change.path,
-                content=change.describe(),
-                location=EvidenceLocation(file=change.path),
-            )
-        )
-
-    for index, change in enumerate(analysis.configuration_changes, start=1):
-        items.append(
-            EvidenceItem(
-                id=f"config-{index}",
-                kind="commit",
-                source=change.path,
-                content=change.describe(),
-                location=EvidenceLocation(file=change.path),
-            )
-        )
-
-    for commit in (state.get("recent_commits") or [])[:5]:
-        head = state.get("commit")
-        if head is not None and commit.sha == head.sha:
-            continue
-        items.append(
-            EvidenceItem(
-                id=f"history-{commit.short_sha}",
-                kind="commit",
-                source=commit.url or "github",
-                timestamp=_parse_timestamp(commit.authored_at),
-                content=f"{commit.short_sha} by {commit.author}: {commit.subject}",
-            )
-        )
-
-    return items[:MAX_EVIDENCE_ITEMS]
-
-
 def build_evidence(state: CodeAgentState) -> Evidence:
     """Assemble the evidence document for a completed investigation.
 
-    Week 2 reports what it found without classifying it. The ``unknown`` type and low
-    confidence are deliberate: the Week 3 reasoning step replaces them, and until it
-    exists the agent must not let the Coordinator weigh a guess.
+    The reasoning step decides the classification, the confidence and whether this
+    agent is prepared to name a cause at all; this function only renders that
+    decision into the shared contract.
     """
     event = state["event"]
     analysis: DiffAnalysis = state.get("analysis") or analyze_changes([])
     items = state.get("evidence_items") or []
+    result = state.get("reasoning")
 
-    if state.get("retrieval_failed"):
-        status = "failed"
-        summary = f"Could not retrieve code context from GitHub: {state.get('retrieval_error', '')}".strip()
-        next_steps = [
-            "Check GITHUB_TOKEN scope and GITHUB_REPO, then re-run the code investigation."
-        ]
-    elif analysis.is_empty:
-        status = "insufficient_evidence"
-        summary = (
-            f"No file changes found for commit {event.git_commit[:7]} on {event.branch}; "
-            "the failure is unlikely to have a code cause."
+    if state.get("retrieval_failed") or result is None:
+        detail = state.get("retrieval_error", "")
+        return Evidence(
+            incident_id=event.incident_id,
+            agent=AGENT_NAME,
+            created_at=_utc_now(),
+            status="failed",
+            failure_type=FailureTaxonomy.UNKNOWN,
+            summary=redact(f"Could not retrieve code context from GitHub: {detail}".strip()),
+            evidence_items=items,
+            tool_calls=state.get("tool_calls") or [],
+            confidence=0.0,
+            recommended_next_steps=[
+                "Check GITHUB_TOKEN scope and GITHUB_REPO, then re-run the code investigation."
+            ],
+            failed_stage=event.failed_stage,
+            redaction_applied=True,
         )
-        next_steps = ["Correlate with the Jenkins and metrics evidence for this incident."]
-    else:
-        status = "completed"
-        summary = (
-            f"Commit {event.git_commit[:7]} on {event.branch} changed {analysis.summarize()}."
-        )
-        next_steps = ["Review the cited file changes against the failing build stage."]
 
     return Evidence(
         incident_id=event.incident_id,
         agent=AGENT_NAME,
         created_at=_utc_now(),
-        status=status,  # type: ignore[arg-type]
-        failure_type=FailureTaxonomy.UNKNOWN,
-        summary=redact(summary),
-        root_cause_hypotheses=[],
+        status=result.status,  # type: ignore[arg-type]
+        failure_type=result.failure_type,
+        summary=redact(
+            f"Commit {event.git_commit[:7]} on {event.branch}: {analysis.summarize()}. "
+            f"{result.summary}"
+        ),
+        root_cause_hypotheses=list(result.hypotheses),
         evidence_items=items,
         tool_calls=state.get("tool_calls") or [],
-        # Retrieval and classification are not a root cause. Confidence stays low
-        # until the Week 3 reasoning step earns it.
-        confidence=0.2 if status == "completed" else 0.1,
-        recommended_next_steps=next_steps,
+        confidence=result.confidence,
+        recommended_next_steps=list(result.recommended_next_steps),
         failed_stage=event.failed_stage,
         redaction_applied=True,
     )
@@ -432,15 +397,6 @@ def failed_evidence(state: CodeAgentState, error: BaseException) -> Evidence:
         redaction_applied=True,
     )
 
-
-def _parse_timestamp(value: str) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 # --- worker -------------------------------------------------------------------
