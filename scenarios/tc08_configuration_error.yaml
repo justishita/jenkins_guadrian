@@ -1,0 +1,47 @@
+# TC-08 - Configuration Error
+#
+# Owner: P3. Ground truth for the code-side investigation of a configuration value
+# changed to something the application rejects. Executed by
+# tests/code_agent/test_scenarios.py.
+
+id: TC-08
+name: Configuration Error
+owner: P3
+agent: code_agent
+
+scenario: >
+  An environment or configuration value is changed to an invalid one. The application
+  fails its settings validation at start-up, and the pipeline fails. The commit touches
+  only configuration, so there is no competing explanation.
+
+fault:
+  description: Set database_timeout_seconds in target_app/config/settings.yaml to a non-positive value.
+  inject: python scripts/inject_code_faults.py tc08
+  revert: python scripts/inject_code_faults.py revert
+
+incident:
+  branch: main
+  git_commit: b2c3d4e5f60718293a4b5c6d7e8f901234567890
+  failed_stage: Test
+
+commit:
+  message: "Reduce the database timeout"
+  author: Ishita
+  files:
+    - path: target_app/config/settings.yaml
+      status: modified
+      additions: 1
+      deletions: 1
+      patch: |
+        @@ -2,1 +2,1 @@
+        -database_timeout_seconds: 3
+        +database_timeout_seconds: -5
+
+expected:
+  status: completed
+  failure_type: config_error
+  min_confidence: 0.7
+  must_cite_kinds: [config]
+  hypothesis_mentions: [database_timeout_seconds, "not a positive value"]
+  must_not_mention: [skip, disable, remove the test]
+  next_steps_mention: [restore]

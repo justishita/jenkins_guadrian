@@ -1,0 +1,32 @@
+# TC-12 - Metrics Anomaly Without a Code Change (code-side expectation)
+#
+# Owner: P3. TC-12 belongs to the metrics agent, but it has a code-side expectation
+# that is just as important and easier to get wrong: when nothing changed, this agent
+# must say so rather than blaming the most recent commit it can see.
+
+id: TC-12
+name: Metrics Anomaly Without Code Change
+owner: P3
+agent: code_agent
+
+scenario: >
+  Latency and error metrics degrade without any code change. The failing build points
+  at a commit, but that commit changed nothing in the repository.
+
+incident:
+  branch: main
+  git_commit: c3d4e5f60718293a4b5c6d7e8f90123456789012
+  failed_stage: Test
+
+commit:
+  message: "Merge branch 'main'"
+  author: Ishita
+  files: []
+
+expected:
+  status: insufficient_evidence
+  failure_type: unknown
+  # An assertion of ignorance may not be made confidently.
+  max_confidence: 0.4
+  hypothesis_mentions: ["does not explain this failure"]
+  must_not_mention: [skip, disable]

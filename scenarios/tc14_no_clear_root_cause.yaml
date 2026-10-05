@@ -1,0 +1,79 @@
+# TC-14 - No Clear Root Cause
+#
+# Owner: P3. The failure mode this agent exists to avoid: a plausible-sounding cause
+# invented from weak evidence. A broad commit touching many unrelated files, with no
+# failing stage recorded, must be reported as insufficient evidence.
+
+id: TC-14
+name: No Clear Root Cause
+owner: P3
+agent: code_agent
+
+scenario: >
+  A build fails after a wide-ranging commit, with no stage recorded and no single
+  signal pointing anywhere. The agent must report low confidence and ask for more
+  investigation instead of naming a cause.
+
+incident:
+  branch: main
+  git_commit: d4e5f60718293a4b5c6d7e8f9012345678901234
+  failed_stage: null
+
+commit:
+  message: "Refactor"
+  author: Ishita
+  files:
+    - path: target_app/app/main.py
+      status: modified
+      additions: 20
+      deletions: 14
+      patch: |
+        @@ -1,2 +1,2 @@
+        -value = compute()
+        +value = compute_v2()
+    - path: target_app/app/db_client.py
+      status: modified
+      additions: 11
+      deletions: 9
+      patch: |
+        @@ -1,2 +1,2 @@
+        -timeout = 3
+        +timeout = 5
+    - path: target_app/app/config.py
+      status: modified
+      additions: 8
+      deletions: 6
+      patch: |
+        @@ -1,2 +1,2 @@
+        -x = 1
+        +x = 2
+    - path: target_app/tests/test_orders.py
+      status: modified
+      additions: 6
+      deletions: 4
+      patch: |
+        @@ -1,2 +1,2 @@
+        -assert total == 10
+        +assert total == 12
+    - path: target_app/app/__init__.py
+      status: modified
+      additions: 2
+      deletions: 1
+      patch: |
+        @@ -1,1 +1,2 @@
+        +from . import main
+    - path: target_app/deploy/deploy.sh
+      status: modified
+      additions: 3
+      deletions: 2
+      patch: |
+        @@ -1,2 +1,2 @@
+        -echo deploying
+        +echo deploying v2
+
+expected:
+  status: insufficient_evidence
+  failure_type: unknown
+  max_confidence: 0.49
+  hypothesis_mentions: ["not strong enough"]
+  next_steps_mention: [correlate]

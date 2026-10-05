@@ -75,7 +75,14 @@ class ToolCallRecord(BaseModel):
 
 
 class Evidence(BaseModel):
-	"""Versioned Jenkins-agent evidence, aligned with the checked-in stub schema."""
+	"""One agent's findings about one incident: the shared cross-agent contract.
+
+	Canonical JSON Schema: ``common/evidence_schema.json``, regenerated from this
+	model by ``scripts/generate_evidence_schema.py``. Changing a field here changes
+	the contract for all three agents and the Coordinator, so regenerate the schema
+	in the same commit. ``agent`` defaults to ``jenkins_agent`` for backwards
+	compatibility; every other agent must set it explicitly.
+	"""
 
 	schema_version: Literal["0.1-stub"] = "0.1-stub"
 	incident_id: UUID

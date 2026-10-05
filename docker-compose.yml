@@ -171,7 +171,52 @@ services:
     networks:
       - devnet
 
-  # Person 3: add the OPA service here.
+  opa:
+    image: openpolicyagent/opa:1.21.1-static
+    # Policies are mounted read-only: the running gate can never be edited from
+    # inside the container, and `opa test policies` in CI checks the same bundle.
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "/policies"
+    volumes:
+      - ./policies:/policies:ro
+    ports:
+      - "8181:8181"
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "--fail", "data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - devnet
+
+  code-agent:
+    build:
+      context: .
+      dockerfile: agents/code_agent/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data/evidence:/app/data/evidence
+      - ./data/audit:/app/data/audit
+    environment:
+      OPA_URL: http://opa:8181
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?Set GITHUB_TOKEN in .env}
+      GITHUB_REPO: ${GITHUB_REPO:?Set GITHUB_REPO in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    networks:
+      - devnet
 
 volumes:
   postgres_data:

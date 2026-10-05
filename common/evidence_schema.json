@@ -1,1 +1,320 @@
-{}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jenkinsguardians.local/schemas/evidence.json",
+  "title": "Evidence",
+  "description": "Canonical contract for one agent's findings about one incident. Each of the jenkins_agent, metrics_agent and code_agent writes exactly one document per incident; agents never read each other's documents directly. Generated from common.models.Evidence by scripts/generate_evidence_schema.py - edit the model, not this file. The evidence store wraps a stored document with an integer 'version' field that is not part of this contract.",
+  "$defs": {
+    "EvidenceHypothesis": {
+      "properties": {
+        "hypothesis": {
+          "minLength": 1,
+          "title": "Hypothesis",
+          "type": "string"
+        },
+        "failure_type": {
+          "$ref": "#/$defs/FailureTaxonomy"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "supporting_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Evidence",
+          "type": "array"
+        },
+        "contradicting_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contradicting Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "failure_type",
+        "confidence"
+      ],
+      "title": "EvidenceHypothesis",
+      "type": "object"
+    },
+    "EvidenceItem": {
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "log_excerpt",
+            "metric",
+            "commit",
+            "test_result"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "source",
+        "content"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "EvidenceLocation": {
+      "properties": {
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line"
+        }
+      },
+      "title": "EvidenceLocation",
+      "type": "object"
+    },
+    "FailureTaxonomy": {
+      "enum": [
+        "code_test_failure",
+        "build_compilation_failure",
+        "dependency_regression",
+        "timeout",
+        "resource_exhaustion",
+        "infra_network_failure",
+        "config_error",
+        "auth_failure",
+        "flaky_test",
+        "deployment_failure",
+        "unknown"
+      ],
+      "title": "FailureTaxonomy",
+      "type": "string"
+    },
+    "ToolCallRecord": {
+      "properties": {
+        "tool": {
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "duration_ms": {
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "number"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool",
+        "duration_ms",
+        "ok"
+      ],
+      "title": "ToolCallRecord",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "0.1-stub",
+      "default": "0.1-stub",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "incident_id": {
+      "format": "uuid",
+      "title": "Incident Id",
+      "type": "string"
+    },
+    "agent": {
+      "default": "jenkins_agent",
+      "enum": [
+        "jenkins_agent",
+        "metrics_agent",
+        "code_agent"
+      ],
+      "title": "Agent",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "insufficient_evidence"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "failure_type": {
+      "$ref": "#/$defs/FailureTaxonomy"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "root_cause_hypotheses": {
+      "items": {
+        "$ref": "#/$defs/EvidenceHypothesis"
+      },
+      "title": "Root Cause Hypotheses",
+      "type": "array"
+    },
+    "evidence_items": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Evidence Items",
+      "type": "array"
+    },
+    "tool_calls": {
+      "items": {
+        "$ref": "#/$defs/ToolCallRecord"
+      },
+      "title": "Tool Calls",
+      "type": "array"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "recommended_next_steps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Recommended Next Steps",
+      "type": "array"
+    },
+    "failed_stage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failed Stage"
+    },
+    "failing_tests": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Failing Tests",
+      "type": "array"
+    },
+    "error_signature": {
+      "default": "",
+      "title": "Error Signature",
+      "type": "string"
+    },
+    "log_truncated": {
+      "default": false,
+      "title": "Log Truncated",
+      "type": "boolean"
+    },
+    "redaction_applied": {
+      "default": false,
+      "title": "Redaction Applied",
+      "type": "boolean"
+    },
+    "flaky_score": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Flaky Score"
+    }
+  },
+  "required": [
+    "incident_id",
+    "created_at",
+    "status",
+    "failure_type",
+    "summary",
+    "confidence"
+  ],
+  "type": "object"
+}
