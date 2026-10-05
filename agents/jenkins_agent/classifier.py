@@ -64,6 +64,10 @@ FLAKY_HISTORY_RE = re.compile(
     r"\bpassed\b.*(?:same commit|commit unchanged|same revision)",
     re.IGNORECASE,
 )
+PYTEST_COLLECTION_RE = re.compile(
+    r"^\s*(?:ERROR\s+collecting\s+|ImportError while importing test module)",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _failed_stage_ids(parsed: ParsedBuild, category: str) -> list[str]:
@@ -151,9 +155,18 @@ def _flaky_evidence(parsed: ParsedBuild) -> list[str]:
 
 
 def _build_compilation_evidence(parsed: ParsedBuild) -> list[str]:
-    stage_ids = _failed_stage_ids(parsed, "build")
     compiler_ids = _compiler_errors(parsed)
-    return [*stage_ids, *compiler_ids] if stage_ids and compiler_ids else []
+    build_stage_ids = _failed_stage_ids(parsed, "build")
+    if build_stage_ids and compiler_ids:
+        return [*build_stage_ids, *compiler_ids]
+    if compiler_ids and any(PYTEST_COLLECTION_RE.search(block) for block in parsed.error_blocks):
+        collection_ids = [
+            f"error_blocks[{index}]"
+            for index, block in enumerate(parsed.error_blocks)
+            if PYTEST_COLLECTION_RE.search(block)
+        ]
+        return [*collection_ids, *compiler_ids]
+    return []
 
 
 def _test_timeout_evidence(parsed: ParsedBuild) -> list[str]:

@@ -1,0 +1,6 @@
+{
+  "expected_failure_type": "code_test_failure",
+  "file": "target_app/tests/test_orders.py",
+  "line": 27,
+  "test_name": "test_create_order"
+}

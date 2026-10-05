@@ -46,6 +46,12 @@ SYSTEM_PROMPT = """You are a CI failure analyst investigating one Jenkins incide
 Ground every claim in a cited evidence ID. If evidence is insufficient, say so
 with low confidence. Never invent file names or line numbers. Never suggest
 disabling tests or security checks. Use only the supplied read-only tools.
+For assertion failures, name the failing test and source file/line when known,
+classify as code_test_failure, and recommend "correct the implementation/test".
+For SyntaxError, ImportError, or collection failures, name the source file/line
+when known and classify as build_compilation_failure, including collection
+errors surfaced in the Test stage. Do not call a confirmed code/test failure an
+environment problem.
 Respond with one JSON object containing status, failure_type, summary,
 root_cause_hypotheses (hypothesis, failure_type, confidence,
 supporting_evidence, contradicting_evidence), confidence, and
@@ -884,27 +890,94 @@ def _evidence_from_answer(state: AgentState, answer: LLMAnswer) -> Evidence:
     event = state["event"]
     parsed = state["parsed"]
     status = answer.status if answer.status in {"completed", "failed", "insufficient_evidence"} else "completed"
+    rule_hypotheses = state.get("hypotheses") or rule_based_classify(parsed)
+    supported_types = {hypothesis.failure_type for hypothesis in rule_hypotheses}
+    failure_type = answer.failure_type
+    classification_overridden = False
+    if (
+        rule_hypotheses[0].failure_type is not FailureTaxonomy.UNKNOWN
+        and answer.failure_type not in supported_types
+    ):
+        failure_type = rule_hypotheses[0].failure_type
+        classification_overridden = True
+
+    summary = redact(answer.summary)
+    recommended_next_steps = [redact(step) for step in answer.recommended_next_steps]
+    evidence_ids = {item.id for item in state.get("evidence_items", [])}
+    if classification_overridden:
+        root_cause_hypotheses = [
+            EvidenceHypothesis(
+                hypothesis=redact(hypothesis.reason),
+                failure_type=hypothesis.failure_type,
+                confidence=hypothesis.rule_confidence,
+                supporting_evidence=[
+                    evidence_id
+                    for evidence_id in hypothesis.matched_evidence_ids
+                    if evidence_id in evidence_ids
+                ],
+            )
+            for hypothesis in rule_hypotheses
+        ]
+    else:
+        root_cause_hypotheses = [
+            hypothesis.model_copy(
+                update={
+                    "hypothesis": redact(hypothesis.hypothesis),
+                    "supporting_evidence": [redact(item) for item in hypothesis.supporting_evidence],
+                    "contradicting_evidence": [redact(item) for item in hypothesis.contradicting_evidence],
+                }
+            )
+            for hypothesis in answer.root_cause_hypotheses
+        ]
+
+    if failure_type is FailureTaxonomy.CODE_TEST_FAILURE and parsed.failing_tests:
+        failing_test = parsed.failing_tests[0]
+        location = _format_location(failing_test.file, failing_test.line)
+        factual_summary = (
+            f"Failing test {failing_test.name}"
+            + (f" in {location}" if location else "")
+        )
+        if any(term in summary.casefold() for term in ("environment", "infrastructure", "network")):
+            summary = f"A test assertion failed. {factual_summary}."
+        else:
+            summary = _append_fact(summary, factual_summary)
+        recommendation = "Correct the implementation/test."
+        if not any("correct the implementation/test" in step.casefold() for step in recommended_next_steps):
+            recommended_next_steps.insert(0, recommendation)
+    elif failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE:
+        compile_error = next(
+            (
+                error for error in parsed.compiler_errors
+                if error.file or error.line
+            ),
+            None,
+        )
+        if compile_error is not None:
+            location = _format_location(compile_error.file, compile_error.line)
+            if location:
+                summary = _append_fact(summary, f"Compiler error at {location}")
+
+    if state.get("log_truncated"):
+        recommended_next_steps.append(
+            "Review the truncated build log before treating this classification as complete."
+        )
+
     return Evidence.model_validate(
         {
             "incident_id": event.incident_id,
             "created_at": datetime.now(timezone.utc),
             "status": status,
-            "failure_type": answer.failure_type,
-            "summary": redact(answer.summary),
-            "root_cause_hypotheses": [
-                hypothesis.model_copy(
-                    update={
-                        "hypothesis": redact(hypothesis.hypothesis),
-                        "supporting_evidence": [redact(item) for item in hypothesis.supporting_evidence],
-                        "contradicting_evidence": [redact(item) for item in hypothesis.contradicting_evidence],
-                    }
-                )
-                for hypothesis in answer.root_cause_hypotheses
-            ],
+            "failure_type": failure_type,
+            "summary": summary,
+            "root_cause_hypotheses": root_cause_hypotheses,
             "evidence_items": state.get("evidence_items", []),
             "tool_calls": state.get("tool_calls", []),
-            "confidence": answer.confidence,
-            "recommended_next_steps": [redact(step) for step in answer.recommended_next_steps],
+            "confidence": min(
+                answer.confidence,
+                rule_hypotheses[0].rule_confidence if classification_overridden else 1.0,
+                0.6 if state.get("log_truncated") else 1.0,
+            ),
+            "recommended_next_steps": recommended_next_steps,
             "failed_stage": redact(event.failed_stage or parsed.failed_stage) if (event.failed_stage or parsed.failed_stage) else None,
             "failing_tests": [redact(test.name) for test in parsed.failing_tests],
             "error_signature": parsed.error_signature,
@@ -939,11 +1012,36 @@ def _fallback_evidence(state: AgentState, *, status: str | None = None) -> Evide
         for hypothesis in hypotheses
     ]
     confidence = max((hypothesis.rule_confidence for hypothesis in hypotheses), default=0.2)
-    summary = (
-        "Insufficient evidence to identify a specific failure cause."
+    if state.get("log_truncated"):
+        confidence = min(confidence, 0.6)
+    summary = "Insufficient evidence to identify a specific failure cause." if is_unknown else redact(primary.reason)
+    recommended_next_steps = (
+        ["Collect additional build evidence and review the related change before remediation."]
         if is_unknown
-        else redact(primary.reason)
+        else ["Review the cited evidence and confirm the suspected cause before remediation."]
     )
+    if primary.failure_type is FailureTaxonomy.CODE_TEST_FAILURE and parsed.failing_tests:
+        failing_test = parsed.failing_tests[0]
+        location = _format_location(failing_test.file, failing_test.line)
+        summary = _append_fact(
+            summary,
+            f"Failing test {failing_test.name}"
+            + (f" in {location}" if location else ""),
+        )
+        recommended_next_steps.insert(0, "Correct the implementation/test.")
+    elif primary.failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE:
+        compile_error = next(
+            (error for error in parsed.compiler_errors if error.file or error.line),
+            None,
+        )
+        if compile_error is not None:
+            location = _format_location(compile_error.file, compile_error.line)
+            if location:
+                summary = _append_fact(summary, f"Compiler error at {location}")
+    if state.get("log_truncated"):
+        recommended_next_steps.append(
+            "Review the truncated build log before treating this classification as complete."
+        )
     return Evidence.model_validate(
         {
             "incident_id": event.incident_id,
@@ -955,11 +1053,7 @@ def _fallback_evidence(state: AgentState, *, status: str | None = None) -> Evide
             "evidence_items": evidence_items,
             "tool_calls": state.get("tool_calls", []),
             "confidence": confidence,
-            "recommended_next_steps": (
-                ["Collect additional build evidence and review the related change before remediation."]
-                if is_unknown
-                else ["Review the cited evidence and confirm the suspected cause before remediation."]
-            ),
+            "recommended_next_steps": recommended_next_steps,
             "failed_stage": redact(event.failed_stage or parsed.failed_stage)
             if (event.failed_stage or parsed.failed_stage)
             else None,
@@ -974,6 +1068,19 @@ def _fallback_evidence(state: AgentState, *, status: str | None = None) -> Evide
             ),
         }
     )
+
+
+def _format_location(file: str | None, line: int | None) -> str:
+    location = file or ""
+    if line is not None:
+        location = f"{location}:{line}" if location else f"line {line}"
+    return location
+
+
+def _append_fact(summary: str, fact: str) -> str:
+    if fact.casefold() in summary.casefold():
+        return summary
+    return f"{summary.rstrip()} {fact}."
 
 
 def parse_event(body: bytes) -> IncidentCreatedEvent:
