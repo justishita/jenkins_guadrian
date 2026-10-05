@@ -1,0 +1,8 @@
+<testResult _class='hudson.tasks.junit.TestResult'><duration>0.291</duration><empty>false</empty><failCount>1</failCount><passCount>0</passCount><skipCount>0</skipCount><suite><case><age>1</age><className></className><duration>0.0</duration><errorDetails>collection failure</errorDetails><errorStackTrace>ImportError while importing test module '/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_orders.py:10: in &lt;module&gt;
+    from target_app.app.config import Settings
+E   ModuleNotFoundError: No module named 'target_app'</errorStackTrace><failedSince>2</failedSince><name>tests.test_orders</name><properties></properties><skipped>false</skipped><status>FAILED</status></case><duration>0.291</duration><enclosingBlockName>Declarative: Post Actions</enclosingBlockName><enclosingBlock>133</enclosingBlock><name>pytest</name><nodeId>136</nodeId><properties></properties><timestamp>2026-10-05T10:23:00.124514+00:00</timestamp></suite></testResult>
