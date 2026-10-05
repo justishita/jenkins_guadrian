@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from agents.metrics_agent.investigator import InvestigationConfig, Investigator
-from agents.metrics_agent.models import IncidentCreatedEvent, QueryResult
+from agents.metrics_agent.models import IncidentCreatedEvent
 from agents.metrics_agent.planner import CatalogPlanner
 from agents.metrics_agent.prometheus_tool import (
     PrometheusQueryError,
@@ -27,46 +27,13 @@ from common.models import Evidence, FailureTaxonomy
 from tests.metrics_agent.helpers import (
     FAILURE_TIME,
     NOW,
-    flat,
+    FakeTool,
     make_window,
-    samples,
     step_up,
 )
 
 MIB = 1024 * 1024
 Fn = Callable[[datetime], float]
-
-
-class FakeTool:
-    """Stands in for PrometheusTool; serves a synthetic series per catalog query."""
-
-    def __init__(self, overrides: dict[str, Fn] | None = None, errors: dict[str, Exception] | None = None) -> None:
-        window = make_window()
-        self.defaults: dict[str, Fn] = {
-            AVAILABILITY.promql: flat(1.0),
-            LATENCY_P95.promql: flat(0.007),
-            CPU_RATE.promql: flat(0.002),
-            MEMORY_RSS.promql: flat(80 * MIB),
-        }
-        self.defaults.update(overrides or {})
-        self.errors = errors or {}
-        self.window = window
-        self.calls: list[str] = []
-
-    def query_range(self, promql: str, start: datetime, end: datetime, step: str) -> QueryResult:
-        self.calls.append(promql)
-        if promql in self.errors:
-            raise self.errors[promql]
-        fn = self.defaults[promql]
-        if fn is None:  # type: ignore[comparison-overlap]
-            return QueryResult(promql=promql, result_type="matrix", series=[])
-        from agents.metrics_agent.models import Series
-
-        return QueryResult(
-            promql=promql,
-            result_type="matrix",
-            series=[Series(labels={}, samples=samples(start, end, fn, inclusive_end=True))],
-        )
 
 
 class MemoryWriter:
