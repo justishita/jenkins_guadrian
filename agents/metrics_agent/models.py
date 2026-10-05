@@ -1,10 +1,10 @@
 """Typed models for data crossing the Prometheus tool and RabbitMQ boundaries."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Sample(BaseModel):
@@ -35,11 +35,20 @@ class QueryResult(BaseModel):
         return not self.series
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 class IncidentCreatedEvent(BaseModel):
-    """Fields the Metrics agent needs from an `incident.created` message.
+    """The `incident.created` payload published by the backend webhook.
 
     Extra fields are ignored so the agent does not break when the backend
-    payload grows; the official schema is owned by P3.
+    payload grows; the official schema is owned by P3. `timestamp` is the
+    failure time and anchors the investigation window.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -47,4 +56,15 @@ class IncidentCreatedEvent(BaseModel):
     incident_id: UUID
     job_name: str | None = None
     build_number: int | None = None
-    created_at: datetime | None = None
+    build_url: str | None = None
+    branch: str | None = None
+    git_commit: str | None = None
+    failed_stage: str | None = None
+    remediation_attempt: int = Field(default=0, ge=0)
+    timestamp: datetime | None = None
+    received_at: datetime | None = None
+
+    @field_validator("timestamp", "received_at")
+    @classmethod
+    def _utc(cls, value: datetime | None) -> datetime | None:
+        return _as_utc(value)

@@ -75,11 +75,33 @@ def test_parse_event_rejects_invalid_json() -> None:
         parse_event(b"not json")
 
 
-def test_agent_logs_ready_without_querying_prometheus(caplog: pytest.LogCaptureFixture) -> None:
-    tool = MagicMock()
-    agent = MetricsAgent(tool)
+def test_parse_event_reads_full_webhook_payload_as_utc() -> None:
+    body = json.dumps(
+        {
+            "incident_id": str(uuid4()),
+            "job_name": "target-app/main",
+            "build_number": 7,
+            "build_url": "http://jenkins/job/7/",
+            "branch": "main",
+            "git_commit": "abc123",
+            "failed_stage": "Deploy",
+            "remediation_attempt": 1,
+            "timestamp": "2026-10-05T09:30:00+05:30",
+            "received_at": "2026-10-05T04:00:01",
+        }
+    ).encode()
+    event = parse_event(body)
+    assert event.failed_stage == "Deploy"
+    assert event.timestamp is not None and event.timestamp.utcoffset().total_seconds() == 0
+    assert event.timestamp.hour == 4
+    assert event.received_at is not None and event.received_at.tzinfo is not None
+
+
+def test_agent_delegates_to_investigator(caplog: pytest.LogCaptureFixture) -> None:
+    investigator = MagicMock()
+    agent = MetricsAgent(investigator)
     event = parse_event(json.dumps({"incident_id": str(uuid4())}).encode())
     with caplog.at_level(logging.INFO):
         agent.handle_incident(event)
-    assert "ready for investigation" in caplog.text
-    tool.query.assert_not_called()
+    assert "investigating incident" in caplog.text
+    investigator.investigate.assert_called_once_with(event)

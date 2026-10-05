@@ -17,6 +17,15 @@ class MetricsAgentSettings(BaseSettings):
     RABBITMQ_CONNECT_RETRIES: int = Field(default=8, ge=0, le=20)
     RABBITMQ_CONNECT_BACKOFF_SECONDS: float = Field(default=1.0, ge=0, le=30)
 
+    INVESTIGATION_LOOKBACK_SECONDS: int = Field(default=300, gt=0, le=86_400)
+    INVESTIGATION_TAIL_SECONDS: int = Field(default=60, ge=0, le=3_600)
+    INVESTIGATION_SETTLE_SECONDS: int = Field(default=30, ge=0, le=120)
+    BASELINE_SECONDS: int = Field(default=600, gt=0, le=86_400)
+    QUERY_STEP: str = Field(default="15s", pattern=r"^\d+[smh]$")
+
+    EVIDENCE_DIR: str = "evidence"
+    EVIDENCE_SCHEMA_PATH: str | None = None
+
     EXCHANGE_NAME: str = "incidents"
     QUEUE_NAME: str = "metrics_agent.incident.created"
     ROUTING_KEY: str = "incident.created"

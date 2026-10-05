@@ -11,5 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY agents/__init__.py ./agents/__init__.py
 COPY agents/metrics_agent ./agents/metrics_agent
+COPY common/evidence_schema_stub.json ./common/evidence_schema_stub.json
+
+ENV EVIDENCE_DIR=/app/evidence
 
 CMD ["python", "-m", "agents.metrics_agent"]
