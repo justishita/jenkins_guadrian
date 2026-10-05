@@ -29,6 +29,13 @@ class SanityResult(BaseModel):
     baseline: list[Sample]
     incident: list[Sample]
     dropped_non_finite: int = 0
+    # How trustworthy the data is, 0..1: sample coverage of both windows, less any dropped
+    # non-finite values. Feeds confidence; it is not a pass/fail gate.
+    quality: float = 0.0
+
+
+def _coverage(count: int, expected: float) -> float:
+    return min(1.0, count / expected) if expected > 0 else 0.0
 
 
 def check(
@@ -38,6 +45,7 @@ def check(
     min_baseline: int = 8,
     min_incident: int = 3,
     stale_after: timedelta = timedelta(seconds=60),
+    step: timedelta = timedelta(seconds=15),
 ) -> SanityResult:
     """Validate a range-query result and split it into baseline and incident samples."""
     if result.empty:
@@ -63,6 +71,16 @@ def check(
     if any(not low <= s.value <= high for s in baseline + incident):
         issues.append(SanityIssue.OUT_OF_RANGE)
 
+    expected_baseline = (window.start - window.baseline_start) / step
+    expected_incident = (window.end - window.start) / step + 1
+    coverage = min(_coverage(len(baseline), expected_baseline), _coverage(len(incident), expected_incident))
+    quality = coverage * (1 - dropped / len(series.samples)) if series.samples else 0.0
+
     return SanityResult(
-        ok=not issues, issues=issues, baseline=baseline, incident=incident, dropped_non_finite=dropped
+        ok=not issues,
+        issues=issues,
+        baseline=baseline,
+        incident=incident,
+        dropped_non_finite=dropped,
+        quality=round(quality, 4),
     )

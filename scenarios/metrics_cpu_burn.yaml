@@ -1,0 +1,46 @@
+id: metrics-cpu-burn
+name: CPU Burn
+owner: P2
+agent: metrics_agent
+
+scenario: >
+  Process CPU climbs from near idle to most of a core and stays there, while latency,
+  memory and availability are normal.
+
+incident:
+  branch: main
+  failed_stage: Test
+
+metrics:
+  cpu_rate:
+    fault: {shape: step, at: -120, level: 0.9}
+
+expected:
+  status: completed
+  failure_type: resource_exhaustion
+  min_confidence: 0.7
+  max_confidence: 0.95
+  # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
+  hypotheses:
+    - failure_type: resource_exhaustion
+      mentions: [cpu_rate, 'memory_rss stayed normal']
+  # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
+  supporting_evidence: [metric-cpu_rate]
+  contradicting_evidence: [metric-memory_rss]
+  # The query plan this scenario expects: how many queries, which PromQL (in order), and
+  # whether each call succeeded.
+  tool_calls:
+    count: 4
+    ok: [true, true, true, true]
+    expected_promql:
+      - 'up{job="target_app"}'
+      - 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="target_app"}[1m])))'
+      - 'rate(process_cpu_seconds{job="target_app"}[1m])'
+      - 'process_memory_bytes{job="target_app"}'
+  # The investigation window in seconds relative to the failure time. incident_start is null
+  # when no metric evidence was produced, so there is no incident window to inspect.
+  window:
+    baseline_start: -900
+    incident_start: -300
+    end: 60
+  next_steps_mention: [CPU/memory limits]

@@ -5,3 +5,4 @@ respx>=0.21.0
 alembic>=1.13.0
 sqlalchemy[asyncio]>=2.0.29
 PyYAML>=6.0.2
+jsonschema>=4.21.0
