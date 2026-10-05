@@ -1,0 +1,24 @@
+============================= test session starts ==============================
+collected 20 items
+FAILED tests/test_many.py::test_case_00 - AssertionError: mismatch 0
+FAILED tests/test_many.py::test_case_01 - AssertionError: mismatch 1
+FAILED tests/test_many.py::test_case_02 - AssertionError: mismatch 2
+FAILED tests/test_many.py::test_case_03 - AssertionError: mismatch 3
+FAILED tests/test_many.py::test_case_04 - AssertionError: mismatch 4
+FAILED tests/test_many.py::test_case_05 - AssertionError: mismatch 5
+FAILED tests/test_many.py::test_case_06 - AssertionError: mismatch 6
+FAILED tests/test_many.py::test_case_07 - AssertionError: mismatch 7
+FAILED tests/test_many.py::test_case_08 - AssertionError: mismatch 8
+FAILED tests/test_many.py::test_case_09 - AssertionError: mismatch 9
+FAILED tests/test_many.py::test_case_10 - AssertionError: mismatch 10
+FAILED tests/test_many.py::test_case_11 - AssertionError: mismatch 11
+FAILED tests/test_many.py::test_case_12 - AssertionError: mismatch 12
+FAILED tests/test_many.py::test_case_13 - AssertionError: mismatch 13
+FAILED tests/test_many.py::test_case_14 - AssertionError: mismatch 14
+FAILED tests/test_many.py::test_case_15 - AssertionError: mismatch 15
+FAILED tests/test_many.py::test_case_16 - AssertionError: mismatch 16
+FAILED tests/test_many.py::test_case_17 - AssertionError: mismatch 17
+FAILED tests/test_many.py::test_case_18 - AssertionError: mismatch 18
+FAILED tests/test_many.py::test_case_19 - AssertionError: mismatch 19
+=========================== short test summary info ============================
+20 failed in 0.50s

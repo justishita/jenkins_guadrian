@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11
+collected 1 item
+
+_______________________ test_rejects_invalid_branch __________________________
+
+    def test_rejects_invalid_branch():
+        result = validate_branch("bad")
+>       assert result.status_code == 400
+E       assert 500 == 400
+
+tests/test_checkout.py:42: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_checkout.py::test_rejects_invalid_branch - AssertionError: expected 400

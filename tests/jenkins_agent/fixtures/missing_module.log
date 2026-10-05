@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/var/jenkins_home/workspace/payments/app/worker.py", line 3, in <module>
+    import missing_package
+ModuleNotFoundError: No module named 'missing_package'

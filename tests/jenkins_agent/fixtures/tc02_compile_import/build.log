@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+ERROR collecting tests/test_orders.py
+Traceback (most recent call last):
+  File "/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py", line 4, in <module>
+    from target_app.app.main import create_app
+  File "/var/jenkins_home/workspace/target-app_main/target_app/app/main.py", line 3, in <module>
+    import _jenkins_fault_injection_missing_module_
+ModuleNotFoundError: No module named '_jenkins_fault_injection_missing_module_'
+=========================== short test summary info ============================
+ERROR tests/test_orders.py
+============================== 1 error in 0.10s ===============================

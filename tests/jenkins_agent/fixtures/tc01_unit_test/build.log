@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+collected 1 item
+
+__________________________ test_create_order ________________________________
+target_app/tests/test_orders.py:27: AssertionError
+E       assert 3 == 4
+
+=========================== short test summary info ============================
+FAILED tests/test_orders.py::test_create_order - AssertionError: expected quantity
+============================== 1 failed in 0.12s ==============================

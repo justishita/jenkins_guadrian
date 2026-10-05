@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/var/jenkins_home/workspace/payments/app/main.py", line 17
+    return {"ready": True
+                       ^
+SyntaxError: '{' was never closed

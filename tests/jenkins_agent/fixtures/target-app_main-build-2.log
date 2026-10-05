@@ -1,0 +1,441 @@
+Branch indexing
+Connecting to https://api.github.com with no credentials, anonymous access
+Obtained target_app/Jenkinsfile from 506b2a73c19b836af36ff0df0278af3a09c1cc4e
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on Jenkins in /var/jenkins_home/workspace/target-app_main
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Declarative: Checkout SCM)
+[Pipeline] checkout
+The recommended git tool is: NONE
+Warning: CredentialId "github-token" could not be found.
+Cloning the remote Git repository
+Cloning with configured refspecs honoured and without tags
+Cloning repository https://github.com/justishita/jenkins_guadrian.git
+ > git init /var/jenkins_home/workspace/target-app_main # timeout=10
+Fetching upstream changes from https://github.com/justishita/jenkins_guadrian.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.47.3'
+ > git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10
+ > git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10
+ > git config --add remote.origin.fetch +refs/heads/main:refs/remotes/origin/main # timeout=10
+Avoid second fetch
+Checking out Revision 506b2a73c19b836af36ff0df0278af3a09c1cc4e (main)
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f 506b2a73c19b836af36ff0df0278af3a09c1cc4e # timeout=10
+Commit message: "feat(jenkins+backend): multibranch job, webhook receiver, idempotency, fake-failure script"
+First time build. Skipping changelog.
+
+
+
+
+
+}
+
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] timestamps
+[Pipeline] {
+[Pipeline] timeout
+[2026-10-05T10:22:47.757Z] Timeout set to expire in 15 min
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Checkout)
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] checkout
+[2026-10-05T10:22:48.242Z] The recommended git tool is: NONE
+[2026-10-05T10:22:48.242Z] Warning: CredentialId "github-token" could not be found.
+[2026-10-05T10:22:48.243Z]  > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/target-app_main/.git # timeout=10
+[2026-10-05T10:22:48.247Z] Fetching changes from the remote Git repository
+[2026-10-05T10:22:48.250Z]  > git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10
+[2026-10-05T10:22:48.257Z] Fetching without tags
+[2026-10-05T10:22:48.257Z] Fetching upstream changes from https://github.com/justishita/jenkins_guadrian.git
+[2026-10-05T10:22:48.257Z]  > git --version # timeout=10
+[2026-10-05T10:22:48.263Z]  > git --version # 'git version 2.47.3'
+[2026-10-05T10:22:48.263Z]  > git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10
+[2026-10-05T10:22:48.935Z] Checking out Revision 506b2a73c19b836af36ff0df0278af3a09c1cc4e (main)
+[2026-10-05T10:22:48.936Z]  > git config core.sparsecheckout # timeout=10
+[2026-10-05T10:22:48.940Z]  > git checkout -f 506b2a73c19b836af36ff0df0278af3a09c1cc4e # timeout=10
+[2026-10-05T10:22:48.950Z] Commit message: "feat(jenkins+backend): multibranch job, webhook receiver, idempotency, fake-failure script"
+[2026-10-05T10:22:49.658Z] 
+
+
+
+
+[2026-10-05T10:22:49.658Z] }
+[2026-10-05T10:22:49.658Z] 
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Setup)
+[Pipeline] dir
+[2026-10-05T10:22:50.186Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] sh
+[2026-10-05T10:22:50.766Z] + python3 -m venv .venv
+[2026-10-05T10:22:52.630Z] + .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt
+[2026-10-05T10:22:52.881Z] Collecting asyncpg==0.30.0 (from -r requirements.txt (line 1))
+[2026-10-05T10:22:52.881Z]   Using cached asyncpg-0.30.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.0 kB)
+[2026-10-05T10:22:52.881Z] Collecting fastapi==0.115.12 (from -r requirements.txt (line 2))
+[2026-10-05T10:22:52.881Z]   Using cached fastapi-0.115.12-py3-none-any.whl.metadata (27 kB)
+[2026-10-05T10:22:52.881Z] Collecting flake8==7.1.1 (from -r requirements.txt (line 3))
+[2026-10-05T10:22:52.881Z]   Using cached flake8-7.1.1-py2.py3-none-any.whl.metadata (3.8 kB)
+[2026-10-05T10:22:52.881Z] Collecting httpx==0.28.1 (from -r requirements.txt (line 4))
+[2026-10-05T10:22:52.881Z]   Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+[2026-10-05T10:22:52.881Z] Collecting prometheus-client==0.21.1 (from -r requirements.txt (line 5))
+[2026-10-05T10:22:52.881Z]   Using cached prometheus_client-0.21.1-py3-none-any.whl.metadata (1.8 kB)
+[2026-10-05T10:22:53.132Z] Collecting psutil==7.0.0 (from -r requirements.txt (line 6))
+[2026-10-05T10:22:53.132Z]   Using cached psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (22 kB)
+[2026-10-05T10:22:53.132Z] Collecting pydantic==2.11.3 (from -r requirements.txt (line 7))
+[2026-10-05T10:22:53.132Z]   Using cached pydantic-2.11.3-py3-none-any.whl.metadata (65 kB)
+[2026-10-05T10:22:53.132Z] Collecting PyYAML==6.0.2 (from -r requirements.txt (line 8))
+[2026-10-05T10:22:53.132Z]   Using cached PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.1 kB)
+[2026-10-05T10:22:53.132Z] Collecting pytest==8.3.5 (from -r requirements.txt (line 9))
+[2026-10-05T10:22:53.132Z]   Using cached pytest-8.3.5-py3-none-any.whl.metadata (7.6 kB)
+[2026-10-05T10:22:53.132Z] Collecting pytest-asyncio==0.26.0 (from -r requirements.txt (line 10))
+[2026-10-05T10:22:53.132Z]   Using cached pytest_asyncio-0.26.0-py3-none-any.whl.metadata (4.0 kB)
+[2026-10-05T10:22:53.383Z] Collecting uvicorn==0.34.0 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:53.383Z]   Using cached uvicorn-0.34.0-py3-none-any.whl.metadata (6.5 kB)
+[2026-10-05T10:22:53.383Z] Collecting starlette<0.47.0,>=0.40.0 (from fastapi==0.115.12->-r requirements.txt (line 2))
+[2026-10-05T10:22:53.383Z]   Using cached starlette-0.46.2-py3-none-any.whl.metadata (6.2 kB)
+[2026-10-05T10:22:53.383Z] Collecting typing-extensions>=4.8.0 (from fastapi==0.115.12->-r requirements.txt (line 2))
+[2026-10-05T10:22:53.383Z]   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+[2026-10-05T10:22:53.383Z] Collecting annotated-types>=0.6.0 (from pydantic==2.11.3->-r requirements.txt (line 7))
+[2026-10-05T10:22:53.383Z]   Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+[2026-10-05T10:22:53.934Z] Collecting pydantic-core==2.33.1 (from pydantic==2.11.3->-r requirements.txt (line 7))
+[2026-10-05T10:22:53.934Z]   Using cached pydantic_core-2.33.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.8 kB)
+[2026-10-05T10:22:53.934Z] Collecting typing-inspection>=0.4.0 (from pydantic==2.11.3->-r requirements.txt (line 7))
+[2026-10-05T10:22:53.934Z]   Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+[2026-10-05T10:22:53.934Z] Collecting mccabe<0.8.0,>=0.7.0 (from flake8==7.1.1->-r requirements.txt (line 3))
+[2026-10-05T10:22:53.934Z]   Using cached mccabe-0.7.0-py2.py3-none-any.whl.metadata (5.0 kB)
+[2026-10-05T10:22:53.934Z] Collecting pycodestyle<2.13.0,>=2.12.0 (from flake8==7.1.1->-r requirements.txt (line 3))
+[2026-10-05T10:22:53.934Z]   Using cached pycodestyle-2.12.1-py2.py3-none-any.whl.metadata (4.5 kB)
+[2026-10-05T10:22:53.934Z] Collecting pyflakes<3.3.0,>=3.2.0 (from flake8==7.1.1->-r requirements.txt (line 3))
+[2026-10-05T10:22:53.934Z]   Using cached pyflakes-3.2.0-py2.py3-none-any.whl.metadata (3.5 kB)
+[2026-10-05T10:22:53.934Z] Collecting anyio (from httpx==0.28.1->-r requirements.txt (line 4))
+[2026-10-05T10:22:53.934Z]   Using cached anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+[2026-10-05T10:22:53.934Z] Collecting certifi (from httpx==0.28.1->-r requirements.txt (line 4))
+[2026-10-05T10:22:53.934Z]   Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+[2026-10-05T10:22:53.934Z] Collecting httpcore==1.* (from httpx==0.28.1->-r requirements.txt (line 4))
+[2026-10-05T10:22:53.934Z]   Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+[2026-10-05T10:22:53.934Z] Collecting idna (from httpx==0.28.1->-r requirements.txt (line 4))
+[2026-10-05T10:22:53.934Z]   Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+[2026-10-05T10:22:53.934Z] Collecting iniconfig (from pytest==8.3.5->-r requirements.txt (line 9))
+[2026-10-05T10:22:53.934Z]   Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+[2026-10-05T10:22:54.185Z] Collecting packaging (from pytest==8.3.5->-r requirements.txt (line 9))
+[2026-10-05T10:22:54.185Z]   Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+[2026-10-05T10:22:54.185Z] Collecting pluggy<2,>=1.5 (from pytest==8.3.5->-r requirements.txt (line 9))
+[2026-10-05T10:22:54.185Z]   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+[2026-10-05T10:22:54.185Z] Collecting click>=7.0 (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.185Z]   Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+[2026-10-05T10:22:54.185Z] Collecting h11>=0.8 (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.185Z]   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+[2026-10-05T10:22:54.436Z] Collecting httptools>=0.6.3 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.437Z]   Using cached httptools-0.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+[2026-10-05T10:22:54.437Z] Collecting python-dotenv>=0.13 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.437Z]   Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+[2026-10-05T10:22:54.437Z] Collecting uvloop!=0.15.0,!=0.15.1,>=0.14.0 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.437Z]   Using cached uvloop-0.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.1 kB)
+[2026-10-05T10:22:54.688Z] Collecting watchfiles>=0.13 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.688Z]   Using cached watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+[2026-10-05T10:22:54.688Z] Collecting websockets>=10.4 (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11))
+[2026-10-05T10:22:54.688Z]   Using cached websockets-17.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+[2026-10-05T10:22:54.688Z] Using cached asyncpg-0.30.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.6 MB)
+[2026-10-05T10:22:54.688Z] Using cached fastapi-0.115.12-py3-none-any.whl (95 kB)
+[2026-10-05T10:22:54.688Z] Using cached pydantic-2.11.3-py3-none-any.whl (443 kB)
+[2026-10-05T10:22:54.688Z] Using cached flake8-7.1.1-py2.py3-none-any.whl (57 kB)
+[2026-10-05T10:22:54.688Z] Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+[2026-10-05T10:22:54.688Z] Using cached prometheus_client-0.21.1-py3-none-any.whl (54 kB)
+[2026-10-05T10:22:54.688Z] Using cached psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (277 kB)
+[2026-10-05T10:22:54.688Z] Using cached PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (759 kB)
+[2026-10-05T10:22:54.688Z] Using cached pytest-8.3.5-py3-none-any.whl (343 kB)
+[2026-10-05T10:22:54.688Z] Using cached pytest_asyncio-0.26.0-py3-none-any.whl (19 kB)
+[2026-10-05T10:22:54.688Z] Using cached uvicorn-0.34.0-py3-none-any.whl (62 kB)
+[2026-10-05T10:22:54.688Z] Using cached pydantic_core-2.33.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.0 MB)
+[2026-10-05T10:22:54.688Z] Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+[2026-10-05T10:22:54.688Z] Using cached mccabe-0.7.0-py2.py3-none-any.whl (7.3 kB)
+[2026-10-05T10:22:54.688Z] Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+[2026-10-05T10:22:54.688Z] Using cached pycodestyle-2.12.1-py2.py3-none-any.whl (31 kB)
+[2026-10-05T10:22:54.688Z] Using cached pyflakes-3.2.0-py2.py3-none-any.whl (62 kB)
+[2026-10-05T10:22:54.688Z] Using cached starlette-0.46.2-py3-none-any.whl (72 kB)
+[2026-10-05T10:22:54.688Z] Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+[2026-10-05T10:22:54.688Z] Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+[2026-10-05T10:22:54.688Z] Using cached click-8.5.0-py3-none-any.whl (125 kB)
+[2026-10-05T10:22:54.688Z] Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+[2026-10-05T10:22:54.688Z] Using cached httptools-0.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (486 kB)
+[2026-10-05T10:22:54.688Z] Using cached idna-3.20-py3-none-any.whl (69 kB)
+[2026-10-05T10:22:54.688Z] Using cached python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+[2026-10-05T10:22:54.688Z] Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+[2026-10-05T10:22:54.688Z] Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+[2026-10-05T10:22:54.688Z] Using cached uvloop-0.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.5 MB)
+[2026-10-05T10:22:54.688Z] Using cached watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (458 kB)
+[2026-10-05T10:22:54.688Z] Using cached websockets-17.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (225 kB)
+[2026-10-05T10:22:54.688Z] Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+[2026-10-05T10:22:54.688Z] Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+[2026-10-05T10:22:54.688Z] Using cached packaging-26.3-py3-none-any.whl (129 kB)
+[2026-10-05T10:22:54.939Z] Installing collected packages: websockets, uvloop, typing-extensions, PyYAML, python-dotenv, pyflakes, pycodestyle, psutil, prometheus-client, pluggy, packaging, mccabe, iniconfig, idna, httptools, h11, click, certifi, asyncpg, annotated-types, uvicorn, typing-inspection, pytest, pydantic-core, httpcore, flake8, anyio, watchfiles, starlette, pytest-asyncio, pydantic, httpx, fastapi
+[2026-10-05T10:22:57.424Z] 
+[2026-10-05T10:22:57.424Z] Successfully installed PyYAML-6.0.2 annotated-types-0.8.0 anyio-4.15.1 asyncpg-0.30.0 certifi-2026.7.22 click-8.5.0 fastapi-0.115.12 flake8-7.1.1 h11-0.16.0 httpcore-1.0.9 httptools-0.8.0 httpx-0.28.1 idna-3.20 iniconfig-2.3.0 mccabe-0.7.0 packaging-26.3 pluggy-1.6.0 prometheus-client-0.21.1 psutil-7.0.0 pycodestyle-2.12.1 pydantic-2.11.3 pydantic-core-2.33.1 pyflakes-3.2.0 pytest-8.3.5 pytest-asyncio-0.26.0 python-dotenv-1.2.4 starlette-0.46.2 typing-extensions-4.16.0 typing-inspection-0.4.4 uvicorn-0.34.0 uvloop-0.23.0 watchfiles-1.3.0 websockets-17.2
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Lint)
+[Pipeline] dir
+[2026-10-05T10:22:58.141Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] sh
+[2026-10-05T10:22:58.830Z] + .venv/bin/flake8 --exit-zero app tests
+[2026-10-05T10:22:58.830Z] app/__init__.py:1:42: W292 no newline at end of file
+[2026-10-05T10:22:58.830Z] app/config.py:30:80: E501 line too long (88 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/config.py:31:80: E501 line too long (82 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/config.py:62:80: E501 line too long (81 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/config.py:65:43: W292 no newline at end of file
+[2026-10-05T10:22:58.830Z] app/db_client.py:8:1: E402 module level import not at top of file
+[2026-10-05T10:22:58.830Z] app/db_client.py:10:1: E402 module level import not at top of file
+[2026-10-05T10:22:58.830Z] app/db_client.py:12:1: E402 module level import not at top of file
+[2026-10-05T10:22:58.830Z] app/db_client.py:16:80: E501 line too long (82 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/db_client.py:88:80: E501 line too long (90 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/db_client.py:99:80: E501 line too long (99 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/db_client.py:104:47: W292 no newline at end of file
+[2026-10-05T10:22:58.830Z] app/main.py:1:80: E501 line too long (80 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:102:80: E501 line too long (99 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:108:80: E501 line too long (90 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:109:80: E501 line too long (92 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:130:80: E501 line too long (80 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:134:80: E501 line too long (91 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:143:80: E501 line too long (93 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:155:80: E501 line too long (94 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:156:80: E501 line too long (97 > 79 characters)
+[2026-10-05T10:22:58.830Z] app/main.py:174:19: W292 no newline at end of file
+[2026-10-05T10:22:58.830Z] tests/test_orders.py:69:80: E501 line too long (82 > 79 characters)
+[2026-10-05T10:22:58.830Z] tests/test_orders.py:71:80: E501 line too long (94 > 79 characters)
+[2026-10-05T10:22:58.830Z] tests/test_orders.py:73:80: E501 line too long (85 > 79 characters)
+[2026-10-05T10:22:58.830Z] tests/test_orders.py:76:80: E501 line too long (81 > 79 characters)
+[2026-10-05T10:22:58.830Z] tests/test_orders.py:92:59: W292 no newline at end of file
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Test)
+[Pipeline] dir
+[2026-10-05T10:22:59.415Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] sh
+[2026-10-05T10:23:00.100Z] + mkdir -p reports
+[2026-10-05T10:23:00.100Z] + .venv/bin/pytest -q --junitxml=reports/junit.xml
+[2026-10-05T10:23:00.351Z] /var/jenkins_home/workspace/target-app_main/target_app/.venv/lib/python3.13/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+[2026-10-05T10:23:00.351Z] The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+[2026-10-05T10:23:00.351Z] 
+[2026-10-05T10:23:00.351Z]   warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+[2026-10-05T10:23:00.602Z] 
+[2026-10-05T10:23:00.602Z] ==================================== ERRORS ====================================
+[2026-10-05T10:23:00.602Z] ____________________ ERROR collecting tests/test_orders.py _____________________
+[2026-10-05T10:23:00.602Z] ImportError while importing test module '/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py'.
+[2026-10-05T10:23:00.602Z] Hint: make sure your test modules/packages have valid Python names.
+[2026-10-05T10:23:00.602Z] Traceback:
+[2026-10-05T10:23:00.602Z] /usr/lib/python3.13/importlib/__init__.py:88: in import_module
+[2026-10-05T10:23:00.602Z]     return _bootstrap._gcd_import(name[level:], package, level)
+[2026-10-05T10:23:00.602Z] tests/test_orders.py:10: in <module>
+[2026-10-05T10:23:00.602Z]     from target_app.app.config import Settings
+[2026-10-05T10:23:00.602Z] E   ModuleNotFoundError: No module named 'target_app'
+[2026-10-05T10:23:00.602Z] =============================== warnings summary ===============================
+[2026-10-05T10:23:00.602Z] .venv/lib/python3.13/site-packages/starlette/testclient.py:37
+[2026-10-05T10:23:00.602Z]   /var/jenkins_home/workspace/target-app_main/target_app/.venv/lib/python3.13/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+[2026-10-05T10:23:00.602Z]     _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+[2026-10-05T10:23:00.602Z] 
+[2026-10-05T10:23:00.602Z] -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+[2026-10-05T10:23:00.602Z] - generated xml file: /var/jenkins_home/workspace/target-app_main/target_app/reports/junit.xml -
+[2026-10-05T10:23:00.602Z] =========================== short test summary info ============================
+[2026-10-05T10:23:00.602Z] ERROR tests/test_orders.py
+[2026-10-05T10:23:00.602Z] !!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+[2026-10-05T10:23:00.602Z] 1 warning, 1 error in 0.29s
+[Pipeline] }
+[2026-10-05T10:23:00.691Z] ERROR: script returned exit code 2
+[2026-10-05T10:23:00.691Z] Setting overall build result to FAILURE
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Build)
+[Pipeline] dir
+[2026-10-05T10:23:01.172Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] sh
+[2026-10-05T10:23:01.901Z] + .venv/bin/python -m compileall app
+[2026-10-05T10:23:01.901Z] Listing 'app'...
+[2026-10-05T10:23:01.901Z] Compiling 'app/__init__.py'...
+[2026-10-05T10:23:01.901Z] Compiling 'app/config.py'...
+[2026-10-05T10:23:01.901Z] Compiling 'app/db_client.py'...
+[2026-10-05T10:23:01.901Z] Compiling 'app/main.py'...
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Deploy)
+[Pipeline] dir
+[2026-10-05T10:23:02.680Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] catchError
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] sh
+[2026-10-05T10:23:03.289Z] + bash deploy/deploy.sh
+[2026-10-05T10:23:03.289Z] DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+[2026-10-05T10:23:03.289Z]             Install the buildx component to build images with BuildKit:
+[2026-10-05T10:23:03.289Z]             https://docs.docker.com/go/buildx/
+[2026-10-05T10:23:03.289Z] 
+[2026-10-05T10:23:03.289Z] permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Post "http://%2Fvar%2Frun%2Fdocker.sock/v1.45/build?buildargs=%7B%7D&cachefrom=%5B%5D&cgroupparent=&cpuperiod=0&cpuquota=0&cpusetcpus=&cpusetmems=&cpushares=0&dockerfile=Dockerfile&labels=%7B%7D&memory=0&memswap=0&networkmode=default&rm=1&shmsize=0&t=orders-service%3Alocal&target=&ulimits=%5B%5D&version=1": dial unix /var/run/docker.sock: connect: permission denied
+[Pipeline] }
+[2026-10-05T10:23:03.383Z] ERROR: script returned exit code 1
+[Pipeline] // catchError
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Declarative: Post Actions)
+[Pipeline] dir
+[2026-10-05T10:23:03.912Z] Running in /var/jenkins_home/workspace/target-app_main/target_app
+[Pipeline] {
+[Pipeline] junit
+[2026-10-05T10:23:04.033Z] Recording test results
+[2026-10-05T10:23:04.056Z] [Checks API] No suitable checks publisher found.
+[Pipeline] }
+[Pipeline] // dir
+[Pipeline] script
+[Pipeline] {
+[Pipeline] withCredentials
+[2026-10-05T10:23:04.259Z] Masking supported pattern matches of $WEBHOOK_TOKEN
+[Pipeline] {
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] sh
+[2026-10-05T10:23:04.676Z] + date -u +%Y-%m-%dT%H:%M:%SZ
+[2026-10-05T10:23:04.676Z] + jq -n --arg job_name target-app/main --arg build_number 2 --arg build_url http://localhost:8080/job/target-app/job/main/2/ --arg branch main --arg git_commit 506b2a73c19b836af36ff0df0278af3a09c1cc4e --arg failed_stage  --arg timestamp 2026-10-05T10:23:04Z --arg incident_id  --arg remediation_attempt 0 --arg result  {
+[2026-10-05T10:23:04.676Z] 						job_name: $job_name,
+[2026-10-05T10:23:04.676Z] 						build_number: $build_number,
+[2026-10-05T10:23:04.676Z] 						build_url: $build_url,
+[2026-10-05T10:23:04.676Z] 						branch: $branch,
+[2026-10-05T10:23:04.676Z] 						git_commit: $git_commit,
+[2026-10-05T10:23:04.676Z] 						failed_stage: $failed_stage,
+[2026-10-05T10:23:04.676Z] 						timestamp: $timestamp,
+[2026-10-05T10:23:04.676Z] 						incident_id: $incident_id,
+[2026-10-05T10:23:04.676Z] 						remediation_attempt: $remediation_attempt
+[2026-10-05T10:23:04.676Z] 					} + (if $result == "" then {} else {result: $result} end)
+[2026-10-05T10:23:04.676Z] + payload={
+[2026-10-05T10:23:04.676Z]   "job_name": "target-app/main",
+[2026-10-05T10:23:04.676Z]   "build_number": "2",
+[2026-10-05T10:23:04.676Z]   "build_url": "http://localhost:8080/job/target-app/job/main/2/",
+[2026-10-05T10:23:04.676Z]   "branch": "main",
+[2026-10-05T10:23:04.676Z]   "git_commit": "506b2a73c19b836af36ff0df0278af3a09c1cc4e",
+[2026-10-05T10:23:04.676Z]   "failed_stage": "",
+[2026-10-05T10:23:04.676Z]   "timestamp": "2026-10-05T10:23:04Z",
+[2026-10-05T10:23:04.676Z]   "incident_id": "",
+[2026-10-05T10:23:04.676Z]   "remediation_attempt": "0"
+[2026-10-05T10:23:04.676Z] }
+[2026-10-05T10:23:04.676Z] + curl --silent --show-error --max-time 10 --retry 3 --request POST --header X-Webhook-Token: [REDACTED] --header Content-Type: application/json --data {
+[2026-10-05T10:23:04.676Z]   "job_name": "target-app/main",
+[2026-10-05T10:23:04.676Z]   "build_number": "2",
+[2026-10-05T10:23:04.676Z]   "build_url": "http://localhost:8080/job/target-app/job/main/2/",
+[2026-10-05T10:23:04.676Z]   "branch": "main",
+[2026-10-05T10:23:04.676Z]   "git_commit": "506b2a73c19b836af36ff0df0278af3a09c1cc4e",
+[2026-10-05T10:23:04.676Z]   "failed_stage": "",
+[2026-10-05T10:23:04.676Z]   "timestamp": "2026-10-05T10:23:04Z",
+[2026-10-05T10:23:04.676Z]   "incident_id": "",
+[2026-10-05T10:23:04.676Z]   "remediation_attempt": "0"
+[2026-10-05T10:23:04.676Z] } http://agent-api:8000/webhooks/jenkins
+[2026-10-05T10:23:04.677Z] {"status":"accepted","incident_id":"0cfc8758-f9e7-473a-bcd0-1056ede3ef04"}
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // withCredentials
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // timeout
+[Pipeline] }
+[Pipeline] // timestamps
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+
+
+
+
+
+}
+
+Finished: FAILURE

@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+ERROR collecting tests/test_orders.py
+Traceback (most recent call last):
+  File "/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py", line 4, in <module>
+    from target_app.app.main import create_app
+  File "/var/jenkins_home/workspace/target-app_main/target_app/app/main.py", line 17
+    app = create_app(
+                    ^
+SyntaxError: '(' was never closed
+=========================== short test summary info ============================
+ERROR tests/test_orders.py
+============================== 1 error in 0.10s ===============================

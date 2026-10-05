@@ -1,0 +1,3 @@
+HTTP 401 Unauthorized
+Authentication failed: invalid token
+Permission denied for requested job

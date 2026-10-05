@@ -1,0 +1,5 @@
+Started by user
+Cloning repository https://example.invalid/acme/private-app.git
+ERROR: Checkout failed
+fatal: repository 'https://example.invalid/acme/private-app.git/' not found
+hudson.plugins.git.GitException: Command "git fetch" returned status code 128

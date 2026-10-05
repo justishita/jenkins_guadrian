@@ -24,4 +24,4 @@ node_modules/
 
 # Logs
 *.log
-!tests/jenkins_agent/fixtures/*/.log
+!tests/jenkins_agent/fixtures/**/*.log

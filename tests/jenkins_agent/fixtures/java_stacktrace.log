@@ -1,0 +1,5 @@
+BUILD FAILURE
+java.lang.IllegalStateException: deployment failed
+    at com.example.deploy.Runner.execute(Runner.java:81)
+    at com.example.deploy.Main.main(Main.java:24)
+Caused by: java.net.SocketTimeoutException: Read timed out
