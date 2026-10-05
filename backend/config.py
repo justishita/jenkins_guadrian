@@ -38,6 +38,12 @@ class Settings(BaseSettings):
         default=True,
         description="Whether catch-up background task is enabled"
     )
+    JENKINS_URL: str = ""
+    JENKINS_USER: str = ""
+    JENKINS_API_TOKEN: str = ""
+    CATCHUP_INTERVAL_SECONDS: float = Field(default=60.0, gt=0)
+    CATCHUP_LOOKBACK_MINUTES: int = Field(default=30, gt=0)
+    JENKINS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
 
     @property
     def async_database_url(self) -> str:

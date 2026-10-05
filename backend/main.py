@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.config import settings
 from backend.db.database import init_db
 from backend.events.publisher import publisher
+from backend.jenkins_catchup import JenkinsCatchup
 from backend.routes.health import router as health_router
 from backend.routes.webhooks import router as webhooks_router
 
@@ -59,11 +60,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 2. Connect to RabbitMQ asynchronously with retry
     asyncio.create_task(publisher.connect(max_retries=5, retry_interval=2.0))
+    catchup_task: asyncio.Task[None] | None = None
+    if settings.CATCHUP_ENABLED:
+        catchup_task = asyncio.create_task(
+            JenkinsCatchup().run(),
+            name="jenkins-failure-catchup",
+        )
 
     yield
 
     # Shutdown
     logger.info("Shutting down DevOps AI Agent API...")
+    if catchup_task is not None:
+        catchup_task.cancel()
+        await asyncio.gather(catchup_task, return_exceptions=True)
     await publisher.close()
 
 
