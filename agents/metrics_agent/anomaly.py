@@ -42,13 +42,15 @@ class Detection(BaseModel):
     score: float
     # How far past the threshold the anomaly is, squashed to 0..1 (0 = barely, ->1 = far past).
     strength: float
-    # Persistence and timing, all measured on the incident window.
+    # Persistence and timing, all measured on the incident window. `elevated_samples` and
+    # `longest_run` look at the whole window; `run_start_at`/`run_end_at` bound the MOST RECENT
+    # contiguous elevated stretch, the one nearest the failure, which is what correlation uses.
     elevated_samples: int
     longest_run: int
     incident_samples: int
-    first_elevated_at: datetime | None
-    last_elevated_at: datetime | None
-    # Seconds between the last elevated sample and the failure (0 if still elevated at/after it).
+    run_start_at: datetime | None
+    run_end_at: datetime | None
+    # Seconds between the end of that latest stretch and the failure (0 if it reaches the failure).
     gap_to_failure_seconds: float | None
     still_elevated: bool
     window_start: datetime
@@ -71,21 +73,25 @@ def _longest_run(flags: Sequence[bool]) -> int:
 
 
 class _Timing(BaseModel):
-    first: datetime | None
-    last: datetime | None
+    run_start: datetime | None
+    run_end: datetime | None
     gap_seconds: float | None
     still_elevated: bool
 
 
 def _timing(incident: list[Sample], flags: Sequence[bool], failure_time: datetime) -> _Timing:
-    elevated = [s.timestamp for s, flag in zip(incident, flags, strict=True) if flag]
-    if not elevated:
-        return _Timing(first=None, last=None, gap_seconds=None, still_elevated=False)
-    last = elevated[-1]
+    """Timing of the most recent contiguous elevated stretch (a metric can be elevated more than once)."""
+    if not any(flags):
+        return _Timing(run_start=None, run_end=None, gap_seconds=None, still_elevated=False)
+    end = max(i for i, flag in enumerate(flags) if flag)
+    start = end
+    while start > 0 and flags[start - 1]:
+        start -= 1
+    run_end = incident[end].timestamp
     return _Timing(
-        first=elevated[0],
-        last=last,
-        gap_seconds=max(0.0, (failure_time - last).total_seconds()),
+        run_start=incident[start].timestamp,
+        run_end=run_end,
+        gap_seconds=max(0.0, (failure_time - run_end).total_seconds()),
         still_elevated=bool(flags[-1]),
     )
 
@@ -121,8 +127,8 @@ def _build(
         elevated_samples=sum(flags),
         longest_run=run,
         incident_samples=len(incident),
-        first_elevated_at=timing.first,
-        last_elevated_at=timing.last,
+        run_start_at=timing.run_start,
+        run_end_at=timing.run_end,
         gap_to_failure_seconds=timing.gap_seconds,
         still_elevated=timing.still_elevated,
         window_start=incident[0].timestamp,

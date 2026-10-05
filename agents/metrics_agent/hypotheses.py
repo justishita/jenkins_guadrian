@@ -18,7 +18,7 @@ from .confidence import (
     inputs_from,
     normal_confidence,
 )
-from .correlation import CandidateCause, correlate
+from .correlation import CandidateCause, coincide, correlate
 from .findings import Finding
 
 __all__ = ["Finding", "Synthesis", "synthesize"]
@@ -89,11 +89,16 @@ def _hypothesis(cause: CandidateCause) -> EvidenceHypothesis:
     scored = [(f, inputs_from(f.detection, f.quality)) for f in cause.primaries]  # type: ignore[arg-type]
     best, best_inputs = max(scored, key=lambda pair: base_confidence(pair[1]))
     others = [f for f in cause.primaries if f is not best]
-    corroborating = len(others) + len(cause.symptoms)
+    # Only anomalies at the same time corroborate; an earlier one is cited but does not add confidence.
+    together = [f for f in others if coincide(best, f)]
+    earlier = [f for f in others if f not in together]
+    corroborating = len(together) + len(cause.symptoms)
 
     text = f"{best.spec.name}: {best.detection.detail}"  # type: ignore[union-attr]
-    if others:
-        text += f"; also anomalous: {_names(others)}"
+    if together:
+        text += f"; also anomalous: {_names(together)}"
+    if earlier:
+        text += f"; separate earlier anomaly: {_names(earlier)}"
     if cause.symptoms:
         text += f"; coincides with elevated {_names(cause.symptoms)} (a likely symptom)"
     if cause.contradicting:

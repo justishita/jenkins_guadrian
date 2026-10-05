@@ -23,7 +23,7 @@ The agent waits `INVESTIGATION_SETTLE_SECONDS` (default 30) after a very recent 
 ## Correlation rules
 
 1. Anomalous metrics that point to the same failure type form **one** cause; the others corroborate the strongest (CPU + memory → one `resource_exhaustion` hypothesis).
-2. Elevated latency that coincides with a resource-exhaustion anomaly is a **symptom**: cited as supporting evidence ("coincides with elevated latency_p95"), not reported as a second, competing cause.
+2. Elevated latency that **coincides in time** with a resource-exhaustion anomaly is a **symptom**: cited as supporting evidence ("coincides with elevated latency_p95"), not reported as a second, competing cause. Timing is judged on each metric's most recent contiguous elevated stretch (within 60 s); an earlier, recovered anomaly stays a separate, lower-confidence cause and does not corroborate.
 3. `contradicting_evidence` comes **only from relevant catalog metrics** (those mapping to the same failure type) that were measured and stayed normal, e.g. normal memory against a CPU claim. Metrics that could not be measured neither support nor contradict.
 4. When the target is down, metrics that stopped reporting are noted as consistent with the outage.
 
@@ -57,5 +57,5 @@ Config is env-driven; see `config.py`.
 
 ## Demo
 
-`python scripts/inject_faults.py slow|cpu|leak|healthy` (enable fault → traffic → wait for metrics → publish incident).
+`python scripts/inject_faults.py slow|cpu|leak|healthy` (enable fault → traffic → wait for metrics → publish incident). Add `--via-webhook` to send it through agent-api's `/webhooks/jenkins` (secret read from `WEBHOOK_SHARED_SECRET`, only ever sent to a local host) so the backend, the incidents table and the queue are exercised too.
 Leave ~6 minutes between runs so one fault is not inside the next incident window.

@@ -160,3 +160,23 @@ def test_detect_requires_data() -> None:
         detect(CPU_RATE, [], [sample], FAILURE_TIME)
     with pytest.raises(ValueError):
         detect(CPU_RATE, [sample], [], FAILURE_TIME)
+
+
+# --- a metric can be elevated more than once --------------------------------------------
+
+
+def test_timing_follows_the_most_recent_elevated_stretch_not_the_first() -> None:
+    """Regression from a live run: latency was elevated during an old burst AND again near the failure."""
+    twice = lambda ts: 2.0 if -285 <= offset(ts) < -240 or -120 <= offset(ts) < 1000 else 0.007
+    detection = run(LATENCY_P95, twice)
+    assert detection.anomalous and detection.still_elevated
+    assert offset(detection.run_start_at) == -120  # type: ignore[arg-type]  # the latest stretch, not -285
+    assert detection.elevated_samples > detection.longest_run  # both bursts still counted overall
+    assert detection.gap_to_failure_seconds == 0
+
+
+def test_a_recovered_second_burst_reports_the_gap_from_the_latest_stretch() -> None:
+    twice = lambda ts: 2.0 if -285 <= offset(ts) < -240 or -150 <= offset(ts) < -90 else 0.007
+    detection = run(LATENCY_P95, twice)
+    assert detection.run_end_at is not None and offset(detection.run_end_at) == -105
+    assert detection.gap_to_failure_seconds == pytest.approx(105)

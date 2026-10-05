@@ -8,9 +8,10 @@ written out here, not learned:
 1. **Same cause, one hypothesis.** Anomalous metrics that point to the same failure type
    (e.g. CPU and memory -> resource_exhaustion) form one candidate cause; the others
    corroborate the strongest.
-2. **Symptoms are absorbed.** Elevated latency that coincides with a resource-exhaustion
-   anomaly is treated as a symptom of it, cited as supporting evidence, instead of being
-   reported as a second, competing cause.
+2. **Symptoms are absorbed, if they coincide.** Elevated latency that happens at the same time
+   as a resource-exhaustion anomaly is treated as a symptom of it, cited as supporting
+   evidence, instead of being reported as a second, competing cause. Anomalies that did not
+   overlap in time (e.g. a CPU spike minutes before a fresh latency spike) stay separate.
 3. **Contradiction is local.** A candidate cause is contradicted only by *relevant catalog
    metrics* (those that map to the same failure type) that were measured and stayed normal.
    Metrics that could not be measured neither support nor contradict.
@@ -19,6 +20,7 @@ written out here, not learned:
 """
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from common.models import FailureTaxonomy
 
@@ -26,6 +28,23 @@ from .findings import Finding
 
 #: Metrics that, when anomalous together with a cause of the given type, are its symptom.
 SYMPTOM_OF: dict[str, FailureTaxonomy] = {"latency_p95": FailureTaxonomy.RESOURCE_EXHAUSTION}
+
+#: Two anomalies "coincide" when their elevated periods overlap or lie within this many seconds.
+COINCIDENCE_SLACK_SECONDS = 60.0
+
+
+def coincide(a: Finding, b: Finding) -> bool:
+    """Did two metrics' latest anomalies happen at the same time? Unrelated ones must not corroborate."""
+    first, second = a.detection, b.detection
+    if first is None or second is None:
+        return False
+    times = (first.run_start_at, first.run_end_at, second.run_start_at, second.run_end_at)
+    if any(t is None for t in times):
+        return False
+    slack = timedelta(seconds=COINCIDENCE_SLACK_SECONDS)
+    return first.run_start_at <= second.run_end_at + slack and (  # type: ignore[operator]
+        second.run_start_at <= first.run_end_at + slack  # type: ignore[operator]
+    )
 
 
 @dataclass
@@ -47,7 +66,11 @@ def correlate(findings: list[Finding]) -> list[CandidateCause]:
     symptoms: dict[FailureTaxonomy, list[Finding]] = {}
     for finding in anomalous:
         cause = SYMPTOM_OF.get(finding.spec.name)
-        if cause is not None and cause != finding.spec.failure_type and cause in primaries:
+        if (
+            cause is not None
+            and cause != finding.spec.failure_type
+            and any(coincide(finding, primary) for primary in primaries.get(cause, []))
+        ):
             primaries[finding.spec.failure_type].remove(finding)
             symptoms.setdefault(cause, []).append(finding)
 
