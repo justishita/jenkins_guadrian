@@ -275,6 +275,13 @@ class JenkinsClient:
         )
         return None if response is None else response.json()
 
+    async def get_test_report_xml(self, job: JobPath, n: int) -> str | None:
+        response = await self._request(
+            f"{self._build_url(job, n)}/testReport/api/xml",
+            not_found_is_none=True,
+        )
+        return None if response is None else response.text
+
     async def get_build_history(
         self,
         job: JobPath,

@@ -191,6 +191,23 @@ async def test_get_test_report_returns_none_for_404_and_json_for_existing_report
 
 
 @pytest.mark.asyncio
+async def test_get_test_report_xml_returns_xml_or_none() -> None:
+    report_url = f"{BASE_URL}/job/with-tests/2/testReport/api/xml"
+    missing_url = f"{BASE_URL}/job/no-tests/2/testReport/api/xml"
+    with respx.mock(base_url=BASE_URL) as router:
+        router.get(report_url).mock(
+            return_value=httpx.Response(200, text="<testsuite tests='1'/>")
+        )
+        router.get(missing_url).mock(return_value=httpx.Response(404))
+        async with make_client() as client:
+            report = await client.get_test_report_xml("with-tests", 2)
+            no_report = await client.get_test_report_xml("no-tests", 2)
+
+    assert report == "<testsuite tests='1'/>"
+    assert no_report is None
+
+
+@pytest.mark.asyncio
 async def test_get_build_history_sends_limit_and_returns_builds() -> None:
     url = f"{BASE_URL}/job/pipeline/api/json"
     with respx.mock(base_url=BASE_URL) as router:
