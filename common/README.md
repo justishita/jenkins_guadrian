@@ -25,3 +25,14 @@ Per-call structured logs contain only the provider, redacted prompt character
 count and SHA-256 hash, token usage when available, latency, and safe error
 metadata. Prompt text is never logged. Tests can use `MockLLMClient` with a
 sequence of scripted values or exceptions.
+
+## Evidence store
+
+`EvidenceStore` defines async `write(evidence)`, `read_all(incident_id)`, and
+`read(incident_id, agent)` operations. `FileEvidenceStore` is the temporary
+worker backend and writes redacted, validated evidence under
+`./data/evidence/<incident_id>/<agent>.json`. Writes replace a document
+atomically and increment its stored `version` on each retry for the same
+incident and agent. The Jenkins-agent container bind-mounts this directory so
+evidence remains available on the host. `PostgresEvidenceStore` implements
+the same interface for deployments that opt into PostgreSQL storage.

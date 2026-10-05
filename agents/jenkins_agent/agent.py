@@ -23,7 +23,7 @@ from agents.jenkins_agent.classifier import Hypothesis, rule_based_classify
 from agents.jenkins_agent.config import JenkinsAgentSettings, load_settings
 from agents.jenkins_agent.parsing import ParsedBuild, parse_build
 from agents.jenkins_agent.tools.jenkins_client import JenkinsClient
-from common.evidence_store import EvidenceStore
+from common.evidence_store import FileEvidenceStore
 from common.llm_client import LLMClient
 from common.models import (
     Evidence,
@@ -986,9 +986,8 @@ async def run(settings: JenkinsAgentSettings) -> None:
     connection = await aio_pika.connect_robust(
         settings.RABBITMQ_URL.get_secret_value(), timeout=10
     )
-    store = EvidenceStore(settings.DATABASE_URL.get_secret_value())
+    store = FileEvidenceStore()
     try:
-        await store.connect()
         agent = JenkinsInvestigationAgent(
             LLMClient(
                 api_key=(
@@ -1040,7 +1039,6 @@ async def run(settings: JenkinsAgentSettings) -> None:
                 async for message in messages:
                     await _process_message(message, agent)
     finally:
-        await store.close()
         if not connection.is_closed:
             await connection.close()
 

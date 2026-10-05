@@ -10,7 +10,7 @@ class JenkinsAgentSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     RABBITMQ_URL: SecretStr
-    DATABASE_URL: SecretStr
+    DATABASE_URL: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
     OPENAI_API_KEY: SecretStr | None = None

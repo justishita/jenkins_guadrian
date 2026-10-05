@@ -79,7 +79,7 @@ class Evidence(BaseModel):
 
 	schema_version: Literal["0.1-stub"] = "0.1-stub"
 	incident_id: UUID
-	agent: Literal["jenkins_agent"] = "jenkins_agent"
+	agent: Literal["jenkins_agent", "metrics_agent", "code_agent"] = "jenkins_agent"
 	created_at: datetime
 	status: Literal["completed", "failed", "insufficient_evidence"]
 	failure_type: FailureTaxonomy
