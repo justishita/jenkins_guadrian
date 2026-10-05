@@ -1,4 +1,6 @@
+import asyncio
 import json
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -7,7 +9,8 @@ from uuid import uuid4
 import pytest
 
 from agents.metrics_agent.evidence import item_content, make_evidence, metric_item
-from agents.metrics_agent.store import EvidenceValidationError, LocalJsonEvidenceWriter
+from agents.metrics_agent.store import SharedStoreEvidenceWriter
+from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, EvidenceHypothesis, FailureTaxonomy
 
 EVIDENCE_ID = "metric-latency_p95"
@@ -42,34 +45,61 @@ def test_builds_the_shared_evidence_model_for_the_metrics_agent() -> None:
     assert record.evidence_items[0].kind == "metric"
 
 
-def test_writes_schema_valid_json_with_utc_z_timestamp(tmp_path: Path) -> None:
+def test_writes_into_the_shared_store_layout(tmp_path: Path) -> None:
     record = valid_record()
-    LocalJsonEvidenceWriter(tmp_path).write(record)
-    stored = json.loads((tmp_path / f"{record.incident_id}.metrics_agent.json").read_text(encoding="utf-8"))
+    SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path)).write(record)
+    stored_path = tmp_path / str(record.incident_id) / "metrics_agent.json"
+    stored = json.loads(stored_path.read_text(encoding="utf-8"))
     assert stored["agent"] == "metrics_agent"
-    assert stored["schema_version"] == "0.1-stub"
     assert stored["created_at"].endswith("Z")
     assert stored["failure_type"] == "timeout"
+    assert asyncio.run(FileEvidenceStore(tmp_path).read(record.incident_id, "metrics_agent")) == record
 
 
-def test_rewriting_same_incident_is_idempotent(tmp_path: Path) -> None:
-    writer = LocalJsonEvidenceWriter(tmp_path)
+def test_agent_evidence_sits_next_to_other_agents_for_the_coordinator(tmp_path: Path) -> None:
+    store = FileEvidenceStore(tmp_path)
+    incident_id = uuid4()
+    SharedStoreEvidenceWriter(store).write(valid_record(incident_id=incident_id))
+    other = valid_record(incident_id=incident_id).model_copy(update={"agent": "jenkins_agent"})
+    asyncio.run(store.write(other))
+    agents = sorted(e.agent for e in asyncio.run(store.read_all(incident_id)))
+    assert agents == ["jenkins_agent", "metrics_agent"]
+
+
+def test_redelivery_replaces_the_document_and_bumps_the_version(tmp_path: Path) -> None:
+    writer = SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path))
     incident_id = uuid4()
     writer.write(valid_record(incident_id=incident_id, summary="first"))
     writer.write(valid_record(incident_id=incident_id, summary="second"))
-    files = list(tmp_path.glob("*.json"))
+    files = list((tmp_path / str(incident_id)).glob("*.json"))
     assert len(files) == 1
-    assert json.loads(files[0].read_text(encoding="utf-8"))["summary"] == "second"
-    assert not list(tmp_path.glob("*.tmp"))
+    stored = json.loads(files[0].read_text(encoding="utf-8"))
+    assert stored["summary"] == "second" and stored["version"] == 2
 
 
-def test_schema_violation_is_rejected_and_nothing_is_written(tmp_path: Path) -> None:
-    schema = tmp_path / "strict.json"
-    schema.write_text(json.dumps({"type": "object", "required": ["no_such_field"]}), encoding="utf-8")
-    out = tmp_path / "out"
-    with pytest.raises(EvidenceValidationError, match="no_such_field"):
-        LocalJsonEvidenceWriter(out, schema).write(valid_record())
-    assert not out.exists() or not list(out.glob("*"))
+def test_write_works_from_a_worker_thread_like_the_consumer_uses() -> None:
+    async def scenario(root: Path) -> None:
+        record = valid_record()
+        await asyncio.to_thread(SharedStoreEvidenceWriter(FileEvidenceStore(root)).write, record)
+        assert (root / str(record.incident_id) / "metrics_agent.json").is_file()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        asyncio.run(scenario(Path(tmp)))
+
+
+def test_store_refuses_evidence_that_was_not_redacted(tmp_path: Path) -> None:
+    unredacted = valid_record().model_copy(update={"redaction_applied": False})
+    with pytest.raises(ValueError, match="redaction"):
+        SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path)).write(unredacted)
+    assert not list(tmp_path.glob("*"))
+
+
+def test_records_conform_to_the_checked_in_stub_schema() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema_path = Path(__file__).resolve().parents[2] / "common" / "evidence_schema_stub.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    payload = valid_record().model_dump(mode="json", exclude_none=True)
+    jsonschema.Draft7Validator(schema).validate(payload)
 
 
 def test_confidence_outside_unit_interval_rejected() -> None:

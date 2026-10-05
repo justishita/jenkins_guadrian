@@ -21,7 +21,8 @@ from agents.metrics_agent.queries import (
     MEMORY_RSS,
     QuerySpec,
 )
-from agents.metrics_agent.store import LocalJsonEvidenceWriter
+from agents.metrics_agent.store import SharedStoreEvidenceWriter
+from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, FailureTaxonomy
 from tests.metrics_agent.helpers import (
     FAILURE_TIME,
@@ -283,13 +284,13 @@ def test_records_validate_against_shared_schema_for_every_outcome(tmp_path: Path
         investigator = Investigator(
             tool,  # type: ignore[arg-type]
             CatalogPlanner(),
-            LocalJsonEvidenceWriter(tmp_path),
+            SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path)),
             InvestigationConfig(),
             clock=lambda: NOW,
             sleep=lambda _seconds: None,
         )
         investigator.investigate(event())
-    assert len(list(tmp_path.glob("*.metrics_agent.json"))) == len(scenarios)
+    assert len(list(tmp_path.glob("*/metrics_agent.json"))) == len(scenarios)
 
 
 def test_deploy_failure_checks_availability_first() -> None:

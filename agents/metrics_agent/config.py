@@ -23,8 +23,8 @@ class MetricsAgentSettings(BaseSettings):
     BASELINE_SECONDS: int = Field(default=600, gt=0, le=86_400)
     QUERY_STEP: str = Field(default="15s", pattern=r"^\d+[smh]$")
 
-    EVIDENCE_DIR: str = "evidence"
-    EVIDENCE_SCHEMA_PATH: str | None = None
+    # Root of the shared FileEvidenceStore (same default as the other agents).
+    EVIDENCE_DIR: str = "data/evidence"
 
     EXCHANGE_NAME: str = "incidents"
     QUEUE_NAME: str = "metrics_agent.incident.created"
