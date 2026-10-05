@@ -139,7 +139,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./data/evidence:/app/data/evidence
+      - ./data/audit:/app/data/audit
     environment:
+      # Empty -> JSON-lines audit trail under /app/data/audit; set -> PostgreSQL trail.
+      DATABASE_URL: ${DATABASE_URL:-}
       PROMETHEUS_URL: http://prometheus:9090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
     depends_on:

@@ -4,7 +4,7 @@
 Effects (read before running):
   * drives load against target_app (/slow, /cpu, /leak or /health),
   * a leak scenario permanently grows target_app memory until it is restarted,
-  * publishes ONE synthetic `incident.created` message to RabbitMQ.
+  * publishes ONE synthetic `incident.created` (to RabbitMQ, or through the webhook with --via-webhook).
 
 Order matters, so the incident timestamp matches the real failure:
   1. preflight: the fault endpoint must be enabled (ORDERS_ENABLE_* in .env),
@@ -15,6 +15,12 @@ Order matters, so the incident timestamp matches the real failure:
 
 Usage:
   python scripts/inject_faults.py slow|cpu|leak|healthy [--prometheus-url URL] ...
+
+By default the incident goes straight to RabbitMQ. With --via-webhook it is POSTed to
+agent-api's /webhooks/jenkins instead (secret from WEBHOOK_SHARED_SECRET in the environment or
+.env, only ever sent to a local host), so the backend, the incidents table and the queue are all
+exercised, and every agent receives it. The Jenkins and Code agents cannot investigate a fake
+build and will log a failure for it; that is expected.
 """
 
 import argparse
@@ -28,6 +34,8 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -137,11 +145,14 @@ def wait_for_signal(prometheus: httpx.Client, scenario: Scenario, before: float 
     sys.exit("fault never became visible in Prometheus; refusing to publish a misleading incident")
 
 
-def publish_incident(rabbit: httpx.Client, fault_end: datetime) -> str:
-    incident_id = str(uuid.uuid4())
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]", "host.docker.internal"})
+WEBHOOK_PATH = "/webhooks/jenkins"
+
+
+def failure_fields(fault_end: datetime) -> dict[str, object]:
+    """The Jenkins-failure fields shared by both publishing paths; `timestamp` is the fault's end."""
     build_number = int(time.time() % 100_000)
-    message = {
-        "incident_id": incident_id,
+    return {
         "job_name": "target-app/main",
         "build_number": build_number,
         "build_url": f"http://jenkins.invalid/job/target-app/job/main/{build_number}/",
@@ -150,6 +161,45 @@ def publish_incident(rabbit: httpx.Client, fault_end: datetime) -> str:
         "failed_stage": "Deploy",
         "remediation_attempt": 0,
         "timestamp": fault_end.isoformat(),
+    }
+
+
+def ensure_local(url: str, allow_remote: bool) -> None:
+    """The webhook secret must never leave the machine unless the caller says so explicitly."""
+    host = urlparse(url).hostname or ""
+    if host not in LOCAL_HOSTS and not allow_remote:
+        sys.exit(f"refusing to send the webhook secret to non-local host {host!r}; pass --allow-remote to override")
+
+
+def load_webhook_secret(env_file: Path = Path(".env")) -> str:
+    """WEBHOOK_SHARED_SECRET from the environment, else from a local `.env`. Never printed."""
+    secret = os.getenv("WEBHOOK_SHARED_SECRET", "")
+    if not secret and env_file.is_file():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() == "WEBHOOK_SHARED_SECRET":
+                secret = value.strip().strip("\"'")
+    if not secret:
+        sys.exit("WEBHOOK_SHARED_SECRET is not set (environment or .env); it is required for --via-webhook")
+    return secret
+
+
+def publish_via_webhook(api: httpx.Client, secret: str, fault_end: datetime) -> str:
+    """POST the failure to the real backend webhook, so backend, database and queue are all exercised."""
+    response = api.post(WEBHOOK_PATH, json=failure_fields(fault_end), headers={"X-Webhook-Token": secret})
+    if response.status_code == httpx.codes.UNAUTHORIZED:
+        sys.exit("the webhook rejected the token (HTTP 401): check WEBHOOK_SHARED_SECRET matches agent-api's")
+    if response.status_code not in (httpx.codes.OK, httpx.codes.ACCEPTED):
+        sys.exit(f"the webhook answered HTTP {response.status_code}; is agent-api healthy?")
+    return str(response.json()["incident_id"])
+
+
+def publish_incident(rabbit: httpx.Client, fault_end: datetime) -> str:
+    """Publish `incident.created` straight to RabbitMQ (bypasses the backend and database)."""
+    incident_id = str(uuid.uuid4())
+    message = {
+        "incident_id": incident_id,
+        **failure_fields(fault_end),
         "received_at": datetime.now(timezone.utc).isoformat(),
     }
     response = rabbit.post(
@@ -173,15 +223,28 @@ def main() -> None:
     parser.add_argument("--target-url", default=os.getenv("ORDERS_URL", "http://localhost:8001"))
     parser.add_argument("--prometheus-url", default=os.getenv("PROMETHEUS_HOST_URL", "http://localhost:9090"))
     parser.add_argument("--rabbitmq-url", default=os.getenv("RABBITMQ_MANAGEMENT_URL", "http://localhost:15672"))
+    parser.add_argument(
+        "--via-webhook",
+        action="store_true",
+        help="announce the incident through agent-api's /webhooks/jenkins (backend + database + queue)"
+        " instead of publishing straight to RabbitMQ",
+    )
+    parser.add_argument("--api-url", default=os.getenv("AGENT_API_URL", "http://localhost:8000"))
+    parser.add_argument("--allow-remote", action="store_true", help="allow --api-url to be a non-local host")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     scenario = SCENARIOS[args.scenario]
-    auth = (os.getenv("RABBITMQ_USER", "rabbit"), os.getenv("RABBITMQ_PASSWORD", "rabbit_password"))
+    secret = ""
+    if args.via_webhook:
+        ensure_local(args.api_url, args.allow_remote)
+        secret = load_webhook_secret()
+    rabbit_auth = (os.getenv("RABBITMQ_USER", "rabbit"), os.getenv("RABBITMQ_PASSWORD", "rabbit_password"))
     with (
         httpx.Client(base_url=args.target_url, timeout=HTTP_TIMEOUT_SECONDS) as target,
         httpx.Client(base_url=args.prometheus_url, timeout=HTTP_TIMEOUT_SECONDS) as prometheus,
-        httpx.Client(base_url=args.rabbitmq_url, timeout=HTTP_TIMEOUT_SECONDS, auth=auth) as rabbit,
+        httpx.Client(base_url=args.rabbitmq_url, timeout=HTTP_TIMEOUT_SECONDS, auth=rabbit_auth) as rabbit,
+        httpx.Client(base_url=args.api_url, timeout=HTTP_TIMEOUT_SECONDS) as api,
     ):
         preflight(target, scenario)  # 1. fault enabled?
         before = query_value(prometheus, scenario.signal_query) if scenario.signal_query else None
@@ -189,12 +252,16 @@ def main() -> None:
         scenario.drive(target)  # 2. generate fault traffic
         fault_end = datetime.now(timezone.utc)
         wait_for_signal(prometheus, scenario, before)  # 3. wait until metrics change
-        incident_id = publish_incident(rabbit, fault_end)  # 4. only now announce the incident
+        # 4. only now announce the incident
+        if args.via_webhook:
+            incident_id = publish_via_webhook(api, secret, fault_end)
+        else:
+            incident_id = publish_incident(rabbit, fault_end)
     logger.info("incident published; the Metrics agent now investigates", extra={"incident_id": incident_id})
-    logger.info(
-        "read the result in ./data/evidence/%s/metrics_agent.json",
-        incident_id,
-    )
+    logger.info("evidence: ./data/evidence/%s/metrics_agent.json", incident_id)
+    logger.info("audit trail: ./data/audit/%s.jsonl (when the file trail is in use)", incident_id)
+    if args.via_webhook:
+        logger.info("the Jenkins and Code agents also received it; they fail on a fake build, which is expected")
 
 
 if __name__ == "__main__":

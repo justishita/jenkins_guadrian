@@ -1,0 +1,49 @@
+id: metrics-noisy-normal
+name: Noisy But Normal
+owner: P2
+agent: metrics_agent
+
+scenario: >
+  All metrics wobble around their normal level but never leave it. Ordinary noise must not
+  be reported as an anomaly.
+
+incident:
+  branch: main
+  failed_stage: Test
+
+metrics:
+  latency_p95:
+    noise: 0.002
+  cpu_rate:
+    baseline: 0.5
+    noise: 0.05
+  memory_rss:
+    noise: 524288
+
+expected:
+  status: insufficient_evidence
+  failure_type: unknown
+  max_confidence: 0.3
+  # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
+  hypotheses:
+    - failure_type: unknown
+      mentions: ['No metric anomaly found']
+  # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
+  supporting_evidence: [metric-target_availability, metric-latency_p95, metric-cpu_rate, metric-memory_rss]
+  contradicting_evidence: []
+  # The query plan this scenario expects: how many queries, which PromQL (in order), and
+  # whether each call succeeded.
+  tool_calls:
+    count: 4
+    ok: [true, true, true, true]
+    expected_promql:
+      - 'up{job="target_app"}'
+      - 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="target_app"}[1m])))'
+      - 'rate(process_cpu_seconds{job="target_app"}[1m])'
+      - 'process_memory_bytes{job="target_app"}'
+  # The investigation window in seconds relative to the failure time. incident_start is null
+  # when no metric evidence was produced, so there is no incident window to inspect.
+  window:
+    baseline_start: -900
+    incident_start: -300
+    end: 60

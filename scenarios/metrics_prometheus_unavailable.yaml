@@ -1,0 +1,43 @@
+id: metrics-prometheus-unavailable
+name: Prometheus Unavailable
+owner: P2
+agent: metrics_agent
+
+scenario: >
+  Prometheus cannot be reached. The agent must stop after the first failed query, record
+  failed evidence with a reason, and leave the incident to the other agents.
+
+incident:
+  branch: main
+  failed_stage: Test
+
+metrics: {}
+
+prometheus:
+  unavailable: true
+
+expected:
+  status: failed
+  failure_type: unknown
+  min_confidence: 0.0
+  max_confidence: 0.0
+  # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
+  hypotheses:
+    []
+  # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
+  supporting_evidence: []
+  contradicting_evidence: []
+  # The query plan this scenario expects: how many queries, which PromQL (in order), and
+  # whether each call succeeded.
+  tool_calls:
+    count: 1
+    ok: [false]
+    expected_promql:
+      - 'up{job="target_app"}'
+  # The investigation window in seconds relative to the failure time. incident_start is null
+  # when no metric evidence was produced, so there is no incident window to inspect.
+  window:
+    baseline_start: -900
+    incident_start: null
+    end: 60
+  must_not_mention: [latency, cpu, memory]

@@ -1,37 +1,33 @@
-"""Turn per-query findings into root-cause hypotheses and an overall verdict."""
+"""Turn per-metric findings into root-cause hypotheses and an overall verdict.
 
-from dataclasses import dataclass, field
+Per-metric detection has already happened. `correlation.correlate` groups the findings into
+candidate causes; this module scores each one (`confidence.py`), writes the reasoning into
+the hypothesis, and ranks them. The final evidence therefore carries the cross-metric
+reasoning: what supports a cause, what contradicts it, and why.
+"""
+
+from dataclasses import dataclass
 from typing import Literal
 
 from common.models import EvidenceHypothesis, FailureTaxonomy
 from common.redaction import redact
 
-from .anomaly import Detection
-from .queries import QuerySpec
-from .sanity import SanityIssue
+from .confidence import (
+    base_confidence,
+    final_confidence,
+    inputs_from,
+    normal_confidence,
+)
+from .correlation import CandidateCause, coincide, correlate
+from .findings import Finding
 
-# Confidence for "metrics looked normal": we learned something, but not the cause.
-NORMAL_METRICS_CONFIDENCE = 0.2
+__all__ = ["Finding", "Synthesis", "synthesize"]
 
 _NEXT_STEPS: dict[FailureTaxonomy, str] = {
     FailureTaxonomy.TIMEOUT: "Check slow endpoints and upstream dependencies for the latency spike window.",
     FailureTaxonomy.RESOURCE_EXHAUSTION: "Inspect CPU/memory limits and recent code paths that allocate or loop.",
     FailureTaxonomy.INFRA_NETWORK_FAILURE: "Verify the target service was running and reachable during the window.",
 }
-
-
-@dataclass
-class Finding:
-    """Outcome of one catalog query. Exactly one of detection / issues / error explains it."""
-
-    spec: QuerySpec
-    detection: Detection | None = None
-    issues: list[SanityIssue] = field(default_factory=list)
-    error: str | None = None
-
-    @property
-    def evidence_id(self) -> str:
-        return f"metric-{self.spec.name}"
 
 
 @dataclass
@@ -45,11 +41,9 @@ class Synthesis:
 
 
 def synthesize(findings: list[Finding]) -> Synthesis:
-    """Pick the strongest anomaly, or honestly report that metrics do not explain the failure."""
-    anomalous = [f for f in findings if f.detection and f.detection.anomalous]
-    if anomalous:
-        anomalous.sort(key=lambda f: f.detection.confidence, reverse=True)  # type: ignore[union-attr]
-        hypotheses = [_hypothesis(f) for f in anomalous]
+    """Rank the candidate causes, or honestly report that metrics do not explain the failure."""
+    hypotheses = sorted((_hypothesis(cause) for cause in correlate(findings)), key=lambda h: h.confidence, reverse=True)
+    if hypotheses:
         top = hypotheses[0]
         return Synthesis(
             status="completed",
@@ -59,9 +53,12 @@ def synthesize(findings: list[Finding]) -> Synthesis:
             hypotheses=hypotheses,
             next_steps=[s for s in dict.fromkeys(_NEXT_STEPS.get(h.failure_type, "") for h in hypotheses) if s],
         )
+    return _nothing_found(findings)
 
+
+def _nothing_found(findings: list[Finding]) -> Synthesis:
     usable = [f for f in findings if f.detection is not None]
-    confidence = NORMAL_METRICS_CONFIDENCE if usable else 0.0
+    confidence = normal_confidence([f.quality for f in usable])
     reason = (
         f"{len(usable)} metric(s) checked, none anomalous"
         if usable
@@ -84,13 +81,35 @@ def synthesize(findings: list[Finding]) -> Synthesis:
     )
 
 
-def _hypothesis(finding: Finding) -> EvidenceHypothesis:
-    detection = finding.detection
-    assert detection is not None
-    text = f"{finding.spec.name}: {detection.detail}"
+def _names(findings: list[Finding]) -> str:
+    return ", ".join(f.spec.name for f in findings)
+
+
+def _hypothesis(cause: CandidateCause) -> EvidenceHypothesis:
+    scored = [(f, inputs_from(f.detection, f.quality)) for f in cause.primaries]  # type: ignore[arg-type]
+    best, best_inputs = max(scored, key=lambda pair: base_confidence(pair[1]))
+    others = [f for f in cause.primaries if f is not best]
+    # Only anomalies at the same time corroborate; an earlier one is cited but does not add confidence.
+    together = [f for f in others if coincide(best, f)]
+    earlier = [f for f in others if f not in together]
+    corroborating = len(together) + len(cause.symptoms)
+
+    text = f"{best.spec.name}: {best.detection.detail}"  # type: ignore[union-attr]
+    if together:
+        text += f"; also anomalous: {_names(together)}"
+    if earlier:
+        text += f"; separate earlier anomaly: {_names(earlier)}"
+    if cause.symptoms:
+        text += f"; coincides with elevated {_names(cause.symptoms)} (a likely symptom)"
+    if cause.contradicting:
+        text += f"; {_names(cause.contradicting)} stayed normal"
+    if cause.unreported:
+        text += f"; {len(cause.unreported)} other metric(s) stopped reporting, consistent with the outage"
+
     return EvidenceHypothesis(
         hypothesis=redact(text),
-        failure_type=finding.spec.failure_type,
-        confidence=detection.confidence,
-        supporting_evidence=[finding.evidence_id],
+        failure_type=cause.failure_type,
+        confidence=final_confidence(best_inputs, corroborating, len(cause.contradicting)),
+        supporting_evidence=[f.evidence_id for f in [best, *others, *cause.symptoms]],
+        contradicting_evidence=[f.evidence_id for f in cause.contradicting],
     )

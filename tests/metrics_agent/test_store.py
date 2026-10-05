@@ -7,11 +7,13 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from jsonschema import ValidationError
 
 from agents.metrics_agent.evidence import item_content, make_evidence, metric_item
 from agents.metrics_agent.store import SharedStoreEvidenceWriter
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, EvidenceHypothesis, FailureTaxonomy
+from tests.metrics_agent.helpers import validate_against_canonical_schema
 
 EVIDENCE_ID = "metric-latency_p95"
 EVIDENCE_TIME = datetime(2026, 10, 5, 9, 30, tzinfo=timezone.utc)
@@ -94,12 +96,18 @@ def test_store_refuses_evidence_that_was_not_redacted(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("*"))
 
 
-def test_records_conform_to_the_checked_in_stub_schema() -> None:
-    jsonschema = pytest.importorskip("jsonschema")
-    schema_path = Path(__file__).resolve().parents[2] / "common" / "evidence_schema_stub.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    payload = valid_record().model_dump(mode="json", exclude_none=True)
-    jsonschema.Draft7Validator(schema).validate(payload)
+def test_records_conform_to_the_canonical_evidence_schema() -> None:
+    validate_against_canonical_schema(valid_record().model_dump(mode="json", exclude_none=True))
+
+
+def test_the_canonical_schema_check_really_rejects_a_violation() -> None:
+    document = valid_record().model_dump(mode="json", exclude_none=True)
+    for broken in ({**document, "confidence": 1.5}, {**document, "failure_type": "made_up"}):
+        with pytest.raises(ValidationError):
+            validate_against_canonical_schema(broken)
+    missing = {key: value for key, value in document.items() if key != "incident_id"}
+    with pytest.raises(ValidationError):
+        validate_against_canonical_schema(missing)
 
 
 def test_confidence_outside_unit_interval_rejected() -> None:

@@ -15,9 +15,13 @@ import aio_pika
 from aio_pika.exceptions import AMQPConnectionError
 from pydantic import ValidationError
 
+from common.audit import AuditLog, build_audit_log
 from common.evidence_store import FileEvidenceStore
+from common.models import Evidence
 
+from .audit import completion_details, record_findings
 from .config import MetricsAgentSettings, load_settings
+from .evidence import AGENT_NAME
 from .investigator import InvestigationConfig, Investigator
 from .models import IncidentCreatedEvent
 from .planner import CatalogPlanner
@@ -62,12 +66,28 @@ async def connect_with_retry(
 class MetricsAgent:
     """Receives incident events and hands them to the Investigator."""
 
-    def __init__(self, investigator: Investigator) -> None:
+    def __init__(self, investigator: Investigator, audit: AuditLog | None = None) -> None:
         self.investigator = investigator
+        self._audit = audit
 
-    def handle_incident(self, event: IncidentCreatedEvent) -> None:
+    def handle_incident(self, event: IncidentCreatedEvent) -> Evidence:
+        """Investigate synchronously (blocking Prometheus calls); no audit trail."""
         logger.info("investigating incident", extra={"incident_id": str(event.incident_id)})
-        self.investigator.investigate(event)
+        return self.investigator.investigate(event)
+
+    async def run_event(self, event: IncidentCreatedEvent) -> Evidence:
+        """Investigate in a worker thread and, when an audit log is set, record the run.
+
+        A failure is audited as `agent_failed` and re-raised for the caller to handle.
+        """
+        if self._audit is None:
+            return await asyncio.to_thread(self.handle_incident, event)
+        async with self._audit.agent_run(event.incident_id, AGENT_NAME) as details:
+            # Investigation does blocking HTTP; keep the event loop (heartbeats) free.
+            evidence = await asyncio.to_thread(self.handle_incident, event)
+            await record_findings(self._audit, evidence)
+            details.update(completion_details(evidence))
+            return evidence
 
 
 def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> MetricsAgent:
@@ -79,7 +99,8 @@ def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> Metrics
         step=settings.QUERY_STEP,
     )
     writer = SharedStoreEvidenceWriter(FileEvidenceStore(Path(settings.EVIDENCE_DIR)))
-    return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config))
+    audit = build_audit_log(database_url=settings.DATABASE_URL or None, root=Path(settings.AUDIT_DIR))
+    return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config), audit)
 
 
 def parse_event(body: bytes) -> IncidentCreatedEvent:
@@ -120,8 +141,7 @@ async def run(settings: MetricsAgentSettings) -> None:
                             logger.exception("dropping malformed incident message")
                             continue
                         try:
-                            # Investigation does blocking HTTP; keep the event loop (heartbeats) free.
-                            await asyncio.to_thread(agent.handle_incident, event)
+                            await agent.run_event(event)
                         except Exception:  # the consumer must outlive any single bad incident
                             logger.exception(
                                 "investigation failed", extra={"incident_id": str(event.incident_id)}

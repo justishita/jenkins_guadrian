@@ -21,6 +21,27 @@ trail — then checks it against `expected`.
 | `tc12_metrics_anomaly_without_code_change.yaml` | TC-12 | `unknown`, ≤ 0.40, says a code change does not explain the failure |
 | `tc14_no_clear_root_cause.yaml` | TC-14 | `unknown`, insufficient evidence, asks for correlation instead of naming a cause |
 
+### Metrics-agent scenarios
+
+**Owner:** P2. Files with `agent: metrics_agent` are run by `tests/metrics_agent/test_scenarios.py`
+against a fake Prometheus built from the scenario itself, through the real agent, evidence store
+and audit trail. `TC-12` has two halves: the code-side file above and
+`tc12_metrics_anomaly_metrics_side.yaml`; the other metrics scenarios (`metrics_*.yaml`) are
+named by behaviour until their matrix ids are agreed.
+
+They use the same `id / name / owner / agent / incident / expected` keys, plus:
+
+* `metrics:` - what Prometheus would have shown, per catalog metric (`target_availability`,
+  `latency_p95`, `cpu_rate`, `memory_rss`): a `baseline`, optional `noise`, and an optional
+  `fault` (`step`, `ramp`, `spike`, `missing`, `stops`) with times in seconds relative to the
+  failure. A metric not listed behaves normally. `prometheus: {unavailable: true}` makes every
+  query fail.
+* `expected` must declare the whole evidence structure, not just the failure type: `status`,
+  `failure_type`, a confidence bound, ranked `hypotheses`, `supporting_evidence`,
+  `contradicting_evidence`, `tool_calls` (`count`, `ok`, `expected_promql` - each scenario
+  declares its own query plan) and `window` (offsets from the failure time). A scenario that
+  omits one fails the meta tests.
+
 TC-12 and TC-14 are the restraint cases, and they are the point. An agent that scores
 well on TC-03 and TC-08 while confidently blaming an innocent commit on TC-12 is worse
 than useless, so both halves are checked on every run.

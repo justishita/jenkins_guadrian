@@ -26,6 +26,11 @@ class MetricsAgentSettings(BaseSettings):
     # Root of the shared FileEvidenceStore (same default as the other agents).
     EVIDENCE_DIR: str = "data/evidence"
 
+    # Audit trail: PostgreSQL when DATABASE_URL is set, otherwise JSON lines under AUDIT_DIR
+    # (same selection as the other agents, via common.audit.build_audit_log).
+    AUDIT_DIR: str = "data/audit"
+    DATABASE_URL: str = ""
+
     EXCHANGE_NAME: str = "incidents"
     QUEUE_NAME: str = "metrics_agent.incident.created"
     ROUTING_KEY: str = "incident.created"

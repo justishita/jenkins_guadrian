@@ -1,0 +1,55 @@
+# TC-12 - Metrics Anomaly Without a Code Change (metrics-side expectation)
+#
+# Owner: P2. The code agent's half of this case is
+# tc12_metrics_anomaly_without_code_change.yaml ("a code change does not explain the failure").
+# This is the other half: the metrics agent must actually see the degradation and name it,
+# so the Coordinator can weigh the two.
+
+id: TC-12
+name: Metrics Anomaly Without Code Change (metrics side)
+owner: P2
+agent: metrics_agent
+
+scenario: >
+  Request latency degrades gradually with no code change, while CPU and memory stay
+  normal. The metrics agent must detect the degradation and classify it as a timeout-type
+  failure.
+
+incident:
+  branch: main
+  failed_stage: Test
+
+metrics:
+  latency_p95:
+    fault: {shape: ramp, at: -240, until: 0, level: 1.5}
+
+expected:
+  status: completed
+  failure_type: timeout
+  min_confidence: 0.7
+  max_confidence: 0.95
+  # Ranked hypotheses: failure type, plus fragments that must appear in the hypothesis text.
+  hypotheses:
+    - failure_type: timeout
+      mentions: [latency_p95]
+  # What the top hypothesis cites. Only the catalog metrics relevant to it, never arbitrary ones.
+  supporting_evidence: [metric-latency_p95]
+  contradicting_evidence: []
+  # The query plan this scenario expects: how many queries, which PromQL (in order), and
+  # whether each call succeeded.
+  tool_calls:
+    count: 4
+    ok: [true, true, true, true]
+    expected_promql:
+      - 'up{job="target_app"}'
+      - 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="target_app"}[1m])))'
+      - 'rate(process_cpu_seconds{job="target_app"}[1m])'
+      - 'process_memory_bytes{job="target_app"}'
+  # The investigation window in seconds relative to the failure time. incident_start is null
+  # when no metric evidence was produced, so there is no incident window to inspect.
+  window:
+    baseline_start: -900
+    incident_start: -300
+    end: 60
+  next_steps_mention: [slow endpoints]
+  must_not_mention: [deploy, commit]
