@@ -13,13 +13,13 @@ Messages are redacted before they are sent. When a schema is supplied, the
 client requests structured output and makes one repair call if parsing or
 validation fails. Optional LangChain tools can be passed through `tools`.
 
-The default provider is Gemini Flash (`GEMINI_API_KEY`,
-`GEMINI_MODEL=gemini-2.5-flash`). Set `LLM_PROVIDER=openai` to use
-`OPENAI_API_KEY` and `OPENAI_MODEL=gpt-4o-mini`. `LLM_TIMEOUT_SECONDS`
-controls the call timeout, and `LLM_REQUESTS_PER_MINUTE` configures the
-token-bucket limit (10 requests/minute by default). Calls retry HTTP 429 and
-5xx errors with bounded exponential backoff. Set `LLM_OFFLINE=1` to disable
-provider calls and raise `LLMUnavailable`, allowing callers to use fallbacks.
+Gemini Flash is the provider (`GEMINI_API_KEY`,
+`GEMINI_MODEL=gemini-2.5-flash`); `LLM_PROVIDER` defaults to and currently
+accepts `gemini`. `LLM_TIMEOUT_SECONDS` controls the call timeout, and
+`LLM_REQUESTS_PER_MINUTE` configures the token-bucket limit (10 requests/minute
+by default). Calls retry HTTP 429 and 5xx errors with bounded exponential
+backoff. Set `LLM_OFFLINE=1` to disable provider calls and raise
+`LLMUnavailable`, allowing callers to use fallbacks.
 
 Per-call structured logs contain only the provider, redacted prompt character
 count and SHA-256 hash, token usage when available, latency, and safe error

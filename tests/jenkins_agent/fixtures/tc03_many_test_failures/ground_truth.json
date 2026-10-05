@@ -1,0 +1,11 @@
+{
+  "expected_failure_type": "code_test_failure",
+  "failing_test_count": 20,
+  "top_failure_names": [
+    "test_case_00",
+    "test_case_01",
+    "test_case_02",
+    "test_case_03",
+    "test_case_04"
+  ]
+}

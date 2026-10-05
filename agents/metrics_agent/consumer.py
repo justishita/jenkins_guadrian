@@ -15,12 +15,14 @@ import aio_pika
 from aio_pika.exceptions import AMQPConnectionError
 from pydantic import ValidationError
 
+from common.evidence_store import FileEvidenceStore
+
 from .config import MetricsAgentSettings, load_settings
 from .investigator import InvestigationConfig, Investigator
 from .models import IncidentCreatedEvent
 from .planner import CatalogPlanner
 from .prometheus_tool import PrometheusTool
-from .store import DEFAULT_SCHEMA_PATH, LocalJsonEvidenceWriter
+from .store import SharedStoreEvidenceWriter
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +71,6 @@ class MetricsAgent:
 
 
 def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> MetricsAgent:
-    schema_path = Path(settings.EVIDENCE_SCHEMA_PATH) if settings.EVIDENCE_SCHEMA_PATH else DEFAULT_SCHEMA_PATH
     config = InvestigationConfig(
         lookback=timedelta(seconds=settings.INVESTIGATION_LOOKBACK_SECONDS),
         tail=timedelta(seconds=settings.INVESTIGATION_TAIL_SECONDS),
@@ -77,7 +78,7 @@ def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> Metrics
         baseline=timedelta(seconds=settings.BASELINE_SECONDS),
         step=settings.QUERY_STEP,
     )
-    writer = LocalJsonEvidenceWriter(Path(settings.EVIDENCE_DIR), schema_path)
+    writer = SharedStoreEvidenceWriter(FileEvidenceStore(Path(settings.EVIDENCE_DIR)))
     return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config))
 
 

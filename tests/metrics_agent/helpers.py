@@ -4,11 +4,14 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from agents.metrics_agent.models import QueryResult, Sample, Series
+from agents.metrics_agent.queries import AVAILABILITY, CPU_RATE, LATENCY_P95, MEMORY_RSS
 from agents.metrics_agent.window import InvestigationWindow, build_window
 
 FAILURE_TIME = datetime(2026, 10, 5, 9, 30, tzinfo=timezone.utc)
 NOW = FAILURE_TIME + timedelta(minutes=2)
 STEP = timedelta(seconds=15)
+MIB = 1024 * 1024
+Fn = Callable[[datetime], float]
 
 
 def make_window() -> InvestigationWindow:
@@ -46,3 +49,33 @@ def step_up(window: InvestigationWindow, before: float, after: float) -> Callabl
     """`before` until the incident window starts, `after` from the middle of it on."""
     midpoint = window.start + (window.end - window.start) / 2
     return lambda ts: after if ts >= midpoint else before
+
+
+class FakeTool:
+    """Stands in for PrometheusTool; serves a synthetic series per catalog query."""
+
+    def __init__(self, overrides: dict[str, Fn] | None = None, errors: dict[str, Exception] | None = None) -> None:
+        window = make_window()
+        self.defaults: dict[str, Fn] = {
+            AVAILABILITY.promql: flat(1.0),
+            LATENCY_P95.promql: flat(0.007),
+            CPU_RATE.promql: flat(0.002),
+            MEMORY_RSS.promql: flat(80 * MIB),
+        }
+        self.defaults.update(overrides or {})
+        self.errors = errors or {}
+        self.window = window
+        self.calls: list[str] = []
+
+    def query_range(self, promql: str, start: datetime, end: datetime, step: str) -> QueryResult:
+        self.calls.append(promql)
+        if promql in self.errors:
+            raise self.errors[promql]
+        fn = self.defaults[promql]
+        if fn is None:  # type: ignore[comparison-overlap]
+            return QueryResult(promql=promql, result_type="matrix", series=[])
+        return QueryResult(
+            promql=promql,
+            result_type="matrix",
+            series=[Series(labels={}, samples=samples(start, end, fn, inclusive_end=True))],
+        )

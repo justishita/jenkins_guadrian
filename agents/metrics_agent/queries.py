@@ -8,7 +8,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from .taxonomy import FailureTaxonomy
+from common.models import FailureTaxonomy
 
 
 class DetectorKind(StrEnum):

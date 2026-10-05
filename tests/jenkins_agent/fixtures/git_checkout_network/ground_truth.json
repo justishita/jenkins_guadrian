@@ -1,0 +1,4 @@
+{
+  "expected_failure_type": "infra_network_failure",
+  "failed_stage": "Checkout"
+}

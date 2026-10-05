@@ -1,0 +1,4 @@
+{
+  "expected_failure_type": "auth_failure",
+  "failed_stage": "Checkout"
+}
