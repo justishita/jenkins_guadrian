@@ -15,7 +15,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Builds by result (total)",
+      "title": "Builds per branch and branch health",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -39,8 +39,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(default_jenkins_builds_success_build_count)",
-          "legendFormat": "success"
+          "expr": "default_jenkins_builds_available_builds_count",
+          "legendFormat": "{{jenkins_job}} builds"
         },
         {
           "refId": "B",
@@ -48,8 +48,17 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(default_jenkins_builds_failed_build_count)",
-          "legendFormat": "failed"
+          "expr": "count(default_jenkins_builds_last_build_result_ordinal == 2) or vector(0)",
+          "legendFormat": "branches whose last build failed"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(default_jenkins_builds_last_build_result_ordinal == 0) or vector(0)",
+          "legendFormat": "branches whose last build passed"
         }
       ]
     },
@@ -81,7 +90,7 @@
             "uid": "prometheus"
           },
           "expr": "default_jenkins_builds_last_build_duration_milliseconds",
-          "legendFormat": "{{jobname}}"
+          "legendFormat": "{{jenkins_job}}"
         }
       ]
     },
@@ -113,7 +122,7 @@
             "uid": "prometheus"
           },
           "expr": "default_jenkins_builds_last_build_result_ordinal",
-          "legendFormat": "{{jobname}}"
+          "legendFormat": "{{jenkins_job}}"
         }
       ]
     },
