@@ -241,7 +241,7 @@ class FileBlackboard:
                                 # Idempotent re-post: return existing version
                                 return existing_data.get("version", 1)
 
-            entry.version = current_version + 1
+            entry.version = max(entry.version, current_version + 1)
 
             # Atomic append using temp file copy
             dumped = entry.model_dump(mode="json")

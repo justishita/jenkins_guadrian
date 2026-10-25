@@ -119,3 +119,26 @@ test_dependency_change_warns_but_is_allowed if {
 test_retry_attempt_warns if {
 	count(remediation.warn) > 0 with input as object.union(minimal_fix, {"attempt": 1})
 }
+
+
+test_test_count_drop_is_denied if {
+	# A validation that passed but dropped test count must be blocked by OPA.
+	not remediation.allow with input as object.union(minimal_fix, {
+		"validation": {
+			"test_count_dropped": true,
+			"original_test_count": 50,
+			"new_test_count": 30,
+		},
+	})
+}
+
+test_test_count_equal_is_allowed if {
+	# A validation that passed with the same test count is fine.
+	remediation.allow with input as object.union(minimal_fix, {
+		"validation": {
+			"test_count_dropped": false,
+			"original_test_count": 50,
+			"new_test_count": 50,
+		},
+	})
+}

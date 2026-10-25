@@ -178,6 +178,20 @@ deny contains msg if {
 	msg := sprintf("proposal disables a test or safety check in %v: %v", [entry.path, entry.line])
 }
 
+
+# A "fix" that reduces the total test count in the validation build must not be
+# allowed through. The Jenkins agent flags this in Evidence as test_count_dropped=true
+# and tells P3 to have OPA enforce it here.
+deny contains msg if {
+	validation := object.get(input, "validation", {})
+	object.get(validation, "test_count_dropped", false) == true
+	orig := object.get(validation, "original_test_count", 0)
+	new_count := object.get(validation, "new_test_count", 0)
+	msg := sprintf(
+		"validation build passed but test count dropped from %v to %v; a fix that deletes tests must not count as success",
+		[orig, new_count],
+	)
+}
 # --- Advisory -----------------------------------------------------------------
 
 warn contains msg if {

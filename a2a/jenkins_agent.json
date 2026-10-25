@@ -1,7 +1,7 @@
 {
   "name": "jenkins_agent",
-  "description": "Analyzes Jenkins CI build logs, pipeline stages, test reports, and git commits to diagnose pipeline failures.",
-  "version": "1.0.0",
+  "description": "Analyzes Jenkins CI build logs, pipeline stages, test reports, and git commits to diagnose pipeline failures and validate remediation builds.",
+  "version": "1.1.0",
   "url": "http://localhost:9101",
   "skills": [
     {
@@ -11,15 +11,55 @@
         "type": "object",
         "properties": {
           "incident_id": { "type": "string", "format": "uuid" },
-          "attempt": { "type": "integer", "default": 0 }
+          "attempt": { "type": "integer", "default": 0, "minimum": 0, "maximum": 0 }
         },
         "required": ["incident_id"]
       },
       "output_schema": {
         "type": "object",
         "properties": {
-          "evidence": { "type": "object" },
+          "status": { "type": "string", "enum": ["completed", "failed"] },
           "blackboard_ref": { "type": "object" }
+        }
+      }
+    },
+    {
+      "name": "reinvestigate_incident",
+      "description": "Re-investigates a new validation build after a fix attempt (attempt > 0). Fetches new build logs, compares error signatures, checks test counts, and runs flakiness re-analysis. Writes versioned evidence to the Blackboard.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "incident_id": { "type": "string", "format": "uuid" },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Reinvestigation attempt number (must be > 0). Caps at REINVESTIGATION_MAX_ATTEMPTS (default 5)."
+          },
+          "previous_failure_summary": {
+            "type": "string",
+            "description": "Summary of what failed in the previous attempt, injected as context so the LLM does not repeat the same hypothesis."
+          },
+          "new_build_url": {
+            "type": "string",
+            "description": "Full Jenkins build URL of the new validation build triggered for the fix PR. Both multibranch (/job/app/job/main/42/) and view-based PR (/job/app/view/change-requests/job/PR-7/5/) URL formats are accepted."
+          }
+        },
+        "required": ["incident_id", "attempt", "new_build_url"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["completed", "failed"] },
+          "blackboard_ref": {
+            "type": "object",
+            "description": "Reference to the versioned Blackboard entry written at attempt+1.",
+            "properties": {
+              "incident_id": { "type": "string" },
+              "section": { "type": "string", "enum": ["evidence"] },
+              "key": { "type": "string" },
+              "version": { "type": "integer" }
+            }
+          }
         }
       }
     }

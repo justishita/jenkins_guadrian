@@ -68,6 +68,7 @@ class CoordinatorRuntime:
         )
         self.queue = await channel.declare_queue(self.queue_name, durable=True)
         await self.queue.bind(exchange, routing_key="incident.created")
+        await self.queue.bind(exchange, routing_key="incident.reinvestigate")
         self.consumer_tag = await self.queue.consume(self._handle_message)
         logger.info("Coordinator consuming incident.created events")
 
@@ -90,8 +91,15 @@ class CoordinatorRuntime:
     async def _handle_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
         try:
             async with message.process(requeue=True):
+                body = json.loads(message.body)
+                routing_key = message.routing_key or ""
+
+                if routing_key == "incident.reinvestigate" or body.get("previous_failure_summary"):
+                    await self._dispatch_reinvestigation(body)
+                    return
+
                 try:
-                    event = IncidentCreatedEvent.model_validate(json.loads(message.body))
+                    event = IncidentCreatedEvent.model_validate(body)
                 except (ValueError, ValidationError) as error:
                     logger.error(
                         "Discarding invalid incident.created message (%s)",
@@ -153,6 +161,48 @@ class CoordinatorRuntime:
                     raise
                 await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
         raise RuntimeError("Jenkins A2A dispatch attempts were exhausted")
+
+    async def _dispatch_reinvestigation(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Forward an incident.reinvestigate event to the Jenkins agent via A2A."""
+        if self.client is None:
+            raise RuntimeError("Coordinator HTTP client has not started")
+
+        incident_id = body.get("incident_id", "")
+        attempt = int(body.get("attempt", 1))
+        previous_failure_summary = body.get("previous_failure_summary", "")
+        new_build_url = body.get("new_build_url", "")
+
+        url = f"{self.jenkins_agent_url}/tasks"
+        payload = {
+            "incident_id": str(incident_id),
+            "attempt": attempt,
+            "previous_failure_summary": previous_failure_summary,
+            "new_build_url": new_build_url,
+        }
+        for retry in range(3):
+            try:
+                response = await self.client.post(url, json=payload)
+                if response.status_code >= 500:
+                    if retry < 2:
+                        await asyncio.sleep(min(0.25 * (2**retry), 1.0))
+                        continue
+                response.raise_for_status()
+                result = response.json()
+                logger.info(
+                    "Reinvestigation dispatched for incident %s attempt %d",
+                    incident_id,
+                    attempt,
+                )
+                return result
+            except (httpx.TimeoutException, httpx.TransportError):
+                if retry == 2:
+                    raise
+                await asyncio.sleep(min(0.25 * (2**retry), 1.0))
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code < 500 or retry == 2:
+                    raise
+                await asyncio.sleep(min(0.25 * (2**retry), 1.0))
+        raise RuntimeError("Reinvestigation A2A dispatch attempts were exhausted")
 
     async def _synthesize(self, event: IncidentCreatedEvent) -> IncidentReport | None:
         """Fuse whatever is on the blackboard into the incident report (Week 4).

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import inspect
 import logging
 import os
 from typing import Any, Callable
@@ -25,10 +26,12 @@ _EXECUTION_TASKS: dict[tuple[str, int], asyncio.Task[Response]] = {}
 
 
 class AgentTaskRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     incident_id: UUID
     attempt: int = Field(default=0, ge=0)
+    previous_failure_summary: str | None = None
+    new_build_url: str | None = None
 
 
 def verify_a2a_bearer_token(authorization: str | None = Header(None)) -> None:
@@ -54,7 +57,7 @@ def verify_a2a_bearer_token(authorization: str | None = Header(None)) -> None:
 
 def create_a2a_app(
     agent_card_data: dict[str, Any],
-    run_fn: Callable[[str | UUID, int], Evidence | Any],
+    run_fn: Callable[..., Evidence | Any],
     timeout_seconds: float = 60.0,
 ) -> FastAPI:
     """Serve authenticated, idempotent A2A tasks; return only a Blackboard reference."""
@@ -127,11 +130,37 @@ async def _execute_task(
     *,
     task: AgentTaskRequest,
     key: tuple[str, int],
-    run_fn: Callable[[str | UUID, int], Evidence | Any],
+    run_fn: Callable[..., Evidence | Any],
     agent_card_data: dict[str, Any],
 ) -> Response:
     try:
-        await asyncio.to_thread(run_fn, task.incident_id, task.attempt)
+        def _call_run_fn():
+            try:
+                sig = inspect.signature(run_fn)
+                params = list(sig.parameters.values())
+                accepts_varargs = any(p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD) for p in params)
+                if len(params) >= 4 or accepts_varargs:
+                    return run_fn(
+                        task.incident_id,
+                        task.attempt,
+                        task.previous_failure_summary,
+                        task.new_build_url,
+                    )
+                elif len(params) == 2:
+                    return run_fn(task.incident_id, task.attempt)
+                elif len(params) == 1:
+                    return run_fn(task.incident_id)
+                else:
+                    return run_fn(
+                        task.incident_id,
+                        task.attempt,
+                        task.previous_failure_summary,
+                        task.new_build_url,
+                    )
+            except TypeError:
+                return run_fn(task.incident_id, task.attempt)
+
+        await asyncio.to_thread(_call_run_fn)
         agent_name = str(agent_card_data.get("name", ""))
         entry = get_blackboard().read(
             task.incident_id,
@@ -176,7 +205,7 @@ async def _run_with_trace(
     trace_context: Any,
     task: AgentTaskRequest,
     key: tuple[str, int],
-    run_fn: Callable[[str | UUID, int], Evidence | Any],
+    run_fn: Callable[..., Evidence | Any],
     agent_card_data: dict[str, Any],
 ) -> Response:
     with tracer.start_as_current_span("a2a_execute_task", context=trace_context):

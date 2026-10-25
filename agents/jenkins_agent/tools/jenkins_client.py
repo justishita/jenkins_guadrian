@@ -9,7 +9,7 @@ import random
 import re
 import time
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 import httpx
 
@@ -307,3 +307,84 @@ class JenkinsClient:
         )
         assert response is not None
         return response.json()
+
+
+    async def trigger_build(
+        self,
+        job: JobPath,
+        *,
+        token: str | None = None,
+    ) -> None:
+        """Trigger a new build for job (POST /job/.../build).
+
+        Raises JenkinsAuthError, JenkinsNotFound, or JenkinsUnavailable on failure.
+        Note: Jenkins returns 201 Created for a successful trigger (not 200).
+        """
+        url = f"{self.base_url}{self._job_path(job)}/build"
+        params: dict[str, str] = {}
+        if token:
+            params["token"] = token
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await self._client.post(url, params=params or None)
+            except httpx.TransportError as error:
+                if attempt == self.max_retries:
+                    raise JenkinsUnavailable("Jenkins trigger request failed after retries") from error
+                await self._wait_before_retry(attempt)
+                continue
+            if response.status_code >= 500:
+                if attempt == self.max_retries:
+                    raise JenkinsUnavailable(
+                        f"Jenkins returned HTTP {response.status_code} triggering build"
+                    )
+                await self._wait_before_retry(attempt)
+                continue
+            if response.status_code == 401:
+                raise JenkinsAuthError("Jenkins rejected credentials when triggering build")
+            if response.status_code == 404:
+                raise JenkinsNotFound(f"Build trigger URL not found: {url}")
+            # 201 Created or 200 OK are both success
+            if response.status_code not in (200, 201):
+                response.raise_for_status()
+            return
+        raise JenkinsUnavailable("Jenkins trigger request failed after retries")
+
+    async def trigger_build_url(
+        self,
+        build_trigger_url: str,
+        *,
+        token: str | None = None,
+    ) -> None:
+        """Trigger a build via an explicit URL (e.g. a PR branch or change-request job).
+
+        ``build_trigger_url`` should be the ``/build`` endpoint of the target job,
+        e.g. ``http://jenkins:8080/job/target-app/view/change-requests/job/PR-7/build``.
+        The caller is responsible for discovering the correct path; see docs/jenkins_pr_trigger.md
+        for how to find the working URL on your instance.
+        """
+        params: dict[str, str] = {}
+        if token:
+            params["token"] = token
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await self._client.post(build_trigger_url, params=params or None)
+            except httpx.TransportError as error:
+                if attempt == self.max_retries:
+                    raise JenkinsUnavailable("Jenkins PR trigger request failed after retries") from error
+                await self._wait_before_retry(attempt)
+                continue
+            if response.status_code >= 500:
+                if attempt == self.max_retries:
+                    raise JenkinsUnavailable(
+                        f"Jenkins returned HTTP {response.status_code} triggering build at {build_trigger_url}"
+                    )
+                await self._wait_before_retry(attempt)
+                continue
+            if response.status_code == 401:
+                raise JenkinsAuthError("Jenkins rejected credentials when triggering PR build")
+            if response.status_code == 404:
+                raise JenkinsNotFound(f"PR build trigger URL not found: {build_trigger_url}")
+            if response.status_code not in (200, 201):
+                response.raise_for_status()
+            return
+        raise JenkinsUnavailable("Jenkins PR trigger request failed after retries")
