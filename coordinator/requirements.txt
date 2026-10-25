@@ -1,0 +1,6 @@
+a2a-sdk>=1.2.0
+google-adk>=2.0.0
+uvicorn>=0.30.0
+starlette>=0.37.0
+pydantic>=2.7.0
+asyncpg>=0.29.0

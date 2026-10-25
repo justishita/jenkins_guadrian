@@ -6,3 +6,4 @@ langchain-google-genai>=2.0.0
 crewai>=1.15.0
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
+a2a-sdk>=1.2.0

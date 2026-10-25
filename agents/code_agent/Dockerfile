@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY agents/__init__.py ./agents/__init__.py
 COPY agents/code_agent ./agents/code_agent
 COPY common ./common
+COPY coordinator/__init__.py coordinator/a2a_contract.py coordinator/a2a_client.py ./coordinator/
 
 ENV EVIDENCE_DIR=/app/data/evidence \
     AUDIT_DIR=/app/data/audit

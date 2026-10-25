@@ -115,6 +115,10 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Used by the provisioned Postgres (audit trail) datasource.
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -129,6 +133,7 @@ services:
       start_period: 15s
     depends_on:
       - prometheus
+      - postgres
     networks:
       - devnet
 
@@ -144,6 +149,7 @@ services:
       # Empty -> JSON-lines audit trail under /app/data/audit; set -> PostgreSQL trail.
       DATABASE_URL: ${DATABASE_URL:-}
       PROMETHEUS_URL: http://prometheus:9090
+      COORDINATOR_URL: http://coordinator:8090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
     depends_on:
       rabbitmq:
@@ -164,6 +170,7 @@ services:
       - ./data/evidence:/app/data/evidence
     environment:
       JENKINS_URL: http://jenkins:8080
+      COORDINATOR_URL: http://coordinator:8090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
     depends_on:
@@ -209,6 +216,7 @@ services:
       - ./data/audit:/app/data/audit
     environment:
       OPA_URL: http://opa:8181
+      COORDINATOR_URL: http://coordinator:8090
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
       GITHUB_TOKEN: ${GITHUB_TOKEN:?Set GITHUB_TOKEN in .env}
       GITHUB_REPO: ${GITHUB_REPO:?Set GITHUB_REPO in .env}
@@ -218,6 +226,31 @@ services:
         condition: service_healthy
       opa:
         condition: service_healthy
+    networks:
+      - devnet
+
+  coordinator:
+    build:
+      context: .
+      dockerfile: coordinator/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./data/evidence:/app/data/evidence
+      - ./data/audit:/app/data/audit
+      - ./data/reports:/app/data/reports
+    environment:
+      COORDINATOR_PUBLIC_URL: http://coordinator:8090
+      # Seconds to wait for all three agents before writing an incomplete report.
+      COORDINATOR_TIMEOUT_SECONDS: ${COORDINATOR_TIMEOUT_SECONDS:-120}
+      DATABASE_URL: ${DATABASE_URL:-}
+    ports:
+      - "${COORDINATOR_HOST_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - devnet
 

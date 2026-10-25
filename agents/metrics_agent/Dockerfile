@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY agents/__init__.py ./agents/__init__.py
 COPY agents/metrics_agent ./agents/metrics_agent
 COPY common ./common
+COPY coordinator/__init__.py coordinator/a2a_contract.py coordinator/a2a_client.py ./coordinator/
 
 
 CMD ["python", "-m", "agents.metrics_agent"]

@@ -35,6 +35,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
+from coordinator.a2a_client import notifier_from_env
 from coordinator.a2a_contract import evidence_ready
 
 
@@ -1298,6 +1299,7 @@ async def run(settings: JenkinsAgentSettings) -> None:
             per_call_timeout=settings.PER_CALL_TIMEOUT_SECONDS,
             total_timeout=settings.TOTAL_TIMEOUT_SECONDS,
             llm_timeout=settings.LLM_TIMEOUT_SECONDS,
+            notifier=notifier_from_env(),
         )
         async with connection:
             channel = await connection.channel()
