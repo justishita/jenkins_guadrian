@@ -22,7 +22,7 @@ import pytest
 
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, FailureTaxonomy, IncidentCreatedEvent
-from coordinator.a2a_contract import AGENT_NAMES, parse_evidence_ready
+from common.a2a_contract import AGENT_NAMES, parse_evidence_ready
 from coordinator.agent import CoordinatorAgent
 
 
@@ -201,7 +201,7 @@ async def test_all_three_agents_reporting_completes_the_blackboard(
         await store.write(evidence_for(agent))
         await bus(
             __import__(
-                "coordinator.a2a_contract", fromlist=["evidence_ready"]
+                "common.a2a_contract", fromlist=["evidence_ready"]
             ).evidence_ready(INCIDENT, agent)
         )
 
@@ -217,7 +217,7 @@ async def test_notifications_arriving_together_are_all_recorded(
     wiring: tuple[FileEvidenceStore, CoordinatorAgent, RecordingBus]
 ) -> None:
     """Agents run in parallel, so their notifications can land at the same moment."""
-    from coordinator.a2a_contract import evidence_ready
+    from common.a2a_contract import evidence_ready
 
     store, coordinator, bus = wiring
     for agent in AGENT_NAMES:
@@ -232,7 +232,7 @@ async def test_notifications_arriving_together_are_all_recorded(
 async def test_an_agent_announcing_a_different_incident_is_kept_apart(
     wiring: tuple[FileEvidenceStore, CoordinatorAgent, RecordingBus]
 ) -> None:
-    from coordinator.a2a_contract import evidence_ready
+    from common.a2a_contract import evidence_ready
 
     store, coordinator, bus = wiring
     other = uuid4()

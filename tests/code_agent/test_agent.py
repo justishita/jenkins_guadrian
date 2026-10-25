@@ -356,7 +356,7 @@ def test_a_message_missing_required_fields_is_rejected() -> None:
 
 @pytest.mark.asyncio
 async def test_it_announces_over_a2a_once_evidence_is_published(tmp_path: Path) -> None:
-	from coordinator.a2a_contract import parse_evidence_ready
+	from common.a2a_contract import parse_evidence_ready
 
 	sent: list[Any] = []
 	github = routed_github(HEALTHY_ROUTES)

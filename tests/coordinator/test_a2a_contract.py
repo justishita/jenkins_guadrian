@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from coordinator.a2a_contract import (
+from common.a2a_contract import (
 	AGENT_KEY,
 	AGENT_NAMES,
 	EVIDENCE_READY,

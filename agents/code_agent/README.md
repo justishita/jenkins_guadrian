@@ -69,14 +69,44 @@ python scripts/inject_code_faults.py tc03    # or tc08
 python scripts/inject_code_faults.py revert
 ```
 
+## Remediation (Week 5)
+
+`remediation.py` turns an actionable `IncidentReport` into a `FixPlan`, or a `NoFix`
+explaining why not. It proposes; it never applies.
+
+A fix is **the inverse of exactly the lines that broke the build**: the removed line
+from the breaking diff replaces the added one, verbatim. A pin moved from 0.28.1 to
+0.99.0 is moved back; a timeout changed from `3` to `-5` is set back to `3`. Nothing
+else in the file is touched.
+
+It declines as readily as it fixes:
+
+* the report must be actionable - a resolved cause at or above 0.5;
+* only `dependency_regression` and `config_error` are fixed automatically, since only
+  they carry a provable previous good state in the diff;
+* a config fix reverts only values that are checkably wrong, never every changed key;
+* an added dependency or removed key has no line to restore, so a human handles it.
+
+`FileEdit.apply` refuses unless the line it replaces appears **exactly once** - zero
+means the fix went stale, two means it is ambiguous.
+
+### Writing to GitHub
+
+`tools/github_writer.py` is a separate class from the read-only `GitHubClient`, so the
+investigation path physically cannot write. `apply_plan_to_branch` creates
+`remediation/<incident>-<type>-a<attempt>` from the breaking commit and commits each
+edit conditioned on the blob sha it read, so a concurrent change is refused rather than
+overwritten. Writes are never retried blindly - a timeout after a POST may mean it
+succeeded. Pull requests can only be drafts.
+
+Nothing calls the writer except `coordinator/remediation_gate.py`, which first requires
+the OPA remediation policy, a recorded human approval and the OPA pull-request policy.
+
 ## Status
 
-Weeks 2 and 3 deliver retrieval, analysis and rule-based root-cause reasoning. Week 4
-adds LLM-assisted reasoning and confidence calibration on top of the same evidence,
-measured against these scenarios.
-
-GitHub access is **read-only** until Week 5. Draft pull requests arrive then, behind
-the OPA policy gate in `policies/` and a recorded human approval.
+Weeks 2-3 deliver retrieval, analysis and rule-based reasoning; Week 5 the remediation
+engine and branching workflow; Week 6 (in `coordinator/`) the gated path to a draft PR.
+LLM-assisted reasoning, measured against these scenarios, is still to come.
 
 ## Configuration
 
