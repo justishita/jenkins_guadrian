@@ -250,13 +250,75 @@ RULES = [
 ]
 
 
-def rule_based_classify(parsed: ParsedBuild) -> list[Hypothesis]:
-    """Return every rule supported by parsed build evidence, or a low-confidence unknown."""
+def rule_based_classify(
+    parsed: ParsedBuild,
+    flaky_score: float | None = None,
+) -> list[Hypothesis]:
+    """Return every rule supported by parsed build evidence, adjusted for flakiness if present."""
     hypotheses = [
         Hypothesis(rule.failure_type, rule.reason, evidence_ids, rule.confidence)
         for rule in RULES
         if (evidence_ids := rule.match(parsed))
     ]
+
+    if flaky_score is not None and flaky_score > 0.4:
+        adjusted_hypotheses: list[Hypothesis] = []
+        has_flaky_hyp = False
+        evidence_ids = [f"failing_tests[{i}]" for i in range(len(parsed.failing_tests))]
+        if not evidence_ids and parsed.error_blocks:
+            evidence_ids = [f"error_blocks[{i}]" for i in range(len(parsed.error_blocks))]
+
+        for hyp in hypotheses:
+            if hyp.failure_type == FailureTaxonomy.CODE_TEST_FAILURE:
+                # REDUCE code_test_failure confidence
+                reduced_conf = round(max(0.15, hyp.rule_confidence * (1.0 - flaky_score)), 4)
+                adjusted_hypotheses.append(
+                    Hypothesis(
+                        failure_type=hyp.failure_type,
+                        reason=hyp.reason + " (reduced: test exhibited historical flakiness)",
+                        matched_evidence_ids=hyp.matched_evidence_ids,
+                        rule_confidence=reduced_conf,
+                    )
+                )
+            elif hyp.failure_type == FailureTaxonomy.FLAKY_TEST:
+                has_flaky_hyp = True
+                flaky_conf = round(min(0.95, max(0.70, 0.50 + flaky_score * 0.45)), 4)
+                adjusted_hypotheses.append(
+                    Hypothesis(
+                        failure_type=hyp.failure_type,
+                        reason=(
+                            f"Historical test flakiness detected (flaky_score={flaky_score:.2f}); "
+                            "retry / quarantine and investigate."
+                        ),
+                        matched_evidence_ids=hyp.matched_evidence_ids or evidence_ids,
+                        rule_confidence=flaky_conf,
+                    )
+                )
+            else:
+                adjusted_hypotheses.append(hyp)
+
+        if not has_flaky_hyp:
+            flaky_conf = round(min(0.95, max(0.70, 0.50 + flaky_score * 0.45)), 4)
+            adjusted_hypotheses.insert(
+                0,
+                Hypothesis(
+                    failure_type=FailureTaxonomy.FLAKY_TEST,
+                    reason=(
+                        f"Historical test flakiness detected (flaky_score={flaky_score:.2f}); "
+                        "retry / quarantine and investigate."
+                    ),
+                    matched_evidence_ids=evidence_ids,
+                    rule_confidence=flaky_conf,
+                ),
+            )
+
+        # Ensure FLAKY_TEST ranks at the top
+        adjusted_hypotheses.sort(
+            key=lambda h: (h.failure_type == FailureTaxonomy.FLAKY_TEST, h.rule_confidence),
+            reverse=True,
+        )
+        return adjusted_hypotheses
+
     if hypotheses:
         return hypotheses
     return [

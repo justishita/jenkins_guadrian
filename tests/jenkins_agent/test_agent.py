@@ -7,9 +7,10 @@ import pytest
 
 import agents.jenkins_agent.agent as agent_module
 from agents.jenkins_agent.agent import JenkinsInvestigationAgent
+from agents.jenkins_agent.tools.flaky import FLAKY_RECOMMENDATION, FlakinessReport
 from agents.jenkins_agent.tools.jenkins_client import ConsoleText
 from common.blackboard import FileBlackboard
-from common.models import Evidence, IncidentCreatedEvent
+from common.models import Evidence, FailureTaxonomy, IncidentCreatedEvent
 
 
 EVENT = IncidentCreatedEvent(
@@ -44,8 +45,11 @@ class FakeJenkinsClient:
     async def get_test_report(self, job: str, number: int) -> dict[str, int]:
         return {"failCount": 1, "totalCount": 1}
 
-    async def get_build_history(self, job: str) -> list[dict[str, object]]:
+    async def get_build_history(self, job: str, limit: int = 30) -> list[dict[str, object]]:
         return [{"number": EVENT.build_number, "result": "FAILURE"}]
+
+    async def get_build(self, job: str, number: int) -> dict[str, object]:
+        return {"number": number, "result": "FAILURE"}
 
     async def aclose(self) -> None:
         self.closed = True
@@ -138,3 +142,47 @@ async def test_only_top_five_failing_tests_are_added_to_evidence(
     assert len([item for item in evidence.evidence_items if item.id.startswith("failing_tests[")]) == 5
     summary = next(item for item in evidence.evidence_items if item.id == "build_summary")
     assert '"total_failing_tests": 20' in summary.content
+
+
+@pytest.mark.asyncio
+async def test_flaky_score_sets_retry_quarantine_recommendation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("LLM_OFFLINE", "1")
+    blackboard = FileBlackboard(tmp_path / "blackboard")
+    monkeypatch.setattr(agent_module, "get_blackboard", lambda: blackboard)
+
+    async def fake_analyze(*, job, test_name, client):
+        return FlakinessReport(
+            test_name=test_name,
+            job=job,
+            pass_count=4,
+            fail_count=4,
+            total_runs=8,
+            transitions=7,
+            same_commit_both_passed_and_failed=True,
+            regression_detected=False,
+            regression_commit=None,
+            flaky_score=0.85,
+            is_flaky=True,
+            status="flaky",
+            confidence=0.9,
+            history=[],
+            details="oscillating",
+        )
+
+    monkeypatch.setattr(agent_module, "analyze_test_flakiness", fake_analyze)
+    store = FakeEvidenceStore()
+    agent = JenkinsInvestigationAgent(
+        llm_client=object(),
+        evidence_store=store,
+        jenkins_client_factory=lambda: FakeJenkinsClient(),
+    )
+
+    evidence = await agent.run_event(EVENT)
+
+    assert evidence.failure_type is FailureTaxonomy.FLAKY_TEST
+    assert evidence.recommended_next_steps == [FLAKY_RECOMMENDATION]
+    assert all("change business logic" not in step.lower() for step in evidence.recommended_next_steps)
+    assert evidence.flaky_score == 0.85

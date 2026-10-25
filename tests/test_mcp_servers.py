@@ -10,7 +10,8 @@ from mcp_servers.analytics_mcp import server as a_server
 from common.mcp_client import get_jenkins_mcp_tools, get_analytics_mcp_tools
 
 
-def test_analytics_mcp_tools():
+@pytest.mark.asyncio
+async def test_analytics_mcp_tools():
     # Test compute_signature
     result = a_server.compute_signature(
         failed_stage="test",
@@ -19,8 +20,7 @@ def test_analytics_mcp_tools():
     assert "error_signature" in result
     assert len(result["error_signature"]) == 64
 
-    # Test flakiness stub
-    flaky = a_server.check_flakiness("test_order_flow")
+    flaky = await a_server.check_flakiness("test_order_flow")
     assert flaky["test_name"] == "test_order_flow"
     assert flaky["is_flaky"] is False
 

@@ -50,10 +50,25 @@ def compute_signature(failed_stage: str | None, error_blocks: list[str]) -> dict
 
 
 @mcp.tool()
-def check_flakiness(test_name: str) -> dict[str, Any]:
+async def check_flakiness(test_name: str, job: str = "target-app/main") -> dict[str, Any]:
     """Check whether a test is known to be flaky across recent pipeline runs."""
     safe_test_name = redact(test_name)
-    return FlakinessResult(test_name=safe_test_name).model_dump(mode="json")
+    try:
+        from agents.jenkins_agent.tools.flaky import analyze_test_flakiness
+        from agents.jenkins_agent.tools.jenkins_client import JenkinsClient
+
+        async with JenkinsClient() as client:
+            report = await analyze_test_flakiness(job, safe_test_name, client)
+            return FlakinessResult(
+                test_name=safe_test_name,
+                is_flaky=report.is_flaky,
+                flakiness_score=report.flaky_score,
+                history_runs=report.total_runs,
+                message=report.details,
+            ).model_dump(mode="json")
+    except Exception as exc:
+        logger.debug("Live flakiness check failed: %s", exc)
+        return FlakinessResult(test_name=safe_test_name).model_dump(mode="json")
 
 
 @mcp.tool()

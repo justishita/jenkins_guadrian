@@ -143,3 +143,34 @@ def test_non_build_compile_error_is_not_classified_as_build_failure() -> None:
 def test_rules_are_data_driven() -> None:
     assert RULES
     assert all(callable(rule.match) for rule in RULES)
+
+
+def test_high_flaky_score_adds_flaky_hypothesis_and_reduces_code_test_confidence() -> None:
+    parsed = ParsedBuild(
+        failing_tests=[FailingTest("test_x", "test_x.py", 1, "AssertionError: mismatch")],
+    )
+    baseline = rule_based_classify(parsed)
+    code_conf = next(
+        h.rule_confidence for h in baseline if h.failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+    )
+
+    hypotheses = rule_based_classify(parsed, flaky_score=0.7)
+
+    types = [h.failure_type for h in hypotheses]
+    assert types[0] is FailureTaxonomy.FLAKY_TEST
+    flaky = next(h for h in hypotheses if h.failure_type is FailureTaxonomy.FLAKY_TEST)
+    code = next(h for h in hypotheses if h.failure_type is FailureTaxonomy.CODE_TEST_FAILURE)
+    assert "retry / quarantine and investigate" in flaky.reason
+    assert "change business logic" not in flaky.reason.lower()
+    assert code.rule_confidence < code_conf
+    assert code.rule_confidence == round(max(0.15, 0.9 * (1.0 - 0.7)), 4)
+
+
+def test_low_flaky_score_does_not_override_code_test_failure() -> None:
+    parsed = ParsedBuild(
+        failing_tests=[FailingTest("test_x", "test_x.py", 1, "AssertionError: mismatch")],
+    )
+    hypotheses = rule_based_classify(parsed, flaky_score=0.2)
+
+    assert FailureTaxonomy.FLAKY_TEST not in {h.failure_type for h in hypotheses}
+    assert hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE

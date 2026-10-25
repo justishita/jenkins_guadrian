@@ -22,6 +22,11 @@ from agents.jenkins_agent.classifier import Hypothesis, rule_based_classify
 from agents.jenkins_agent.confidence import compute_confidence
 from agents.jenkins_agent.config import JenkinsAgentSettings, load_settings
 from agents.jenkins_agent.parsing import ParsedBuild, parse_build
+from agents.jenkins_agent.tools.flaky import (
+    FLAKY_RECOMMENDATION,
+    analyze_test_flakiness,
+    create_flakiness_tool,
+)
 from agents.jenkins_agent.tools.jenkins_client import JenkinsClient
 from common.blackboard import (
     BlackboardEntry,
@@ -221,10 +226,17 @@ def _fallback_evidence(
     log_truncated: bool = False,
     partial: bool = False,
     history: list[dict[str, Any]] | None = None,
+    flaky_score: float | None = None,
 ) -> Evidence:
     """Build deterministic rule-based Evidence when LLM is unavailable or fails."""
     primary = hypotheses[0] if hypotheses else None
     failure_type = primary.failure_type if primary else FailureTaxonomy.UNKNOWN
+
+    if flaky_score is not None and flaky_score > 0.4:
+        failure_type = FailureTaxonomy.FLAKY_TEST
+        recommended_next_steps = [FLAKY_RECOMMENDATION]
+    else:
+        recommended_next_steps = ["Inspect CI logs at point of failure"]
 
     breakdown = compute_confidence(
         parsed=parsed,
@@ -285,7 +297,7 @@ def _fallback_evidence(
         evidence_items=items,
         tool_calls=tool_calls,
         confidence=confidence,
-        recommended_next_steps=["Inspect CI logs at point of failure"],
+        recommended_next_steps=recommended_next_steps,
         failed_stage=parsed.failed_stage,
         failing_tests=[
             redact(t.name) for t in parsed.failing_tests[:MAX_TEST_FAILURES_IN_PROMPT]
@@ -293,6 +305,7 @@ def _fallback_evidence(
         log_truncated=log_truncated,
         error_signature=parsed.error_signature,
         redaction_applied=True,
+        flaky_score=flaky_score,
     )
 
 
@@ -391,10 +404,6 @@ class JenkinsInvestigationAgent:
         except Exception:
             pass
 
-        close_client = getattr(client, "aclose", None)
-        if close_client is not None:
-            await close_client()
-
         # Screen untrusted console text
         screened = screen_untrusted_text(
             console_text,
@@ -409,8 +418,28 @@ class JenkinsInvestigationAgent:
             failed_stage=event.failed_stage,
         )
 
-        # Rule-based classify
-        rule_hypotheses = rule_based_classify(parsed)
+        # Check flakiness for failing tests while the Jenkins client is still open
+        flaky_score: float | None = None
+        flaky_report = None
+        if parsed.failing_tests:
+            try:
+                flaky_report = await analyze_test_flakiness(
+                    job=event.job_name,
+                    test_name=parsed.failing_tests[0].name,
+                    client=client,
+                )
+                flaky_score = flaky_report.flaky_score
+                tool_calls.append(
+                    ToolCallRecord(tool="check_flakiness", duration_ms=10.0, ok=True)
+                )
+            except Exception as error:
+                logger.debug("Flakiness check failed (%s)", error)
+                tool_calls.append(
+                    ToolCallRecord(tool="check_flakiness", duration_ms=10.0, ok=False)
+                )
+
+        # Rule-based classify with flaky_score
+        rule_hypotheses = rule_based_classify(parsed, flaky_score=flaky_score)
 
         # Build initial evidence items
         build_summary = {
@@ -424,6 +453,16 @@ class JenkinsInvestigationAgent:
             ),
         }
         evidence_items = _initial_evidence_items(event, parsed, build_summary, test_report, history)
+        if flaky_report is not None:
+            evidence_items.append(
+                EvidenceItem(
+                    id="flakiness",
+                    kind="test_result",
+                    source=redact(f"jenkins:{event.job_name}#{event.build_number}"),
+                    timestamp=event.timestamp,
+                    content=json.dumps(redact_value(flaky_report.to_dict())),
+                )
+            )
 
         # Suspect files
         suspect_files = [t.file for t in parsed.failing_tests if t.file] + [
@@ -500,9 +539,11 @@ class JenkinsInvestigationAgent:
                     variant=variant_config.get("name", "react"),
                 )
 
+                flakiness_tool = create_flakiness_tool(event.job_name, client)
                 tools = (
                     get_jenkins_mcp_tools(event.job_name, event.build_number)
                     + get_analytics_mcp_tools()
+                    + [flakiness_tool]
                 )
 
                 llm_adapter = CrewLLMAdapter(self.llm_client)
@@ -623,18 +664,25 @@ class JenkinsInvestigationAgent:
                     )
                 )
 
+            final_failure_type = draft.failure_type if draft.failure_type != FailureTaxonomy.UNKNOWN and sanitized_hypotheses else (sanitized_hypotheses[0].failure_type if sanitized_hypotheses else FailureTaxonomy.UNKNOWN)
+            if flaky_score is not None and flaky_score > 0.4:
+                final_failure_type = FailureTaxonomy.FLAKY_TEST
+                final_recommended_steps = [FLAKY_RECOMMENDATION]
+            else:
+                final_recommended_steps = draft.recommended_next_steps or ["Inspect build logs"]
+
             final_evidence = Evidence(
                 incident_id=event.incident_id,
                 agent="jenkins_agent",
                 created_at=datetime.now(timezone.utc),
                 status="completed",
-                failure_type=draft.failure_type if draft.failure_type != FailureTaxonomy.UNKNOWN and sanitized_hypotheses else (sanitized_hypotheses[0].failure_type if sanitized_hypotheses else FailureTaxonomy.UNKNOWN),
+                failure_type=final_failure_type,
                 summary=draft.summary,
                 root_cause_hypotheses=sanitized_hypotheses,
                 evidence_items=items,
                 tool_calls=tool_calls,
                 confidence=breakdown.total,
-                recommended_next_steps=draft.recommended_next_steps or ["Inspect build logs"],
+                recommended_next_steps=final_recommended_steps,
                 failed_stage=parsed.failed_stage,
                 failing_tests=[
                     redact(t.name)
@@ -643,6 +691,7 @@ class JenkinsInvestigationAgent:
                 error_signature=parsed.error_signature,
                 log_truncated=console_truncated,
                 redaction_applied=True,
+                flaky_score=flaky_score,
             )
         else:
             final_evidence = _fallback_evidence(
@@ -654,7 +703,12 @@ class JenkinsInvestigationAgent:
                 log_truncated=console_truncated,
                 partial=console_partial,
                 history=history,
+                flaky_score=flaky_score,
             )
+
+        close_client = getattr(client, "aclose", None)
+        if close_client is not None:
+            await close_client()
 
         # Post to Blackboard
         final_evidence = Evidence.model_validate(

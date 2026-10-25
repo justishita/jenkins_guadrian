@@ -30,6 +30,7 @@ SUPPORTED_SCENARIOS = (
     "tc01_unit_test",
     "tc02_compile_syntax",
     "tc02_compile_import",
+    "tc10_flaky",
 )
 MISSING_MODULE_IMPORT = "import _jenkins_fault_injection_missing_module_"
 COAUTHOR_TRAILER = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
@@ -137,6 +138,39 @@ def apply_fault(repo: Path, scenario: str) -> FaultInfo:
             "app = create_app(",
         )
         failure_type = "build_compilation_failure"
+    elif scenario == "tc10_flaky":
+        relative_file = TARGET_APP / "tests" / "test_orders.py"
+        path = repo / relative_file
+        lines = _read_lines(path)
+        flaky_marker = "def test_flaky_random_order_check"
+        existing_idx = next(
+            (i for i, l in enumerate(lines) if flaky_marker in l),
+            None,
+        )
+        if existing_idx is not None:
+            assert_idx = next(
+                (
+                    i
+                    for i in range(existing_idx, min(len(lines), existing_idx + 10))
+                    if "random.random() < 0.5" in lines[i]
+                ),
+                existing_idx + 2,
+            )
+            line = assert_idx + 1
+        else:
+            newline = "\r\n" if (lines and lines[-1].endswith("\r\n")) else "\n"
+            if lines and not lines[-1].endswith(("\n", "\r")):
+                lines[-1] = lines[-1] + newline
+            flaky_snippet = [
+                newline,
+                f"def test_flaky_random_order_check() -> None:{newline}",
+                f"    import random{newline}",
+                f"    assert random.random() < 0.5{newline}",
+            ]
+            lines.extend(flaky_snippet)
+            _write_lines(path, lines)
+            line = len(lines)
+        failure_type = "flaky_test"
     else:
         relative_file = TARGET_APP / "app" / "main.py"
         path = repo / relative_file
@@ -228,6 +262,7 @@ def create_fault_branch(repo: Path, scenario: str) -> str:
         "tc01_unit_test": "test: introduce assertion fault in sample orders",
         "tc02_compile_syntax": "build: introduce syntax error in sample app",
         "tc02_compile_import": "build: introduce missing dependency in sample app",
+        "tc10_flaky": "test: introduce non-deterministic assertion in sample orders",
     }
     _git(repo, "add", "--", info.file, relative_ground_truth)
     _git(
@@ -249,6 +284,81 @@ def create_fault_branch(repo: Path, scenario: str) -> str:
     LOGGER.info("Jenkins build URL: %s", build_url)
     LOGGER.info("Pushed branch: %s", branch)
     return branch
+
+
+def _multibranch_build_url(jenkins_url: str, branch: str, job_token: str | None = None) -> str:
+    """Jenkins multibranch jobs are triggered at /job/target-app/job/<branch>/build."""
+    encoded_branch = quote(branch, safe="").replace("%2F", "%252F")
+    trigger_url = f"{jenkins_url.rstrip('/')}/job/target-app/job/{encoded_branch}/build"
+    if job_token:
+        trigger_url = f"{trigger_url}?token={quote(job_token, safe='')}"
+    return trigger_url
+
+
+def trigger_multibranch_build(
+    branch: str,
+    *,
+    runs: int = 8,
+    jenkins_url: str | None = None,
+    username: str | None = None,
+    api_token: str | None = None,
+    job_token: str | None = None,
+) -> list[str]:
+    """Trigger ~8 builds of the multibranch job via the Jenkins HTTP POST API.
+
+    Authentication uses ``JENKINS_USER`` / ``JENKINS_API_TOKEN`` (Basic auth).
+    An optional job trigger token is sent as ``?token=`` (``JENKINS_JOB_TOKEN``).
+    CSRF crumbs are fetched from ``/crumbIssuer/api/json`` when available.
+    """
+    import base64
+    import urllib.error
+    import urllib.request
+
+    url_base = (jenkins_url or os.getenv("JENKINS_URL", "http://localhost:8080")).rstrip("/")
+    user = username or os.getenv("JENKINS_USER", "")
+    token = api_token or os.getenv("JENKINS_API_TOKEN", "")
+    remote_token = job_token if job_token is not None else os.getenv("JENKINS_JOB_TOKEN", "")
+
+    trigger_url = _multibranch_build_url(url_base, branch, remote_token or None)
+    LOGGER.info("Triggering %d builds on %s", runs, trigger_url)
+    triggered: list[str] = []
+
+    headers: dict[str, str] = {}
+    if user and token:
+        headers["Authorization"] = (
+            "Basic " + base64.b64encode(f"{user}:{token}".encode("utf-8")).decode("ascii")
+        )
+    elif not remote_token:
+        LOGGER.warning("No Jenkins credentials or job token set; POST /build may be rejected")
+
+    try:
+        crumb_req = urllib.request.Request(f"{url_base}/crumbIssuer/api/json")
+        for header_name, header_value in headers.items():
+            crumb_req.add_header(header_name, header_value)
+        with urllib.request.urlopen(crumb_req, timeout=10) as crumb_resp:
+            crumb_payload = json.loads(crumb_resp.read().decode("utf-8"))
+        crumb_field = crumb_payload.get("crumbRequestField")
+        crumb_value = crumb_payload.get("crumb")
+        if crumb_field and crumb_value:
+            headers[str(crumb_field)] = str(crumb_value)
+    except Exception as exc:
+        LOGGER.debug("Jenkins crumb not available (%s); continuing without it", exc)
+
+    for run_i in range(runs):
+        req = urllib.request.Request(trigger_url, data=b"", method="POST")
+        for header_name, header_value in headers.items():
+            req.add_header(header_name, header_value)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                loc = resp.headers.get("Location", trigger_url)
+                triggered.append(loc)
+                LOGGER.info("Triggered run %d/%d (status %d)", run_i + 1, runs, resp.status)
+        except urllib.error.HTTPError as http_err:
+            LOGGER.warning("Trigger run %d returned HTTP %d: %s", run_i + 1, http_err.code, http_err.reason)
+        except Exception as exc:
+            LOGGER.warning("Trigger run %d failed: %s", run_i + 1, exc)
+
+    return triggered
 
 
 def revert_fault_branch(repo: Path, branch: str) -> None:
@@ -283,18 +393,35 @@ def revert_fault_branch(repo: Path, branch: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=(*SUPPORTED_SCENARIOS, "revert"))
-    parser.add_argument("branch", nargs="?", help="Exact fault branch name for revert")
+    parser.add_argument("command", choices=(*SUPPORTED_SCENARIOS, "revert", "trigger"))
+    parser.add_argument("branch", nargs="?", help="Exact fault branch name for revert or trigger")
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=8,
+        help="Number of builds to trigger (default: 8)",
+    )
+    parser.add_argument(
+        "--trigger",
+        action="store_true",
+        help="Trigger builds via Jenkins API after pushing",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "revert":
             if not args.branch:
                 parser.error("revert requires an exact branch name, e.g. fault/tc01_unit_test-...")
             revert_fault_branch(REPO_ROOT, args.branch)
+        elif args.command == "trigger":
+            if not args.branch:
+                parser.error("trigger requires a branch name, e.g. fault/tc10_flaky-...")
+            trigger_multibranch_build(args.branch, runs=args.runs)
         else:
             if args.branch:
                 parser.error("scenario commands do not take a branch argument")
-            create_fault_branch(REPO_ROOT, args.command)
+            created_branch = create_fault_branch(REPO_ROOT, args.command)
+            if args.trigger or args.command == "tc10_flaky":
+                trigger_multibranch_build(created_branch, runs=args.runs)
     except (GitCommandError, OSError, RuntimeError, ValueError) as error:
         LOGGER.error("Fault injection failed: %s", error)
         return 1
