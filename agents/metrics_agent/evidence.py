@@ -52,6 +52,8 @@ def make_evidence(
     next_steps: list[str] | None = None,
     failed_stage: str | None = None,
     created_at: datetime | None = None,
+    coverage: float | None = None,
+    coverage_notes: list[str] | None = None,
 ) -> Evidence:
     """Build the Metrics agent's evidence, redacting every free-text field.
 
@@ -71,4 +73,6 @@ def make_evidence(
         recommended_next_steps=[redact(step) for step in next_steps or []],
         failed_stage=redact(failed_stage) if failed_stage else None,
         redaction_applied=True,
+        investigation_coverage=coverage,
+        coverage_notes=[redact(note) for note in coverage_notes or []],
     )

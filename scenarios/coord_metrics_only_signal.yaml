@@ -1,0 +1,33 @@
+id: coord-metrics-only-signal
+name: Only Metrics Finds A Cause
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Jenkins and Code identify nothing; Metrics sees a resource problem. A single in-domain
+  vote is enough for a verdict, and the silent agents are not treated as votes against it.
+
+truth: resource_exhaustion
+
+agents:
+  jenkins_agent: {failure_type: unknown, confidence: 0.30}
+  metrics_agent: {failure_type: resource_exhaustion, confidence: 0.80}
+  code_agent: {failure_type: unknown, confidence: 0.20}
+
+expected:
+  verdict: resource_exhaustion
+  confidence: 0.80
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [resource_exhaustion]
+  ready_for_policy_review: true
+  blocking: []
+  negative: []

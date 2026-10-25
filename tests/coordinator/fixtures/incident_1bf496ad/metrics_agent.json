@@ -1,0 +1,112 @@
+{
+  "agent": "metrics_agent",
+  "confidence": 0.2,
+  "created_at": "2026-10-05T20:14:49.381642Z",
+  "error_signature": "",
+  "evidence_items": [
+    {
+      "content": "{\"confidence_inputs\": null, \"detection\": {\"anomalous\": false, \"baseline_value\": 1.0, \"detail\": \"target down in 0 of 25 samples\", \"detector\": \"availability\", \"direction\": \"none\", \"elevated_samples\": 0, \"gap_to_failure_seconds\": null, \"incident_samples\": 25, \"longest_run\": 0, \"observed_value\": 1.0, \"run_end_at\": null, \"run_start_at\": null, \"score\": 0.0, \"still_elevated\": false, \"strength\": 0.0, \"window_end\": \"2026-10-05T19:03:18Z\", \"window_start\": \"2026-10-05T18:57:18Z\"}, \"error\": null, \"issues\": [], \"metric\": \"target_availability\", \"outcome\": \"normal\", \"promql\": \"up{job=\\\"target_app\\\"}\", \"unit\": \"bool\", \"window\": {\"baseline_start\": \"2026-10-05 18:47:18+00:00\", \"end\": \"2026-10-05 19:03:18+00:00\", \"start\": \"2026-10-05 18:57:18+00:00\"}}",
+      "id": "metric-target_availability",
+      "kind": "metric",
+      "source": "prometheus",
+      "timestamp": "2026-10-05T19:03:18Z"
+    },
+    {
+      "content": "{\"confidence_inputs\": null, \"detection\": {\"anomalous\": false, \"baseline_value\": 0.00475, \"detail\": \"peak 0.00475 vs baseline median 0.00475 (z=0.0, threshold 6)\", \"detector\": \"spike\", \"direction\": \"none\", \"elevated_samples\": 0, \"gap_to_failure_seconds\": null, \"incident_samples\": 25, \"longest_run\": 0, \"observed_value\": 0.004750000000000001, \"run_end_at\": null, \"run_start_at\": null, \"score\": 2.0816681711721685e-17, \"still_elevated\": false, \"strength\": 0.0, \"window_end\": \"2026-10-05T19:03:18Z\", \"window_start\": \"2026-10-05T18:57:18Z\"}, \"error\": null, \"issues\": [], \"metric\": \"latency_p95\", \"outcome\": \"normal\", \"promql\": \"histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\\\"target_app\\\"}[1m])))\", \"unit\": \"s\", \"window\": {\"baseline_start\": \"2026-10-05 18:47:18+00:00\", \"end\": \"2026-10-05 19:03:18+00:00\", \"start\": \"2026-10-05 18:57:18+00:00\"}}",
+      "id": "metric-latency_p95",
+      "kind": "metric",
+      "source": "prometheus",
+      "timestamp": "2026-10-05T19:03:18Z"
+    },
+    {
+      "content": "{\"confidence_inputs\": null, \"detection\": {\"anomalous\": false, \"baseline_value\": 0.0025216310908676987, \"detail\": \"peak 0.002835 vs baseline median 0.002522 (z=0.1, threshold 6)\", \"detector\": \"spike\", \"direction\": \"none\", \"elevated_samples\": 0, \"gap_to_failure_seconds\": null, \"incident_samples\": 25, \"longest_run\": 0, \"observed_value\": 0.002835270768358262, \"run_end_at\": null, \"run_start_at\": null, \"score\": 0.06272793549811266, \"still_elevated\": false, \"strength\": 0.0, \"window_end\": \"2026-10-05T19:03:18Z\", \"window_start\": \"2026-10-05T18:57:18Z\"}, \"error\": null, \"issues\": [], \"metric\": \"cpu_rate\", \"outcome\": \"normal\", \"promql\": \"rate(process_cpu_seconds{job=\\\"target_app\\\"}[1m])\", \"unit\": \"cores\", \"window\": {\"baseline_start\": \"2026-10-05 18:47:18+00:00\", \"end\": \"2026-10-05 19:03:18+00:00\", \"start\": \"2026-10-05 18:57:18+00:00\"}}",
+      "id": "metric-cpu_rate",
+      "kind": "metric",
+      "source": "prometheus",
+      "timestamp": "2026-10-05T19:03:18Z"
+    },
+    {
+      "content": "{\"confidence_inputs\": null, \"detection\": {\"anomalous\": false, \"baseline_value\": 60489728.0, \"detail\": \"rose 8192 bytes over baseline median 6.049e+07 (100% of steps non-decreasing)\", \"detector\": \"sustained_increase\", \"direction\": \"none\", \"elevated_samples\": 0, \"gap_to_failure_seconds\": null, \"incident_samples\": 25, \"longest_run\": 0, \"observed_value\": 60497920.0, \"run_end_at\": null, \"run_start_at\": null, \"score\": 0.0015625, \"still_elevated\": false, \"strength\": 0.0, \"window_end\": \"2026-10-05T19:03:18Z\", \"window_start\": \"2026-10-05T18:57:18Z\"}, \"error\": null, \"issues\": [], \"metric\": \"memory_rss\", \"outcome\": \"normal\", \"promql\": \"process_memory_bytes{job=\\\"target_app\\\"}\", \"unit\": \"bytes\", \"window\": {\"baseline_start\": \"2026-10-05 18:47:18+00:00\", \"end\": \"2026-10-05 19:03:18+00:00\", \"start\": \"2026-10-05 18:57:18+00:00\"}}",
+      "id": "metric-memory_rss",
+      "kind": "metric",
+      "source": "prometheus",
+      "timestamp": "2026-10-05T19:03:18Z"
+    }
+  ],
+  "failing_tests": [],
+  "failure_type": "unknown",
+  "incident_id": "1bf496ad-2958-4adc-9a0f-dfb38ae3aa2c",
+  "log_truncated": false,
+  "recommended_next_steps": [
+    "Rely on Jenkins log and code-change evidence; metrics show no resource or latency cause."
+  ],
+  "redaction_applied": true,
+  "root_cause_hypotheses": [
+    {
+      "confidence": 0.2,
+      "contradicting_evidence": [],
+      "failure_type": "unknown",
+      "hypothesis": "No metric anomaly found (4 metric(s) checked, none anomalous).",
+      "supporting_evidence": [
+        "metric-target_availability",
+        "metric-latency_p95",
+        "metric-cpu_rate",
+        "metric-memory_rss"
+      ]
+    }
+  ],
+  "schema_version": "0.1-stub",
+  "status": "insufficient_evidence",
+  "summary": "Metrics do not explain this failure: 4 metric(s) checked, none anomalous.",
+  "tool_calls": [
+    {
+      "args": {
+        "end": "2026-10-05T19:03:18+00:00",
+        "issued_at": "2026-10-05T20:14:48.765172+00:00",
+        "promql": "up{job=\"target_app\"}",
+        "start": "2026-10-05T18:47:18+00:00",
+        "step": "15s"
+      },
+      "duration_ms": 486.99,
+      "ok": true,
+      "tool": "prometheus.query_range"
+    },
+    {
+      "args": {
+        "end": "2026-10-05T19:03:18+00:00",
+        "issued_at": "2026-10-05T20:14:49.274028+00:00",
+        "promql": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"target_app\"}[1m])))",
+        "start": "2026-10-05T18:47:18+00:00",
+        "step": "15s"
+      },
+      "duration_ms": 56.8,
+      "ok": true,
+      "tool": "prometheus.query_range"
+    },
+    {
+      "args": {
+        "end": "2026-10-05T19:03:18+00:00",
+        "issued_at": "2026-10-05T20:14:49.332248+00:00",
+        "promql": "rate(process_cpu_seconds{job=\"target_app\"}[1m])",
+        "start": "2026-10-05T18:47:18+00:00",
+        "step": "15s"
+      },
+      "duration_ms": 10.17,
+      "ok": true,
+      "tool": "prometheus.query_range"
+    },
+    {
+      "args": {
+        "end": "2026-10-05T19:03:18+00:00",
+        "issued_at": "2026-10-05T20:14:49.342900+00:00",
+        "promql": "process_memory_bytes{job=\"target_app\"}",
+        "start": "2026-10-05T18:47:18+00:00",
+        "step": "15s"
+      },
+      "duration_ms": 6.48,
+      "ok": true,
+      "tool": "prometheus.query_range"
+    }
+  ],
+  "version": 1
+}

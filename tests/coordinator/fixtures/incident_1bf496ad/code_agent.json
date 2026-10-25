@@ -1,0 +1,492 @@
+{
+  "agent": "code_agent",
+  "confidence": 0.55,
+  "created_at": "2026-10-05T20:14:53.663532Z",
+  "error_signature": "",
+  "evidence_items": [
+    {
+      "content": "303d506 by Shreya Khandelwal: Week 3 Shreya metrics-agent: audit trail, scenario suite, correlated detection and confidence",
+      "id": "commit-head",
+      "kind": "commit",
+      "source": "https://github.com/justishita/jenkins_guadrian/commit/303d50670ed1d40ba10be6a7f6dd761c9cb21f5d",
+      "timestamp": "2026-10-05T18:59:33Z"
+    },
+    {
+      "content": "PR #5 (closed, merged) by shreyak7717: Week 3 Shreya metrics-agent: audit trail, scenario suite, correlated detection and confidence ",
+      "id": "pr-5",
+      "kind": "commit",
+      "source": "https://github.com/justishita/jenkins_guadrian/pull/5"
+    },
+    {
+      "content": "modified documentation: +39/-7 lines",
+      "id": "file-1",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/README.md"
+      },
+      "source": "agents/metrics_agent/README.md"
+    },
+    {
+      "content": "modified source: +150/-46 lines",
+      "id": "file-2",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/anomaly.py"
+      },
+      "source": "agents/metrics_agent/anomaly.py"
+    },
+    {
+      "content": "added source: +106/-0 lines",
+      "id": "file-3",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/audit.py"
+      },
+      "source": "agents/metrics_agent/audit.py"
+    },
+    {
+      "content": "added source: +96/-0 lines",
+      "id": "file-4",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/confidence.py"
+      },
+      "source": "agents/metrics_agent/confidence.py"
+    },
+    {
+      "content": "modified source: +5/-0 lines",
+      "id": "file-5",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/config.py"
+      },
+      "source": "agents/metrics_agent/config.py"
+    },
+    {
+      "content": "modified source: +26/-6 lines",
+      "id": "file-6",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/consumer.py"
+      },
+      "source": "agents/metrics_agent/consumer.py"
+    },
+    {
+      "content": "added source: +96/-0 lines",
+      "id": "file-7",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/correlation.py"
+      },
+      "source": "agents/metrics_agent/correlation.py"
+    },
+    {
+      "content": "added source: +32/-0 lines",
+      "id": "file-8",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/findings.py"
+      },
+      "source": "agents/metrics_agent/findings.py"
+    },
+    {
+      "content": "modified source: +53/-34 lines",
+      "id": "file-9",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/hypotheses.py"
+      },
+      "source": "agents/metrics_agent/hypotheses.py"
+    },
+    {
+      "content": "modified source: +21/-3 lines",
+      "id": "file-10",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/investigator.py"
+      },
+      "source": "agents/metrics_agent/investigator.py"
+    },
+    {
+      "content": "modified source: +19/-1 lines",
+      "id": "file-11",
+      "kind": "commit",
+      "location": {
+        "file": "agents/metrics_agent/sanity.py"
+      },
+      "source": "agents/metrics_agent/sanity.py"
+    },
+    {
+      "content": "modified configuration: +3/-0 lines",
+      "id": "file-12",
+      "kind": "commit",
+      "location": {
+        "file": "docker-compose.yml"
+      },
+      "source": "docker-compose.yml"
+    },
+    {
+      "content": "modified documentation: +21/-0 lines",
+      "id": "file-13",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/README.md"
+      },
+      "source": "scenarios/README.md"
+    },
+    {
+      "content": "added configuration: +46/-0 lines",
+      "id": "file-14",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_cpu_burn.yaml"
+      },
+      "source": "scenarios/metrics_cpu_burn.yaml"
+    },
+    {
+      "content": "added configuration: +44/-0 lines",
+      "id": "file-15",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_healthy.yaml"
+      },
+      "source": "scenarios/metrics_healthy.yaml"
+    },
+    {
+      "content": "added configuration: +50/-0 lines",
+      "id": "file-16",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_latency_cpu_correlated.yaml"
+      },
+      "source": "scenarios/metrics_latency_cpu_correlated.yaml"
+    },
+    {
+      "content": "added configuration: +46/-0 lines",
+      "id": "file-17",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_latency_spike.yaml"
+      },
+      "source": "scenarios/metrics_latency_spike.yaml"
+    },
+    {
+      "content": "added configuration: +46/-0 lines",
+      "id": "file-18",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_memory_leak.yaml"
+      },
+      "source": "scenarios/metrics_memory_leak.yaml"
+    },
+    {
+      "content": "added configuration: +51/-0 lines",
+      "id": "file-19",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_no_data.yaml"
+      },
+      "source": "scenarios/metrics_no_data.yaml"
+    },
+    {
+      "content": "added configuration: +49/-0 lines",
+      "id": "file-20",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_noisy_normal.yaml"
+      },
+      "source": "scenarios/metrics_noisy_normal.yaml"
+    },
+    {
+      "content": "added configuration: +47/-0 lines",
+      "id": "file-21",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_partial_data.yaml"
+      },
+      "source": "scenarios/metrics_partial_data.yaml"
+    },
+    {
+      "content": "added configuration: +43/-0 lines",
+      "id": "file-22",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_prometheus_unavailable.yaml"
+      },
+      "source": "scenarios/metrics_prometheus_unavailable.yaml"
+    },
+    {
+      "content": "added configuration: +46/-0 lines",
+      "id": "file-23",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_recovered_spike.yaml"
+      },
+      "source": "scenarios/metrics_recovered_spike.yaml"
+    },
+    {
+      "content": "added configuration: +45/-0 lines",
+      "id": "file-24",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_single_sample_glitch.yaml"
+      },
+      "source": "scenarios/metrics_single_sample_glitch.yaml"
+    },
+    {
+      "content": "added configuration: +53/-0 lines",
+      "id": "file-25",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_target_down.yaml"
+      },
+      "source": "scenarios/metrics_target_down.yaml"
+    },
+    {
+      "content": "added configuration: +51/-0 lines",
+      "id": "file-26",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/metrics_unrelated_earlier_cpu_spike.yaml"
+      },
+      "source": "scenarios/metrics_unrelated_earlier_cpu_spike.yaml"
+    },
+    {
+      "content": "added configuration: +55/-0 lines",
+      "id": "file-27",
+      "kind": "commit",
+      "location": {
+        "file": "scenarios/tc12_metrics_anomaly_metrics_side.yaml"
+      },
+      "source": "scenarios/tc12_metrics_anomaly_metrics_side.yaml"
+    },
+    {
+      "content": "modified source: +79/-12 lines",
+      "id": "file-28",
+      "kind": "commit",
+      "location": {
+        "file": "scripts/inject_faults.py"
+      },
+      "source": "scripts/inject_faults.py"
+    },
+    {
+      "content": "modified test: +16/-0 lines",
+      "id": "file-29",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/helpers.py"
+      },
+      "source": "tests/metrics_agent/helpers.py"
+    },
+    {
+      "content": "added test: +160/-0 lines",
+      "id": "file-30",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/scenario_runner.py"
+      },
+      "source": "tests/metrics_agent/scenario_runner.py"
+    },
+    {
+      "content": "modified test: +136/-62 lines",
+      "id": "file-31",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_anomaly.py"
+      },
+      "source": "tests/metrics_agent/test_anomaly.py"
+    },
+    {
+      "content": "added test: +168/-0 lines",
+      "id": "file-32",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_audit.py"
+      },
+      "source": "tests/metrics_agent/test_audit.py"
+    },
+    {
+      "content": "added test: +94/-0 lines",
+      "id": "file-33",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_audit_postgres.py"
+      },
+      "source": "tests/metrics_agent/test_audit_postgres.py"
+    },
+    {
+      "content": "added test: +89/-0 lines",
+      "id": "file-34",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_confidence.py"
+      },
+      "source": "tests/metrics_agent/test_confidence.py"
+    },
+    {
+      "content": "added test: +188/-0 lines",
+      "id": "file-35",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_correlation.py"
+      },
+      "source": "tests/metrics_agent/test_correlation.py"
+    },
+    {
+      "content": "added test: +94/-0 lines",
+      "id": "file-36",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_inject_faults.py"
+      },
+      "source": "tests/metrics_agent/test_inject_faults.py"
+    },
+    {
+      "content": "modified test: +32/-5 lines",
+      "id": "file-37",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_investigator.py"
+      },
+      "source": "tests/metrics_agent/test_investigator.py"
+    },
+    {
+      "content": "modified test: +29/-0 lines",
+      "id": "file-38",
+      "kind": "commit",
+      "location": {
+        "file": "tests/metrics_agent/test_sanity.py"
+      },
+      "source": "tests/metrics_agent/test_sanity.py"
+    }
+  ],
+  "failing_tests": [],
+  "failure_type": "config_error",
+  "incident_id": "1bf496ad-2958-4adc-9a0f-dfb38ae3aa2c",
+  "log_truncated": false,
+  "recommended_next_steps": [
+    "Restore the previous value of the changed configuration key.",
+    "Check the application's settings validation for the expected type and range."
+  ],
+  "redaction_applied": true,
+  "root_cause_hypotheses": [
+    {
+      "confidence": 0.55,
+      "contradicting_evidence": [
+        "file-2",
+        "file-3",
+        "file-4",
+        "file-5",
+        "file-6",
+        "file-7",
+        "file-8",
+        "file-9",
+        "file-10",
+        "file-11",
+        "file-28"
+      ],
+      "failure_type": "config_error",
+      "hypothesis": "A configuration change in this commit broke the build: max_confidence set to '0.0' in scenarios/metrics_no_data.yaml; max_confidence set to '0.0' in scenarios/metrics_prometheus_unavailable.yaml. max_confidence is not a positive value (0.0); max_confidence is not a positive value (0.0). 11 source file(s) also changed. Restoring the previous value should restore the build.",
+      "supporting_evidence": [
+        "file-12",
+        "file-14",
+        "file-15",
+        "file-16",
+        "file-17",
+        "file-18",
+        "file-19",
+        "file-20",
+        "file-21",
+        "file-22",
+        "file-23",
+        "file-24",
+        "file-25",
+        "file-26",
+        "file-27",
+        "commit-head"
+      ]
+    },
+    {
+      "confidence": 0.4,
+      "contradicting_evidence": [
+        "file-2",
+        "file-3",
+        "file-4",
+        "file-5",
+        "file-6",
+        "file-7",
+        "file-8",
+        "file-9",
+        "file-10",
+        "file-11",
+        "file-28"
+      ],
+      "failure_type": "dependency_regression",
+      "hypothesis": "A dependency change in this commit broke the build: jsonschema >=4.21.0 added in tests/requirements.txt. 11 source file(s) also changed, which could explain it instead. Pinning the package back to its previous version should restore the build.",
+      "supporting_evidence": [
+        "commit-head"
+      ]
+    },
+    {
+      "confidence": 0.1,
+      "contradicting_evidence": [],
+      "failure_type": "code_test_failure",
+      "hypothesis": "This commit changed application code, though the failing stage is unknown. It changed 23 source/test file(s): agents/metrics_agent/anomaly.py, agents/metrics_agent/audit.py, agents/metrics_agent/confidence.py, agents/metrics_agent/config.py.",
+      "supporting_evidence": [
+        "file-2",
+        "file-3",
+        "file-4",
+        "file-5",
+        "file-6",
+        "file-7",
+        "file-8",
+        "file-9",
+        "file-10",
+        "file-11",
+        "file-28",
+        "file-29",
+        "file-30",
+        "file-31",
+        "file-32",
+        "file-33",
+        "file-34",
+        "file-35",
+        "file-36",
+        "file-37",
+        "file-38",
+        "commit-head"
+      ]
+    }
+  ],
+  "schema_version": "0.1-stub",
+  "status": "completed",
+  "summary": "Commit 303d506 on main: 41 file(s), 2823 line(s): 15 configuration, 1 dependency_manifest, 2 documentation, 11 source, 12 test. A configuration change in this commit broke the build: max_confidence set to '0.0' in scenarios/metrics_no_data.yaml; max_confidence set to '0.0' in scenarios/metrics_prometheus_unavailable.yaml. max_confidence is not a positive value (0.0); max_confidence is not a positive value (0.0). 11 source file(s) also changed. Restoring the previous value should restore the build.",
+  "tool_calls": [
+    {
+      "args": {
+        "sha": "303d50670ed1d40ba10be6a7f6dd761c9cb21f5d"
+      },
+      "duration_ms": 1635.9830889996374,
+      "ok": true,
+      "tool": "get_commit"
+    },
+    {
+      "args": {
+        "sha": "303d50670ed1d40ba10be6a7f6dd761c9cb21f5d"
+      },
+      "duration_ms": 475.88741200161166,
+      "ok": true,
+      "tool": "list_pull_requests_for_commit"
+    },
+    {
+      "args": {
+        "branch": "main",
+        "limit": 10
+      },
+      "duration_ms": 468.5636380017968,
+      "ok": true,
+      "tool": "list_recent_commits"
+    }
+  ],
+  "version": 1
+}

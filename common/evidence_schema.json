@@ -306,6 +306,27 @@
       ],
       "default": null,
       "title": "Flaky Score"
+    },
+    "investigation_coverage": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Investigation Coverage"
+    },
+    "coverage_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Coverage Notes",
+      "type": "array"
     }
   },
   "required": [

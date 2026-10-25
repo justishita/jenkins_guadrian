@@ -1,0 +1,39 @@
+id: coord-explicit-contradiction
+name: Code Agent Contradicts The Dependency Hypothesis
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Code's own verdict is config_error, but it also records two changed files as contradicting
+  a dependency_regression hypothesis. Each distinct evidence id is a separate penalty
+  (0.15 x 0.8 relevance = 0.12), bounded by the cap, against Jenkins' dependency vote.
+
+truth: null   # not established
+
+agents:
+  jenkins_agent: {failure_type: dependency_regression, confidence: 0.90}
+  code_agent:
+    failure_type: config_error
+    confidence: 0.60
+    contradicts: {dependency_regression: [file-1, file-2]}
+  metrics_agent: {failure_type: unknown, confidence: 0.10}
+
+expected:
+  verdict: dependency_regression
+  confidence: 0.684         # 0.90 x (1 - 0.24)
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [dependency_regression, config_error]
+  ready_for_policy_review: true
+  blocking: []
+  negative:
+    - {agent: code_agent, failure_type: dependency_regression, kind: explicit_contradiction, status: applied}
+    - {agent: code_agent, failure_type: dependency_regression, kind: explicit_contradiction, status: applied}

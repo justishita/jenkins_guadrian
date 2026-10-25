@@ -111,6 +111,13 @@ class Evidence(BaseModel):
 	log_truncated: bool = False
 	redaction_applied: bool = False
 	flaky_score: float | None = Field(default=None, ge=0, le=1)
+	# Optional and additive: documents written without these still validate.
+	# None = unknown; 0.0 = no usable observations; 1.0 = full under the agent's own criteria.
+	# Measures how much of the planned investigation actually produced usable data, NOT
+	# whether an anomaly was found. The Coordinator uses it to decide if "found nothing"
+	# is trustworthy enough to count against a failure type.
+	investigation_coverage: float | None = Field(default=None, ge=0, le=1)
+	coverage_notes: list[str] = Field(default_factory=list)
 
 	@field_validator("created_at")
 	@classmethod
