@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 import logging
 import os
@@ -32,6 +31,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from common.blackboard import FileBlackboard, get_blackboard
+from common.fingerprint import compute_preliminary_fingerprint  # noqa: F401  (re-exported)
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +43,6 @@ RESOLVED_STATUSES = frozenset({"RESOLVED", "CLOSED", "FIXED", "REMEDIATED"})
 _DEDUP_LOCK = asyncio.Lock()
 
 
-def compute_preliminary_fingerprint(job_name: str, failed_stage: str | None) -> str:
-    """Compute preliminary fingerprint from job_name + failed_stage.
-
-    Used at incident creation time before log parsing.
-    """
-    material = f"{job_name}|{failed_stage or ''}".lower().strip()
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 @dataclass

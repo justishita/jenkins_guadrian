@@ -40,7 +40,7 @@ Say this up front; it pre-empts the obvious question.
 The two simulated agents need a live Jenkins, Prometheus and an LLM key; their real
 versions are covered by their own test suites.
 
-## The four scenarios
+## The five scenarios
 
 | Scenario | What it shows | Ends in |
 | --- | --- | --- |
@@ -48,8 +48,9 @@ versions are covered by their own test suites.
 | TC-15 | a "fix" that skips the failing test | blocked by policy before any human is asked |
 | TC-12 | the build times out but the commit changed nothing | cause found (timeout), fix **declined** |
 | TC-16 | a valid fix the reviewer rejects | no branch, no PR, rejection in the audit trail |
+| TC-19 | the same failure for the third time | report links the two earlier incidents and shows the recurrence count |
 
-Two of the four end in "no". That is the point: the system's value is as much in what it
+Two of the five end in "no". That is the point: the system's value is as much in what it
 refuses to do as in what it does.
 
 ## Lines worth saying

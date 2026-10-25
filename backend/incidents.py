@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.models import Incident
-from agents.jenkins_agent.history import compute_preliminary_fingerprint
+from common.fingerprint import compute_preliminary_fingerprint
 from backend.events.publisher import publisher
 from backend.models.events import JenkinsFailureEvent
 from common.blackboard import BlackboardEntry, get_blackboard

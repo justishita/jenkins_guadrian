@@ -114,3 +114,10 @@ def minimal_evidence_payload() -> dict[str, Any]:
 		"summary": "invalid database_url in settings.yaml",
 		"confidence": 0.8,
 	}
+
+
+def test_duplicate_linking_and_coverage_fields_are_in_the_contract(schema: dict[str, Any]) -> None:
+	"""Both sets are optional and additive; losing either broke a teammate's agent once."""
+	for field in ("related_incident_ids", "recurrence_count", "investigation_coverage", "coverage_notes"):
+		assert field in schema["properties"], field
+		assert field not in schema["required"], field
