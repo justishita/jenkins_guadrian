@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from common.audit import AuditLog, build_audit_log
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence
-from coordinator.a2a_contract import evidence_ready
+from common.a2a_contract import evidence_ready
 
 from .audit import completion_details, record_findings
 from .config import MetricsAgentSettings, load_settings

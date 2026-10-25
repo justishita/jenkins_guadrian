@@ -7,53 +7,92 @@ The investigation agents never talk to each other. The Coordinator is the only
 component that reads all three evidence documents for an incident, fuses them into one
 report, and drives what happens next.
 
-## Policy gate
-
-`policy.py` is the client for the OPA guardrails in `policies/`. It evaluates a
-proposed remediation before a reviewer sees it, and the approval state before a pull
-request is opened:
-
-```python
-async with PolicyGate(settings.OPA_URL) as gate:
-    verdict = await gate.evaluate_remediation(proposal)
-    if not verdict.allowed:
-        ...  # record verdict.violations and stop
+```text
+agents --A2A evidence.ready--> CoordinatorAgent --collect--> blackboard
+                                      |
+                                  synthesize --> IncidentReport
+                                      |
+                       (code agent) propose_fix --> FixPlan | NoFix
+                                      |
+                              RemediationGate
+        submit:  remediation policy ----------> policy_rejected | awaiting_approval
+        decide:  human approval -> PR policy -> branch -> draft PR  (or rejected / pr_blocked)
 ```
 
+## Coordinator agent (Google ADK)
+
+`agent.py` is a Google ADK `BaseAgent`. It receives A2A notifications and reads the
+blackboard. `collect` returns what each agent concluded, unchanged and unranked;
+`synthesize` fuses it. The two stay separate so a reviewer can always see the agents'
+own words before the Coordinator's verdict.
+
+## Synthesis (Week 4)
+
+`synthesis.py` turns every agent's evidence for one incident into an `IncidentReport`
+- Pydantic structured output, rendered to Markdown for a reviewer. Deterministic, so
+it is the baseline LLM-assisted fusion will be measured against.
+
+| Rule | Effect |
+| --- | --- |
+| Agreement | each additional agent naming the same cause adds **0.1** |
+| Disagreement | each competing cause costs **0.15**, and is named in the report |
+| A tie on agent count | `conflicting` - confidence orders candidates but never breaks a tie |
+| Abstention | insufficient-evidence and failed agents are findings, never votes |
+| Floor | below **0.5** the report names no cause and is not `actionable` |
+
+Cited evidence IDs are namespaced by agent (`code_agent:file-1`), because each agent
+numbers its evidence independently and `file-1` is ambiguous once merged.
+
+## Remediation gate (Week 6)
+
+`remediation_gate.py` is the only path from a proposed fix to GitHub, through three
+gates in order:
+
+1. **Remediation policy** - is the fix safe and minimal enough to show a human?
+   Blocks unsafe fixes such as skipping a test (TC-15) before anyone is asked.
+2. **A recorded human decision** - approve, reject or request changes, with a named
+   reviewer. A rejection ends it: no branch, no PR (TC-16).
+3. **Pull-request policy** - re-checks the policy pass, the named approval, that the
+   PR is a draft and that auto-merge is off.
+
+Only then is a branch created and a **draft** pull request opened (TC-11). `submit`
+and `decide` are separate calls because a human answers when they answer. Every step
+is written to the audit trail, refusals included:
+
+`remediation_proposed → policy_evaluated → approval_requested → approval_decided → pull_request_created`
+
+Every gate fails closed. An unreachable policy engine blocks the proposal; a fix that
+went stale between approval and branching is recorded as `failed`, never forced.
+
+## Policy gate
+
+`policy.py` evaluates `policies/` two ways, sharing one parser so they cannot disagree:
+
+* `PolicyGate` queries the running `opa` service over HTTP.
+* `OpaCliGate` runs the `opa` CLI with no server - the Conftest-style path for CI and
+  for tests that check proposals against the real Rego.
+
 A `PolicyVerdict` carries `allowed`, the `violations` that blocked it and any
-`warnings` for the reviewer. If OPA cannot be reached the call raises
-`PolicyUnavailable` rather than returning a permissive verdict: the proposal is
-blocked. Every verdict, allow or deny, belongs in the `policy_decisions` audit table.
+`warnings`. If OPA cannot answer, both raise `PolicyUnavailable` rather than returning
+a permissive verdict. An undefined package returns no result, which is not an allow.
+
+Note that a denying `PolicyVerdict` is falsy - its `__bool__` is `allowed`. Test it
+with `is None`, never with `if verdict:`, or a denial reads as "no verdict".
 
 Rules live in `policies/` and are documented there; see `policies/README.md` before
 changing one.
 
-## Coordinator agent (Google ADK)
-
-`agent.py` is a Google ADK `BaseAgent`. It is the only component allowed to see all
-three evidence documents, and it is deliberately a **collection layer only**: it
-receives A2A notifications, reads the blackboard and reports what each agent
-independently concluded. It does not fuse evidence, resolve conflicting hypotheses or
-produce an incident report - that synthesis is not implemented, and inventing it here
-would be guessing.
-
-`BlackboardView` reports which agents have written, which are still missing, and each
-agent's verdict unchanged. A test asserts the view carries no combined `failure_type`
-or `confidence`, so fusion cannot be added by accident.
-
 ## A2A contract
 
-`a2a_contract.py` defines the agent cards and the one message kind the Coordinator
-accepts, `evidence.ready`. The notification carries the incident id and the agent name
-and **no findings** - a receiver that wants the evidence reads it from the shared
-store. That split is what keeps the blackboard architecture intact: A2A carries
-notification, not payload, so no agent can hand another agent a conclusion.
-
-Malformed messages raise `A2AContractError` rather than being skipped; a notification
-that cannot be parsed is a contract break worth surfacing.
+The contract lives in `common/a2a_contract.py`, not here: every agent imports it, and
+each agent image ships only its own package plus `common/`. It defines the agent cards
+and the one message kind the Coordinator accepts, `evidence.ready`, which carries the
+incident id and agent name and **no findings**. A2A carries notification, not payload,
+so no agent can hand another agent a conclusion - the blackboard stays the only route
+evidence travels.
 
 ## Frameworks
 
 The three investigation agents run on CrewAI; this Coordinator runs on Google ADK.
-The split is real rather than cosmetic: CrewAI orchestrates each investigation,
-ADK coordinates across them, and A2A is the boundary between the two.
+CrewAI orchestrates each investigation, ADK coordinates across them, and A2A is the
+boundary between the two.

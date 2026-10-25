@@ -16,7 +16,7 @@ import pytest
 
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, FailureTaxonomy
-from coordinator.a2a_contract import A2AContractError, evidence_ready
+from common.a2a_contract import A2AContractError, evidence_ready
 from coordinator.agent import COORDINATOR_NAME, BlackboardView, CoordinatorAgent
 
 

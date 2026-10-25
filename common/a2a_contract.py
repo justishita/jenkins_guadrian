@@ -1,6 +1,8 @@
 """A2A messages and agent cards for the investigation agents.
 
-**Owner:** P3. The three investigation agents announce their findings to the
+**Owner:** P3. Lives in ``common/`` because it is a contract shared by every agent and
+the Coordinator, and each agent image ships only its own package plus ``common/``.
+The three investigation agents announce their findings to the
 Coordinator over the A2A protocol instead of being called directly. The message says
 only *that* an agent finished and which incident it finished - the findings themselves
 stay on the blackboard (``common.evidence_store``), which the Coordinator reads.

@@ -27,7 +27,7 @@ from a2a.types import Message
 from common.evidence_store import EvidenceStore
 from common.models import Evidence
 
-from coordinator.a2a_contract import AGENT_NAMES, A2AContractError, parse_evidence_ready
+from common.a2a_contract import AGENT_NAMES, A2AContractError, parse_evidence_ready
 from coordinator.synthesis import IncidentReport, synthesize
 
 

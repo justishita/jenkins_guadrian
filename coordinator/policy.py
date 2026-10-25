@@ -75,6 +75,32 @@ def _as_messages(value: Any) -> tuple[str, ...]:
 	return (str(value),)
 
 
+def verdict_from_result(package: str, result: Any) -> PolicyVerdict:
+	"""Turn a raw OPA result into a verdict, refusing anything ambiguous.
+
+	Shared by the HTTP gate and the CLI gate so both read a decision identically.
+	An undefined package yields no result at all, which is not an allow.
+	"""
+	if not isinstance(result, dict):
+		raise PolicyResponseInvalid(f"policy {package} returned {type(result).__name__}, expected an object")
+	if "allow" not in result:
+		raise PolicyResponseInvalid(f"policy {package} returned no 'allow' decision")
+
+	violations = _as_messages(result.get("deny"))
+	allowed = bool(result["allow"])
+	if allowed and violations:
+		# allow is derived from deny, so this means the bundle is inconsistent.
+		raise PolicyResponseInvalid(
+			f"policy {package} allowed a document while reporting {len(violations)} violations"
+		)
+	return PolicyVerdict(
+		package=package,
+		allowed=allowed,
+		violations=violations,
+		warnings=_as_messages(result.get("warn")),
+	)
+
+
 class PolicyGate:
 	"""Evaluate remediation documents against the OPA policy bundle."""
 
@@ -118,25 +144,7 @@ class PolicyGate:
 		``package`` is a slash-separated data path such as
 		``jenkinsguardians/remediation``.
 		"""
-		result = await self._query(package, document)
-		if not isinstance(result, dict):
-			raise PolicyResponseInvalid(f"policy {package} returned {type(result).__name__}, expected an object")
-		if "allow" not in result:
-			raise PolicyResponseInvalid(f"policy {package} returned no 'allow' decision")
-
-		violations = _as_messages(result.get("deny"))
-		allowed = bool(result["allow"])
-		if allowed and violations:
-			# allow is derived from deny, so this means the bundle is inconsistent.
-			raise PolicyResponseInvalid(
-				f"policy {package} allowed a document while reporting {len(violations)} violations"
-			)
-		return PolicyVerdict(
-			package=package,
-			allowed=allowed,
-			violations=violations,
-			warnings=_as_messages(result.get("warn")),
-		)
+		return verdict_from_result(package, await self._query(package, document))
 
 	async def evaluate_remediation(self, proposal: dict[str, Any]) -> PolicyVerdict:
 		"""Check a proposed fix before it is shown to a human reviewer."""
@@ -183,12 +191,71 @@ class PolicyGate:
 		) from last_error
 
 
+class OpaCliGate:
+	"""Evaluate the same bundle with the ``opa`` CLI, with no server running.
+
+	The Conftest-style path: what CI and local checks use, and what the tests use to
+	run proposals against the real Rego. It reads decisions with the same
+	``verdict_from_result`` as the HTTP gate, so the two cannot disagree on parsing.
+	It fails closed exactly like the HTTP gate: no binary, a crash or a timeout all
+	raise ``PolicyUnavailable``.
+	"""
+
+	def __init__(self, binary: str, policy_dir: str, *, timeout_seconds: float = 30.0) -> None:
+		if not binary:
+			raise ValueError("an opa binary path is required")
+		self._binary = binary
+		self._policy_dir = policy_dir
+		self._timeout = timeout_seconds
+
+	async def evaluate(self, package: str, document: dict[str, Any]) -> PolicyVerdict:
+		import json
+
+		query = "data." + package.strip("/").replace("/", ".")
+		try:
+			process = await asyncio.create_subprocess_exec(
+				self._binary, "eval", "--format", "json", "--stdin-input",
+				"-d", self._policy_dir, query,
+				stdin=asyncio.subprocess.PIPE,
+				stdout=asyncio.subprocess.PIPE,
+				stderr=asyncio.subprocess.PIPE,
+			)
+			stdout, stderr = await asyncio.wait_for(
+				process.communicate(json.dumps(document).encode("utf-8")), timeout=self._timeout
+			)
+		except (OSError, asyncio.TimeoutError) as error:
+			raise PolicyUnavailable(f"could not run opa for {package}: {type(error).__name__}") from error
+
+		if process.returncode != 0:
+			raise PolicyUnavailable(
+				f"opa exited {process.returncode} for {package}: {redact(stderr.decode('utf-8', 'replace'))[:200]}"
+			)
+		try:
+			expressions = json.loads(stdout)["result"][0]["expressions"]
+			result = expressions[0]["value"]
+		except (ValueError, KeyError, IndexError) as error:
+			# No result at all is what an undefined package looks like: not an allow.
+			raise PolicyResponseInvalid(f"opa returned no decision for {package}") from error
+		return verdict_from_result(package, result)
+
+	async def evaluate_remediation(self, proposal: dict[str, Any]) -> PolicyVerdict:
+		return await self.evaluate(REMEDIATION_PACKAGE, proposal)
+
+	async def evaluate_pull_request(self, request: dict[str, Any]) -> PolicyVerdict:
+		return await self.evaluate(PULL_REQUEST_PACKAGE, request)
+
+	async def close(self) -> None:
+		return None
+
+
 __all__ = [
 	"PULL_REQUEST_PACKAGE",
 	"REMEDIATION_PACKAGE",
+	"OpaCliGate",
 	"PolicyError",
 	"PolicyGate",
 	"PolicyResponseInvalid",
 	"PolicyUnavailable",
 	"PolicyVerdict",
+	"verdict_from_result",
 ]

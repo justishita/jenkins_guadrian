@@ -35,7 +35,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
-from coordinator.a2a_contract import evidence_ready
+from common.a2a_contract import evidence_ready
 
 
 logger = logging.getLogger(__name__)
