@@ -95,6 +95,10 @@ class RabbitMQPublisher:
         """Publish an incident.reinvestigate message to the incidents topic exchange."""
         return await self.publish_event("incident.reinvestigate", payload)
 
+    async def publish_approval_decided(self, payload: Dict[str, Any]) -> bool:
+        """Publish an approval.decided message to the incidents topic exchange."""
+        return await self.publish_event("approval.decided", payload)
+
     async def is_healthy(self) -> bool:
         """Check if connection to RabbitMQ is currently alive."""
         if not self.connection or self.connection.is_closed:

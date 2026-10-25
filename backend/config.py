@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         default="",
         description="Shared secret for Jenkins webhook authentication"
     )
+    APPROVAL_API_TOKEN: str = Field(
+        default="",
+        description="Bearer token for the /approvals API; unset disables it (fail closed)"
+    )
 
     # Database
     DATABASE_URL: str = Field(
