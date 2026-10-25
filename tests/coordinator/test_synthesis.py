@@ -302,3 +302,69 @@ def test_the_report_is_valid_structured_output() -> None:
 	report = synthesize([ev("code_agent", DEP, 0.9)], now=NOW)
 
 	assert type(report).model_validate_json(report.model_dump_json()) == report
+
+
+# --- duplicate linking (TC-19) --------------------------------------------------
+
+
+def _with_links(evidence: Evidence, related: list[str], count: int) -> Evidence:
+	return evidence.model_copy(update={"related_incident_ids": related, "recurrence_count": count})
+
+
+def test_a_recurrence_is_shown_in_the_report() -> None:
+	report = synthesize(
+		[_with_links(ev("jenkins_agent", DEP, 0.7), ["inc-a", "inc-b"], 2), ev("code_agent", DEP, 0.9)],
+		now=NOW,
+	)
+
+	assert report.is_recurrence
+	assert report.related_incident_ids == ("inc-a", "inc-b")
+	assert report.recurrence_count == 2
+	assert "Recurrence: seen 2 time(s) before" in report.summary
+	assert "## Recurrence" in report.to_markdown() and "`inc-a`" in report.to_markdown()
+
+
+def test_links_from_several_agents_are_merged_without_duplicates() -> None:
+	report = synthesize(
+		[
+			_with_links(ev("jenkins_agent", DEP, 0.7), ["inc-a", "inc-b"], 2),
+			_with_links(ev("code_agent", DEP, 0.9), ["inc-b", "inc-c"], 1),
+		],
+		now=NOW,
+	)
+
+	assert set(report.related_incident_ids) == {"inc-a", "inc-b", "inc-c"}
+	assert len(report.related_incident_ids) == 3  # inc-b reported twice, listed once
+	assert report.recurrence_count == 3  # never fewer than the distinct incidents linked
+
+
+def test_an_incident_never_links_to_itself() -> None:
+	report = synthesize([_with_links(ev("jenkins_agent", DEP, 0.8), [str(INCIDENT), "inc-a"], 1)], now=NOW)
+
+	assert report.related_incident_ids == ("inc-a",)
+
+
+def test_a_first_occurrence_has_no_recurrence_section() -> None:
+	report = synthesize([ev("code_agent", DEP, 0.9)], now=NOW)
+
+	assert not report.is_recurrence
+	assert report.recurrence_count == 0
+	assert "## Recurrence" not in report.to_markdown()
+	assert "Recurrence" not in report.summary
+
+
+def test_recurrence_survives_an_insufficient_evidence_report() -> None:
+	"""A repeat of an unexplained failure is still worth knowing about."""
+	report = synthesize(
+		[_with_links(ev("jenkins_agent", UNKNOWN, 0.2, status="insufficient_evidence"), ["inc-a"], 4)], now=NOW
+	)
+
+	assert report.status == "insufficient_evidence"
+	assert report.related_incident_ids == ("inc-a",)
+	assert report.recurrence_count == 4
+
+
+def test_a_count_without_ids_is_still_a_recurrence() -> None:
+	report = synthesize([_with_links(ev("jenkins_agent", DEP, 0.8), [], 3)], now=NOW)
+
+	assert report.is_recurrence and report.recurrence_count == 3

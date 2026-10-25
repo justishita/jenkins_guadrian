@@ -109,6 +109,10 @@ class IncidentReport(BaseModel):
     agreeing_agents: tuple[str, ...] = ()
     abstaining_agents: tuple[str, ...] = ()
     missing_agents: tuple[str, ...] = ()
+    # Duplicate linking (TC-19): earlier incidents with the same failure signature,
+    # merged from every agent that reported them, and how often it has recurred.
+    related_incident_ids: tuple[str, ...] = ()
+    recurrence_count: int = Field(default=0, ge=0)
     conflicts: tuple[Conflict, ...] = ()
     hypotheses: tuple[EvidenceHypothesis, ...] = ()
     recommended_next_steps: tuple[str, ...] = ()
@@ -132,6 +136,11 @@ class IncidentReport(BaseModel):
     @property
     def reporting_agents(self) -> tuple[str, ...]:
         return tuple(finding.agent for finding in self.findings)
+
+    @property
+    def is_recurrence(self) -> bool:
+        """True when this failure has happened before - link it, do not re-investigate blind."""
+        return bool(self.related_incident_ids) or self.recurrence_count > 0
 
     @property
     def failed_agents(self) -> tuple[str, ...]:
@@ -172,6 +181,17 @@ class IncidentReport(BaseModel):
             "",
             self.summary,
             "",
+            *(
+                [
+                    "## Recurrence",
+                    "",
+                    f"Seen {self.recurrence_count} time(s) before. Related incidents: "
+                    + (", ".join(f"`{i}`" for i in self.related_incident_ids) or "none recorded"),
+                    "",
+                ]
+                if self.is_recurrence
+                else []
+            ),
             "## What each agent found",
             "",
             "| Agent | Verdict | Confidence | Status |",
@@ -249,6 +269,23 @@ def _next_steps(documents: Sequence[Evidence], failure_type: FailureTaxonomy) ->
     return tuple(steps)
 
 
+def _recurrence(documents: Sequence[Evidence], incident_id: UUID) -> tuple[tuple[str, ...], int]:
+    """Merge every agent's duplicate links into one view.
+
+    Related ids are unioned in first-seen order, and the incident never links to
+    itself. The count is the highest any agent reported: agents look at different
+    history windows, and the widest one is the most informative.
+    """
+    own = str(incident_id)
+    related: dict[str, None] = {}
+    for document in documents:
+        for identifier in document.related_incident_ids:
+            if identifier and identifier != own:
+                related.setdefault(identifier, None)
+    count = max((document.recurrence_count for document in documents), default=0)
+    return tuple(related), max(count, len(related)) if related else count
+
+
 def synthesize(
     evidence: Iterable[Evidence],
     *,
@@ -276,6 +313,7 @@ def synthesize(
     hypotheses = _all_hypotheses(documents)
     reporting = {finding.agent for finding in findings}
     missing = tuple(agent for agent in expected_agents if agent not in reporting)
+    related_ids, recurrence_count = _recurrence(documents, incident_id)
 
     # --- nobody named a cause -------------------------------------------------
     if not substantive:
@@ -295,6 +333,8 @@ def synthesize(
             findings=findings,
             abstaining_agents=abstaining,
             missing_agents=missing,
+            related_incident_ids=related_ids,
+            recurrence_count=recurrence_count,
             hypotheses=hypotheses,
             recommended_next_steps=(
                 "Widen the investigation window or gather more evidence before proposing a fix.",
@@ -369,6 +409,11 @@ def synthesize(
     )
     abstain_note = f" {', '.join(abstaining)} found nothing in their evidence." if abstaining else ""
     missing_note = f" Incomplete: no evidence from {', '.join(missing)}." if missing else ""
+    recurrence_note = (
+        f" Recurrence: seen {recurrence_count} time(s) before ({', '.join(related_ids)})."
+        if related_ids or recurrence_count
+        else ""
+    )
 
     return IncidentReport(
         incident_id=incident_id,
@@ -378,12 +423,14 @@ def synthesize(
         confidence=confidence,
         summary=(
             f"{leading_type.value} at {confidence:.2f} confidence - {agreement_note}."
-            f"{conflict_note}{abstain_note}{missing_note}"
+            f"{conflict_note}{abstain_note}{missing_note}{recurrence_note}"
         ),
         findings=findings,
         agreeing_agents=agreeing,
         abstaining_agents=abstaining,
         missing_agents=missing,
+        related_incident_ids=related_ids,
+        recurrence_count=recurrence_count,
         conflicts=conflicts,
         hypotheses=hypotheses,
         recommended_next_steps=_next_steps(documents, leading_type),

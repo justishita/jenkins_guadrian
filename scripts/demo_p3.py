@@ -563,11 +563,48 @@ async def scenario_tc16(workdir: Path, opa: str) -> Checks:
     return checks
 
 
+async def scenario_tc19(workdir: Path, opa: str) -> Checks:
+    banner("TC-19  Duplicate incident - the report links it to earlier occurrences",
+           "The same dependency failure, for the third time this week.")
+    checks = Checks("TC-19")
+    github = tc03_github()
+    pipeline = Pipeline(workdir, github, opa)
+    event = incident("11111111-1919-4919-8919-000000000019", BREAKING_SHA, "Setup")
+    earlier = ["11111111-0000-4000-8000-0000000000a1", "11111111-0000-4000-8000-0000000000a2"]
+
+    step("1", "Code agent investigates, as in TC-03")
+    code = await pipeline.run_code_agent(event)
+    detail(f"verdict   {code.failure_type.value} at {code.confidence:.2f}")
+
+    step("2", "Jenkins agent reports, linking two earlier incidents (RECORDED evidence)")
+    jenkins = recorded(
+        "jenkins_agent", event.incident_id, FailureTaxonomy.DEPENDENCY_REGRESSION, 0.65,
+        "pip could not resolve httpx==0.99.0 during Setup",
+        finding="ERROR: No matching distribution found for httpx==0.99.0",
+    ).model_copy(update={"related_incident_ids": earlier, "recurrence_count": 2})
+    await pipeline.post_recorded(jenkins)
+    for incident_id in earlier:
+        detail(f"related   {incident_id}")
+
+    step("3", "Coordinator fuses the evidence")
+    report = await pipeline.coordinator.synthesize(event.incident_id)
+    assert report is not None
+    detail(f"cause       {report.failure_type.value} at {report.confidence:.2f}")
+    detail(f"recurrence  seen {report.recurrence_count} time(s) before")
+    for incident_id in report.related_incident_ids:
+        detail(f"linked to   {incident_id}")
+    checks.expect("the report is marked as a recurrence", report.is_recurrence)
+    checks.expect("both earlier incidents are linked", set(report.related_incident_ids) == set(earlier))
+    checks.expect("the recurrence count is carried into the report", report.recurrence_count == 2)
+    checks.expect("the reviewer's Markdown has a Recurrence section", "## Recurrence" in report.to_markdown())
+    return checks
+
+
 # --- entry point --------------------------------------------------------------
 
 
 async def run(opa: str) -> list[Checks]:
-    scenarios: list[Callable[[Path, str], Any]] = [scenario_tc03, scenario_tc15, scenario_tc12, scenario_tc16]
+    scenarios: list[Callable[[Path, str], Any]] = [scenario_tc03, scenario_tc15, scenario_tc12, scenario_tc16, scenario_tc19]
     results: list[Checks] = []
     for scenario in scenarios:
         with tempfile.TemporaryDirectory() as tmp:
