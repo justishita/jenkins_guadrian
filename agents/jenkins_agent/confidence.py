@@ -218,6 +218,7 @@ def compute_confidence(
     log_meta: Any,
     history: Sequence[dict[str, Any]] | None,
     weights: ConfidenceWeights | None = None,
+    history_consistency_boost: float = 0.0,
 ) -> ConfidenceBreakdown:
     """Compute overall and per-hypothesis confidence for Jenkins build failure analysis.
 
@@ -302,6 +303,8 @@ def compute_confidence(
         + weights.w_signal * signal_score
         + weights.w_history * history_score
     )
+    if history_consistency_boost > 0.0 and not empty:
+        base_score = min(1.0, base_score + history_consistency_boost)
 
     # 5. Penalties and Caps
     penalties: list[str] = []
@@ -334,6 +337,7 @@ def compute_confidence(
         "llm_agreement": round(llm_score, 4),
         "signal_strength": round(signal_score, 4),
         "history_support": round(history_score, 4),
+        "history_consistency": round(history_consistency_boost, 4),
     }
 
     # 6. Per-hypothesis independent confidences

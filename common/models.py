@@ -111,6 +111,8 @@ class Evidence(BaseModel):
 	log_truncated: bool = False
 	redaction_applied: bool = False
 	flaky_score: float | None = Field(default=None, ge=0, le=1)
+	related_incident_ids: list[str] = Field(default_factory=list)
+	recurrence_count: int = Field(default=0, ge=0)
 
 	@field_validator("created_at")
 	@classmethod

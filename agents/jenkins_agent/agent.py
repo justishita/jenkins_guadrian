@@ -22,6 +22,7 @@ from agents.jenkins_agent.classifier import Hypothesis, rule_based_classify
 from agents.jenkins_agent.confidence import compute_confidence
 from agents.jenkins_agent.config import JenkinsAgentSettings, load_settings
 from agents.jenkins_agent.parsing import ParsedBuild, parse_build
+from agents.jenkins_agent.history import find_related_incidents, RelatedIncidentResult
 from agents.jenkins_agent.tools.flaky import (
     FLAKY_RECOMMENDATION,
     analyze_test_flakiness,
@@ -227,6 +228,7 @@ def _fallback_evidence(
     partial: bool = False,
     history: list[dict[str, Any]] | None = None,
     flaky_score: float | None = None,
+    related_result: RelatedIncidentResult | None = None,
 ) -> Evidence:
     """Build deterministic rule-based Evidence when LLM is unavailable or fails."""
     primary = hypotheses[0] if hypotheses else None
@@ -238,12 +240,14 @@ def _fallback_evidence(
     else:
         recommended_next_steps = ["Inspect CI logs at point of failure"]
 
+    boost = related_result.history_consistency_boost if related_result else 0.0
     breakdown = compute_confidence(
         parsed=parsed,
         rule_hypotheses=hypotheses,
         llm_hypotheses=None,
         log_meta={"truncated": log_truncated, "partial": partial},
         history=history or [],
+        history_consistency_boost=boost,
     )
     confidence = breakdown.total
 
@@ -306,6 +310,8 @@ def _fallback_evidence(
         error_signature=parsed.error_signature,
         redaction_applied=True,
         flaky_score=flaky_score,
+        related_incident_ids=related_result.related_incident_ids if related_result else [],
+        recurrence_count=related_result.recurrence_count if related_result else 0,
     )
 
 
@@ -440,6 +446,23 @@ class JenkinsInvestigationAgent:
 
         # Rule-based classify with flaky_score
         rule_hypotheses = rule_based_classify(parsed, flaky_score=flaky_score)
+        initial_failure_type = rule_hypotheses[0].failure_type.value if rule_hypotheses else None
+
+        # Look up related incidents using error_signature (Prompt 5.2)
+        related_result: RelatedIncidentResult | None = None
+        if parsed.error_signature:
+            try:
+                related_result = await find_related_incidents(
+                    error_signature=parsed.error_signature,
+                    job_name=event.job_name,
+                    current_incident_id=event.incident_id,
+                    current_failure_type=initial_failure_type,
+                    current_branch=event.branch,
+                    bb=self.bb,
+                    failed_stage=parsed.failed_stage or event.failed_stage,
+                )
+            except Exception as e:
+                logger.warning("find_related_incidents failed (%s)", e)
 
         # Build initial evidence items
         build_summary = {
@@ -615,12 +638,14 @@ class JenkinsInvestigationAgent:
 
         # 3. Finalize
         if draft is not None:
+            boost = related_result.history_consistency_boost if related_result else 0.0
             breakdown = compute_confidence(
                 parsed=parsed,
                 rule_hypotheses=rule_hypotheses,
                 llm_hypotheses=draft.root_cause_hypotheses,
                 log_meta={"truncated": console_truncated, "partial": console_partial},
                 history=history,
+                history_consistency_boost=boost,
             )
 
             source = redact(f"jenkins:{event.job_name}#{event.build_number}")
@@ -692,6 +717,8 @@ class JenkinsInvestigationAgent:
                 log_truncated=console_truncated,
                 redaction_applied=True,
                 flaky_score=flaky_score,
+                related_incident_ids=related_result.related_incident_ids if related_result else [],
+                recurrence_count=related_result.recurrence_count if related_result else 0,
             )
         else:
             final_evidence = _fallback_evidence(
@@ -704,6 +731,7 @@ class JenkinsInvestigationAgent:
                 partial=console_partial,
                 history=history,
                 flaky_score=flaky_score,
+                related_result=related_result,
             )
 
         close_client = getattr(client, "aclose", None)

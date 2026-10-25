@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.models import Incident
+from agents.jenkins_agent.history import compute_preliminary_fingerprint
 from backend.events.publisher import publisher
 from backend.models.events import JenkinsFailureEvent
 from common.blackboard import BlackboardEntry, get_blackboard
@@ -39,6 +40,20 @@ async def create_incident_if_missing(
         existing = result.scalar_one_or_none()
         created = existing is None
         if existing is None:
+            # Duplicate detection: link to prior incident matching preliminary fingerprint (job_name + failed_stage)
+            related_id = None
+            if payload.failed_stage:
+                dup_result = await db.execute(
+                    select(Incident.id)
+                    .where(
+                        Incident.job_name == payload.job_name,
+                        Incident.failed_stage == payload.failed_stage,
+                    )
+                    .order_by(Incident.created_at.desc())
+                    .limit(1)
+                )
+                related_id = dup_result.scalar_one_or_none()
+
             incident = Incident(
                 id=payload.incident_id or str(uuid.uuid4()),
                 job_name=payload.job_name,
@@ -50,6 +65,7 @@ async def create_incident_if_missing(
                 status="OPEN",
                 event_key=event_key,
                 remediation_attempt=payload.remediation_attempt,
+                related_incident_id=related_id,
             )
             db.add(incident)
             await db.commit()
@@ -66,6 +82,8 @@ async def create_incident_if_missing(
             "git_commit": incident.git_commit,
             "failed_stage": incident.failed_stage,
             "remediation_attempt": incident.remediation_attempt,
+            "related_incident_id": incident.related_incident_id,
+            "preliminary_fingerprint": compute_preliminary_fingerprint(incident.job_name, incident.failed_stage),
             "timestamp": payload.timestamp.isoformat(),
             "received_at": (
                 incident.created_at.astimezone(timezone.utc).isoformat()

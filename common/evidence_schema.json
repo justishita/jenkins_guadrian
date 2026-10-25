@@ -306,6 +306,19 @@
       ],
       "default": null,
       "title": "Flaky Score"
+    },
+    "related_incident_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Related Incident Ids",
+      "type": "array"
+    },
+    "recurrence_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Recurrence Count",
+      "type": "integer"
     }
   },
   "required": [
