@@ -1,9 +1,9 @@
 """Tests for the ADK Coordinator agent.
 
 **Owner:** P3. The Coordinator is the only component allowed to see all three evidence
-documents, and today it is a collection layer only. These tests check that it reads
-the blackboard faithfully, reports partial state honestly, and - the important one -
-that it does **not** fuse, rank or invent a verdict it has no implementation for.
+documents. ``collect`` must return the raw, unfused view - exactly what each agent
+said - and ``synthesize`` is the separate step that fuses it. Keeping them apart means
+a reviewer can always see the agents' own words before the Coordinator's verdict.
 """
 
 from __future__ import annotations
@@ -99,10 +99,10 @@ async def test_partial_reporting_names_who_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_it_does_not_fuse_or_rank_disagreeing_agents(
+async def test_collect_returns_the_raw_unfused_view(
 	coordinator: CoordinatorAgent, store: FileEvidenceStore
 ) -> None:
-	"""Fusion is not implemented. Each agent's verdict must survive unchanged."""
+	"""`collect` is the unfused view; fusion lives only in `synthesize`."""
 	await store.write(evidence_for("code_agent", failure_type=FailureTaxonomy.CONFIG_ERROR, confidence=0.9))
 	await store.write(
 		evidence_for("metrics_agent", failure_type=FailureTaxonomy.TIMEOUT, confidence=0.4)
@@ -188,3 +188,36 @@ async def test_incidents_are_kept_apart(
 
 def test_a_view_of_nothing_is_not_complete() -> None:
 	assert BlackboardView(incident_id=INCIDENT).complete is False
+
+
+
+@pytest.mark.asyncio
+async def test_synthesize_fuses_the_blackboard_into_one_report(
+	coordinator: CoordinatorAgent, store: FileEvidenceStore
+) -> None:
+	await store.write(evidence_for("code_agent", failure_type=FailureTaxonomy.DEPENDENCY_REGRESSION, confidence=0.8))
+	await store.write(evidence_for("jenkins_agent", failure_type=FailureTaxonomy.DEPENDENCY_REGRESSION, confidence=0.7))
+
+	report = await coordinator.synthesize(INCIDENT)
+
+	assert report is not None
+	assert report.failure_type is FailureTaxonomy.DEPENDENCY_REGRESSION
+	assert report.agreeing_agents == ("code_agent", "jenkins_agent")
+	assert report.actionable is True
+
+
+@pytest.mark.asyncio
+async def test_synthesize_on_an_empty_blackboard_returns_none(coordinator: CoordinatorAgent) -> None:
+	assert await coordinator.synthesize(INCIDENT) is None
+
+
+@pytest.mark.asyncio
+async def test_synthesize_does_not_wait_for_every_agent(
+	coordinator: CoordinatorAgent, store: FileEvidenceStore
+) -> None:
+	await store.write(evidence_for("code_agent", confidence=0.9))
+
+	report = await coordinator.synthesize(INCIDENT)
+
+	assert report is not None
+	assert report.reporting_agents == ("code_agent",)
