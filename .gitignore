@@ -31,3 +31,4 @@ data/*.json
 data/*.txt
 # Local tool binaries (scripts/get_opa.py)
 .bin/
+data/blackboard/

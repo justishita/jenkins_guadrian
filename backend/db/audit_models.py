@@ -29,6 +29,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -252,7 +253,12 @@ class PolicyDecision(Base):
 
 
 class Approval(Base):
-    """The human decision on a proposal. No pull request may exist without one."""
+    """The human decision on a proposal. No pull request may exist without one.
+
+    This is the shared approval contract (``backend/routes/approvals.py``): one
+    decision per ``(incident_id, attempt)``, which the unique constraint enforces so
+    a double-click or a replayed request cannot record a second, contradicting one.
+    """
 
     __tablename__ = "approvals"
 
@@ -261,18 +267,24 @@ class Approval(Base):
         Integer, ForeignKey("remediation_proposals.id", ondelete="CASCADE"), index=True, nullable=False
     )
     incident_id = Column(String(36), index=True, nullable=False)
+    attempt = Column(Integer, default=0, nullable=False)
     decision = Column(String(32), nullable=False)
     reviewer = Column(String(128), nullable=False)
-    reason = Column(Text, nullable=False, default="")
+    comment = Column(Text, nullable=False, default="")
     decided_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "attempt", name="uq_approvals_incident_attempt"),
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "proposal_id": self.proposal_id,
             "incident_id": self.incident_id,
+            "attempt": self.attempt,
             "decision": self.decision,
             "reviewer": self.reviewer,
-            "reason": self.reason,
+            "comment": self.comment,
             "decided_at": self.decided_at.isoformat() if self.decided_at else None,
         }

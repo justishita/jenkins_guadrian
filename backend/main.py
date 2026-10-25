@@ -97,6 +97,7 @@ app.include_router(health_router)
 app.include_router(webhooks_router)
 app.include_router(validation_router)
 app.include_router(approvals_router)
+app.include_router(approvals_router)
 
 
 @app.get("/")

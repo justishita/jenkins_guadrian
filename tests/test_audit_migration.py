@@ -125,3 +125,15 @@ def test_agent_run_status_covers_the_evidence_statuses() -> None:
 
 	evidence_statuses = set(Evidence.model_fields["status"].annotation.__args__)  # type: ignore[union-attr]
 	assert evidence_statuses <= {member.value for member in AgentRunStatus}
+
+
+def test_approvals_match_the_shared_contract(database_url: str) -> None:
+	"""approvals: incident_id, attempt, decision, reviewer, comment, decided_at."""
+	command.upgrade(alembic_config(database_url), "head")
+
+	inspector = inspect(create_engine(database_url))
+	columns = {column["name"] for column in inspector.get_columns("approvals")}
+	assert {"incident_id", "attempt", "decision", "reviewer", "comment", "decided_at"} <= columns
+	assert "reason" not in columns
+	unique = {tuple(item["column_names"]) for item in inspector.get_unique_constraints("approvals")}
+	assert ("incident_id", "attempt") in unique
