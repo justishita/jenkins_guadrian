@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remediation Review: {{ incident.job_name }} #{{ incident.build_number }}</title>
+  <style>
+    :root {
+      --bg: #f6f8fa;
+      --card-bg: #ffffff;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --primary: #0969da;
+      --success: #1a7f37;
+      --danger: #cf222e;
+      --warning: #9a6700;
+      --warning-bg: #fff8c5;
+      --danger-bg: #ffebe9;
+      --success-bg: #dafbe1;
+      --code-bg: #24292e;
+      --code-text: #e1e4e8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px 16px;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-success { background: var(--success-bg); color: var(--success); }
+    .badge-danger { background: var(--danger-bg); color: var(--danger); }
+    .badge-warning { background: var(--warning-bg); color: var(--warning); }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(31,35,40,0.04);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .fact-label { font-size: 12px; color: var(--text-muted); }
+    .fact-value { font-size: 14px; font-weight: 500; word-break: break-all; }
+    .evidence-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .diff-block {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .diff-add { color: #85e89d; background-color: rgba(46, 160, 67, 0.15); display: block; }
+    .diff-del { color: #fdaeb7; background-color: rgba(248, 81, 73, 0.15); display: block; }
+    .diff-hdr { color: #79b8ff; display: block; }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .alert-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(207, 34, 46, 0.3); }
+    .alert-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(26, 127, 55, 0.3); }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .btn-approve { background-color: var(--success); color: #fff; }
+    .btn-approve:hover { background-color: #1a6f32; }
+    .btn-reject { background-color: var(--danger); color: #fff; }
+    .btn-reject:hover { background-color: #b91c1c; }
+    .action-forms {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-control {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--warning);
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>Remediation Review: {{ incident.job_name }} #{{ incident.build_number }}</h1>
+        <p style="font-size: 13px; color: var(--text-muted);">Incident ID: {{ incident.id }}</p>
+      </div>
+      <div>
+        {% if policy_allowed %}
+          <span class="badge badge-success">Policy Passed</span>
+        {% else %}
+          <span class="badge badge-danger">Policy Blocked</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 1. UNIFIED REPORT -->
+    <div class="card">
+      <div class="card-title">
+        <span>Incident Overview</span>
+        <span style="font-size: 13px; font-weight: normal;">
+          <a href="{{ incident.build_url }}" target="_blank" style="color: var(--primary); text-decoration: none;">View in Jenkins ↗</a>
+        </span>
+      </div>
+      <div class="grid">
+        <div>
+          <div class="fact-label">Pipeline</div>
+          <div class="fact-value">{{ incident.job_name }}</div>
+        </div>
+        <div>
+          <div class="fact-label">Build Number</div>
+          <div class="fact-value">#{{ incident.build_number }}</div>
+        </div>
+        <div>
+          <div class="fact-label">Branch &amp; Commit</div>
+          <div class="fact-value">{{ incident.branch }} ({{ incident.git_commit[:8] }})</div>
+        </div>
+        <div>
+          <div class="fact-label">Failed Stage</div>
+          <div class="fact-value">{{ incident.failed_stage or 'Unknown' }}</div>
+        </div>
+        <div>
+          <div class="fact-label">Failure Classification</div>
+          <div class="fact-value">{{ diagnosis.failure_type }} ({{ (diagnosis.confidence * 100)|round|int }}%)</div>
+        </div>
+        <div>
+          <div class="fact-label">Remediation Attempt</div>
+          <div class="fact-value">#{{ proposal.attempt }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; padding: 12px; background: var(--bg); border-radius: 6px;">
+        <div class="fact-label" style="margin-bottom: 4px;">Summary</div>
+        <p style="font-size: 14px;">{{ diagnosis.summary }}</p>
+      </div>
+
+      {% if top_evidence %}
+      <div style="margin-top: 16px;">
+        <div class="fact-label" style="margin-bottom: 8px;">Top Evidence Items</div>
+        {% for ev in top_evidence %}
+          <div class="evidence-item">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+              <span>[{{ ev.kind }}] {{ ev.source }} {% if ev.location %}({{ ev.location }}){% endif %}</span>
+              <a href="{{ ev.build_url }}" target="_blank" style="color: var(--primary); text-decoration: none;">Jenkins Console ↗</a>
+            </div>
+            <pre style="font-size: 12px; white-space: pre-wrap; font-family: monospace;">{{ ev.excerpt }}</pre>
+          </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 2. POLICY VERDICT -->
+    <div class="card">
+      <div class="card-title">
+        <span>OPA / Conftest Remediation Policy</span>
+        {% if policy_allowed %}
+          <span class="badge badge-success">Allowed</span>
+        {% else %}
+          <span class="badge badge-danger">Blocked (TC-15)</span>
+        {% endif %}
+      </div>
+
+      {% if not policy_allowed %}
+        <div class="alert alert-danger">
+          <strong>Remediation Policy Check Failed (TC-15):</strong>
+          This proposed fix violates safety rules (e.g. skips failing tests or modifies protected files).
+          Server-side enforcement blocks approval unless explicitly confirmed with a human override.
+        </div>
+      {% else %}
+        <div class="alert alert-success">
+          <strong>Policy Passed:</strong> Fix meets safety criteria. Safe for reviewer approval.
+        </div>
+      {% endif %}
+
+      {% if policy_violations %}
+        <div style="margin-bottom: 8px;">
+          <div class="fact-label">Violations:</div>
+          <ul style="padding-left: 20px; font-size: 13px; color: var(--danger);">
+            {% for v in policy_violations %}
+              <li>{{ v }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      {% if policy_warnings %}
+        <div>
+          <div class="fact-label">Warnings:</div>
+          <ul style="padding-left: 20px; font-size: 13px; color: var(--warning);">
+            {% for w in policy_warnings %}
+              <li>{{ w }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- 3. PROPOSED DIFF -->
+    <div class="card">
+      <div class="card-title">
+        <span>Proposed Remediation Diff</span>
+        <span style="font-size: 13px; color: var(--text-muted);">Branch: {{ branch_name }}</span>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <div class="fact-label">Rationale:</div>
+        <p style="font-size: 14px;">{{ proposal.rationale or 'Automated fix proposed by Code Agent' }}</p>
+      </div>
+
+      {% if proposal.changed_files %}
+        <div style="margin-bottom: 12px;">
+          <div class="fact-label">Changed Files:</div>
+          <p style="font-size: 13px; font-family: monospace;">{{ proposal.changed_files|join(', ') }}</p>
+        </div>
+      {% endif %}
+
+      <div class="diff-block">
+{% if diff_lines %}
+{% for line in diff_lines %}
+{% if line.startswith('+') and not line.startswith('+++') %}
+<span class="diff-add">{{ line }}</span>
+{% elif line.startswith('-') and not line.startswith('---') %}
+<span class="diff-del">{{ line }}</span>
+{% elif line.startswith('@@') %}
+<span class="diff-hdr">{{ line }}</span>
+{% else %}
+<span>{{ line }}</span>
+{% endif %}
+{% endfor %}
+{% else %}
+<span style="color: var(--text-muted);">[No diff content available]</span>
+{% endif %}
+      </div>
+    </div>
+
+    <!-- 4. DECISION ACTION BUTTONS -->
+    <div class="card">
+      <div class="card-title">Submit Review Decision</div>
+
+      {% if existing_decision %}
+        <div class="alert alert-success">
+          <strong>Decision already recorded:</strong> This proposal was {{ existing_decision.decision }} by {{ existing_decision.reviewer }} on {{ existing_decision.decided_at }}.
+        </div>
+      {% else %}
+        <p style="font-size: 14px; margin-bottom: 16px; color: var(--text-muted);">
+          Approving this proposal will trigger OPA pull-request policy verification and open a draft GitHub PR.
+        </p>
+
+        <!-- APPROVE FORM -->
+        <form method="POST" action="/approvals/{{ incident.id }}" style="margin-bottom: 16px;">
+          <input type="hidden" name="token" value="{{ approve_token }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="approved">
+
+          <div class="grid" style="grid-template-columns: 1fr 2fr; margin-bottom: 12px;">
+            <div>
+              <label class="fact-label" for="reviewer-name">Reviewer Name</label>
+              <input type="text" id="reviewer-name" name="reviewer" class="form-control" value="reviewer" required>
+            </div>
+            <div>
+              <label class="fact-label" for="approve-comment">Comment / Justification</label>
+              <input type="text" id="approve-comment" name="comment" class="form-control" placeholder="Optional comments regarding approval">
+            </div>
+          </div>
+
+          {% if not policy_allowed %}
+            <label class="checkbox-label">
+              <input type="checkbox" name="human_override" value="true">
+              Confirm Human Override for OPA Policy Failure (TC-15)
+            </label>
+          {% endif %}
+
+          <button type="submit" class="btn btn-approve">
+            ✓ Approve Remediation Fix
+          </button>
+        </form>
+
+        <!-- REJECT FORM -->
+        <form method="POST" action="/approvals/{{ incident.id }}">
+          <input type="hidden" name="token" value="{{ reject_token }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="rejected">
+
+          <div class="grid" style="grid-template-columns: 1fr 2fr; margin-bottom: 12px;">
+            <div>
+              <label class="fact-label" for="reject-reviewer-name">Reviewer Name</label>
+              <input type="text" id="reject-reviewer-name" name="reviewer" class="form-control" value="reviewer" required>
+            </div>
+            <div>
+              <label class="fact-label" for="reject-comment">Rejection Reason</label>
+              <input type="text" id="reject-comment" name="comment" class="form-control" placeholder="Reason for rejection (required for audit trail)">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-reject">
+            ✕ Reject Remediation Fix
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+  </div>
+</body>
+</html>

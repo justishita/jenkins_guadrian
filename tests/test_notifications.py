@@ -510,6 +510,7 @@ def test_decide_approval_endpoint_success(client):
     mock_scalars.first.return_value = None
     mock_result = MagicMock()
     mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
 
     async def override_db():
@@ -570,6 +571,7 @@ def test_decide_approval_twice_returns_409(client):
     mock_scalars.first.return_value = None
     mock_result = MagicMock()
     mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
 
     async def override_db():
@@ -609,6 +611,7 @@ def test_decide_approval_html_rendering(client):
     mock_scalars.first.return_value = None
     mock_result = MagicMock()
     mock_result.scalars.return_value = mock_scalars
+    mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
 
     async def override_db():

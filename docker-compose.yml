@@ -59,109 +59,129 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    ports:
-      - "8000:8000"
     env_file:
       - .env
+    ports:
+      - "8000:8000"
     volumes:
-      - ./data/blackboard:/app/data/blackboard
+      - ./backend:/app/backend
+      - ./common:/app/common
+      - ./policies:/app/policies
       - ./data/evidence:/app/data/evidence
+      - ./data/blackboard:/app/data/blackboard
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       postgres:
         condition: service_healthy
-    networks:
-      - devnet
-
-  target_app:
-    build: ./target_app
-    environment:
-      # Fault-injection endpoints stay off unless explicitly enabled in .env.
-      ORDERS_ENABLE_SLOW: ${ORDERS_ENABLE_SLOW:-false}
-      ORDERS_ENABLE_CPU: ${ORDERS_ENABLE_CPU:-false}
-      ORDERS_ENABLE_LEAK: ${ORDERS_ENABLE_LEAK:-false}
-    ports:
-      - "8001:8000"
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     networks:
       - devnet
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    depends_on:
-      - target_app
-      - jenkins
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
     networks:
       - devnet
 
   grafana:
     image: grafana/grafana:11.2.0
+    ports:
+      - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      # Used by the provisioned Postgres (audit trail) datasource.
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     depends_on:
       - prometheus
-      - postgres
     networks:
       - devnet
 
-  metrics-agent:
+  target-app:
+    build:
+      context: ./target_app
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+    networks:
+      - devnet
+
+  opa:
+    image: openpolicyagent/opa:0.68.0
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./policies:/policies:ro
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "/policies"
+    healthcheck:
+      test: ["CMD", "opa", "version"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - devnet
+
+  code-agent:
     build:
       context: .
-      dockerfile: agents/metrics_agent/Dockerfile
+      dockerfile: agents/code_agent/Dockerfile
     restart: unless-stopped
     ports:
-      - "9102:9102"
+      - "9103:9103"
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
+      COORDINATOR_URL: http://coordinator:9100
+      PORT: "9103"
+      EVIDENCE_DIR: /app/data/evidence
+      BLACKBOARD_DIR: /app/data/blackboard
+      AUDIT_DIR: /app/data/audit
+      OPA_URL: http://opa:8181
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_REPO: ${GITHUB_REPO}
+      GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
+      REPO_ROOT: /app
+      TEST_COMMAND: "python -m pytest"
+      TEST_TIMEOUT_SECONDS: "30"
     volumes:
       - ./data/evidence:/app/data/evidence
-      - ./data/audit:/app/data/audit
       - ./data/blackboard:/app/data/blackboard
-    environment:
-      # Empty -> JSON-lines audit trail under /app/data/audit; set -> PostgreSQL trail.
-      DATABASE_URL: ${DATABASE_URL:-}
-      PROMETHEUS_URL: http://prometheus:9090
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
+      - ./data/audit:/app/data/audit
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9103/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       rabbitmq:
         condition: service_healthy
-      prometheus:
+      opa:
         condition: service_healthy
     networks:
       - devnet
@@ -173,96 +193,68 @@ services:
     restart: unless-stopped
     ports:
       - "9101:9101"
-    env_file:
-      - .env
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
+      PORT: "9101"
+      EVIDENCE_DIR: /app/data/evidence
+      JENKINS_URL: http://jenkins:8080
+      JENKINS_USER: ${JENKINS_USER}
+      JENKINS_API_TOKEN: ${JENKINS_API_TOKEN}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      ANALYTICS_MCP_URL: http://mcp-analytics:8082
     volumes:
       - ./data/evidence:/app/data/evidence
-      - ./data/audit:/app/data/audit
       - ./data/blackboard:/app/data/blackboard
-    environment:
-      JENKINS_URL: http://jenkins:8080
-      MCP_JENKINS_URL: http://mcp-jenkins:8081/mcp
-      MCP_ANALYTICS_URL: http://mcp-analytics:8082/mcp
-      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN:?Set A2A_SHARED_TOKEN in .env}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
-      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9101/.well-known/agent-card.json', timeout=3)\" || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9101/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 10s
     depends_on:
       rabbitmq:
         condition: service_healthy
       jenkins:
         condition: service_healthy
-      mcp-jenkins:
-        condition: service_healthy
-      mcp-analytics:
-        condition: service_healthy
     networks:
       - devnet
 
-  opa:
-    image: openpolicyagent/opa:1.21.1-static
-    # Policies are mounted read-only: the running gate can never be edited from
-    # inside the container, and `opa test policies` in CI checks the same bundle.
-    command:
-      - "run"
-      - "--server"
-      - "--addr=0.0.0.0:8181"
-      - "--log-level=info"
-      - "/policies"
-    volumes:
-      - ./policies:/policies:ro
+  metrics-agent:
+    build:
+      context: .
+      dockerfile: agents/metrics_agent/Dockerfile
+    restart: unless-stopped
     ports:
-      - "8181:8181"
+      - "9102:9102"
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
+      PORT: "9102"
+      EVIDENCE_DIR: /app/data/evidence
+      PROMETHEUS_URL: http://prometheus:9090
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      ANALYTICS_MCP_URL: http://mcp-analytics:8082
+    volumes:
+      - ./data/evidence:/app/data/evidence
+      - ./data/blackboard:/app/data/blackboard
     healthcheck:
-      test: ["CMD", "/opa", "eval", "--fail", "data"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9102/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - devnet
-
-  code-agent:
-    build:
-      context: .
-      dockerfile: agents/code_agent/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "9103:9103"
-    env_file:
-      - .env
-    volumes:
-      - ./data/evidence:/app/data/evidence
-      - ./data/audit:/app/data/audit
-      - ./data/blackboard:/app/data/blackboard
-    environment:
-      OPA_URL: http://opa:8181
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
-      GITHUB_TOKEN: ${GITHUB_TOKEN:?Set GITHUB_TOKEN in .env}
-      GITHUB_REPO: ${GITHUB_REPO:?Set GITHUB_REPO in .env}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
     depends_on:
       rabbitmq:
         condition: service_healthy
-      opa:
-        condition: service_healthy
+      prometheus:
+        condition: service_started
     networks:
       - devnet
-
-  # --- Services added for CrewAI + Google ADK + A2A + MCP Architecture ---
-
-  # Person 2 additions placeholder:
-  # - otel-collector (OTLP 4317)
-  # - jaeger (16686)
-  # - mcp-prometheus
-
-  # Person 3 additions placeholder:
-  # - mcp-github
 
   coordinator:
     build:
@@ -273,10 +265,7 @@ services:
       - "9100:9100"
     environment:
       PORT: "9100"
-      TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
-      EVIDENCE_DIR: /app/data/evidence
-      COORDINATOR_QUEUE_NAME: coordinator.incident.created
+      RABBITMQ_URL: ${RABBITMQ_URL:?Set RABBITMQ_URL in .env}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN:?Set A2A_SHARED_TOKEN in .env}
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
       JENKINS_AGENT_URL: http://jenkins-agent:9101
@@ -338,6 +327,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - devnet
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - devnet
 
