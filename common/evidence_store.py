@@ -239,3 +239,27 @@ class PostgresEvidenceStore(EvidenceStore):
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
+
+
+
+class InMemoryEvidenceStore(EvidenceStore):
+    """In-memory evidence store for offline testing without filesystem access."""
+
+    def __init__(self) -> None:
+        self._store: dict[tuple[str, str], Evidence] = {}
+
+    async def write(self, evidence: Evidence) -> None:
+        if not evidence.redaction_applied:
+            raise ValueError("refusing to persist evidence without redaction")
+        key = (str(evidence.incident_id), str(evidence.agent))
+        self._store[key] = evidence
+
+    async def read_all(self, incident_id: UUID | str) -> list[Evidence]:
+        inc_id = str(incident_id)
+        return [ev for (iid, _), ev in self._store.items() if iid == inc_id]
+
+    async def read(self, incident_id: UUID | str, agent: str) -> Evidence | None:
+        return self._store.get((str(incident_id), str(agent)))
+
+    def clear(self) -> None:
+        self._store.clear()

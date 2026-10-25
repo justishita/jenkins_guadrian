@@ -1,4 +1,4 @@
-.PHONY: up down logs test lint fmt policy-test policy-fmt migrate schema
+.PHONY: up down logs test test-unit test-int lint fmt policy-test policy-fmt migrate schema
 
 up:
 	docker compose up --build -d
@@ -11,6 +11,12 @@ logs:
 
 test:
 	python -m pytest
+
+test-unit:
+	python -m pytest -m "not integration"
+
+test-int:
+	python -m pytest -m "integration"
 
 lint:
 	ruff check .

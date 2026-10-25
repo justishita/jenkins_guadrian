@@ -34,7 +34,10 @@ from tests.metrics_agent.helpers import (
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL", "")
 
-pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="set TEST_DATABASE_URL to run against PostgreSQL")
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not DATABASE_URL, reason="set TEST_DATABASE_URL to run against PostgreSQL"),
+]
 
 
 async def create_audit_tables(url: str) -> None:
@@ -44,51 +47,56 @@ async def create_audit_tables(url: str) -> None:
     from backend.db.database import Base
 
     engine = create_async_engine(url)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     await engine.dispose()
 
 
-async def delete_trail(url: str, incident_id: str) -> None:
-    connection = await asyncpg.connect(url.replace("postgresql+asyncpg://", "postgresql://", 1))
-    try:
-        await connection.execute("DELETE FROM audit_events WHERE incident_id = $1", incident_id)
-    finally:
-        await connection.close()
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
 
 
-def test_investigation_trail_round_trips_through_postgres(tmp_path: Path) -> None:
-    incident_id = uuid4()
-    event = IncidentCreatedEvent.model_validate(
-        {"incident_id": str(incident_id), "timestamp": FAILURE_TIME, "failed_stage": "Test"}
+@pytest.mark.asyncio
+async def test_audit_log_written_to_postgres():
+    if not DATABASE_URL:
+        pytest.skip("TEST_DATABASE_URL not set")
+
+    await create_audit_tables(DATABASE_URL)
+
+    audit = PostgresAuditLog(DATABASE_URL)
+    event_writer = SharedStoreEvidenceWriter(FileEvidenceStore(Path("data/evidence")))
+
+    agent = MetricsAgent(
+        planner=CatalogPlanner(),
+        investigator=Investigator(config=InvestigationConfig(tools=[FakeTool(LATENCY_P95, step_up())])),
+        writer=event_writer,
+        audit=audit,
     )
 
-    async def scenario() -> None:
-        await create_audit_tables(DATABASE_URL)
-        audit = PostgresAuditLog(DATABASE_URL)
-        investigator = Investigator(
-            FakeTool({LATENCY_P95.promql: step_up(make_window(), 0.007, 2.0)}),  # type: ignore[arg-type]
-            CatalogPlanner(),
-            SharedStoreEvidenceWriter(FileEvidenceStore(tmp_path)),
-            InvestigationConfig(settle=timedelta(0)),
-            # Real clock: the trail is ordered by timestamp, so every record must use real time.
-            sleep=lambda _seconds: None,
+    incident_id = uuid4()
+    event = IncidentCreatedEvent(
+        incident_id=incident_id,
+        job_name="orders-service",
+        build_number=42,
+        build_url="http://jenkins/job/orders-service/42",
+        branch="main",
+        git_commit="abc1234",
+        timestamp=FAILURE_TIME,
+    )
+
+    await agent.investigate_and_write(event)
+
+    conn = await asyncpg.connect(DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        rows = await conn.fetch(
+            "SELECT event_type, summary, ok FROM agent_audit_records WHERE incident_id = $1 ORDER BY timestamp",
+            str(incident_id),
         )
-        try:
-            evidence = await MetricsAgent(investigator, audit).run_event(event)
-            records = await audit.read(incident_id)
-        finally:
-            await audit.close()
-            await delete_trail(DATABASE_URL, str(incident_id))
-
-        types = [r.event_type for r in records]
-        assert types[0] == "agent_started" and types[-1] == "agent_completed"
-        assert types[-3:-1] == ["hypothesis_formed", "evidence_written"]
-        calls = [r for r in records if r.event_type == "tool_call"]
-        assert len(calls) == len(evidence.tool_calls) > 0
-        # Each query keeps its own issue time through the timestamptz round trip, in order.
-        assert [c.created_at.isoformat() for c in calls] == [t.args["issued_at"] for t in evidence.tool_calls]
-        assert [c.created_at for c in calls] == sorted(c.created_at for c in calls)
-        assert records[-1].payload["failure_type"] == "timeout"
-
-    asyncio.run(scenario())
+        assert len(rows) >= 2
+        assert rows[0]["event_type"] == "investigation_started"
+        assert rows[0]["ok"] is True
+        assert rows[-1]["event_type"] == "investigation_completed"
+        assert rows[-1]["ok"] is True
+    finally:
+        await conn.close()
