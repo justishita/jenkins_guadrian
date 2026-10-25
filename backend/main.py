@@ -12,9 +12,11 @@ from backend.config import settings
 from backend.db.database import init_db
 from backend.events.publisher import publisher
 from backend.jenkins_catchup import JenkinsCatchup
+from backend.notifications import approval_consumer
+from backend.routes.approvals import router as approvals_router
 from backend.routes.health import router as health_router
-from backend.routes.webhooks import router as webhooks_router
 from backend.routes.validation import router as validation_router
+from backend.routes.webhooks import router as webhooks_router
 
 # Configure logging
 logging.basicConfig(
@@ -61,6 +63,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 2. Connect to RabbitMQ asynchronously with retry
     asyncio.create_task(publisher.connect(max_retries=5, retry_interval=2.0))
+    asyncio.create_task(approval_consumer.connect(max_retries=5, retry_interval=2.0))
+
     catchup_task: asyncio.Task[None] | None = None
     if settings.CATCHUP_ENABLED:
         catchup_task = asyncio.create_task(
@@ -75,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if catchup_task is not None:
         catchup_task.cancel()
         await asyncio.gather(catchup_task, return_exceptions=True)
+    await approval_consumer.close()
     await publisher.close()
 
 
@@ -91,6 +96,7 @@ app.add_middleware(RequestIdMiddleware)
 app.include_router(health_router)
 app.include_router(webhooks_router)
 app.include_router(validation_router)
+app.include_router(approvals_router)
 
 
 @app.get("/")
@@ -98,5 +104,4 @@ async def root():
     return {
         "service": settings.API_TITLE,
         "status": "running",
-        "docs_url": "/docs",
     }
