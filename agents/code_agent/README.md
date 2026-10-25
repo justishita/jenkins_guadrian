@@ -94,7 +94,7 @@ means the fix went stale, two means it is ambiguous.
 
 `tools/github_writer.py` is a separate class from the read-only `GitHubClient`, so the
 investigation path physically cannot write. `apply_plan_to_branch` creates
-`remediation/<incident>-<type>-a<attempt>` from the breaking commit and commits each
+`ai-fix/<incident_id>-<attempt>` from the breaking commit and commits each
 edit conditioned on the blob sha it read, so a concurrent change is refused rather than
 overwritten. Writes are never retried blindly - a timeout after a POST may mean it
 succeeded. Pull requests can only be drafts.

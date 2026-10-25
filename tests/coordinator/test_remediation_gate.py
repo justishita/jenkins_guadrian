@@ -112,7 +112,7 @@ def unsafe_plan() -> FixPlan:
 		failure_type=FailureTaxonomy.CODE_TEST_FAILURE,
 		confidence=0.9,
 		base_ref=BASE,
-		branch_name="remediation/11111111-code_test_failure-a0",
+		branch_name="ai-fix/11111111-2222-3333-4444-555555555555-0",
 		commit_message="Make the build green",
 		rationale="Skip the failing test.",
 		edits=(
@@ -340,7 +340,7 @@ async def test_a_proposal_cannot_be_decided_twice(github: FakeGitHub, audit: Fil
 async def test_a_record_cannot_be_used_with_another_plan(github: FakeGitHub, audit: FileAuditLog) -> None:
 	gate = gate_for(FakePolicy(), github, audit)
 	record = await gate.submit(tc11_plan())
-	other = tc11_plan().model_copy(update={"branch_name": "remediation/elsewhere"})
+	other = tc11_plan().model_copy(update={"branch_name": "ai-fix/11111111-2222-3333-4444-555555555555-9"})
 
 	with pytest.raises(WorkflowError, match="does not belong"):
 		await gate.decide(other, record, APPROVE)
