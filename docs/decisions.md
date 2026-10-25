@@ -41,3 +41,26 @@ All agents must restrict their hypothesis classifications to the following enum 
 ## 2. Directory Ownership & Service Boundaries
 
 Each top-level directory has a single clear owner. **Do not edit files outside your assigned directory without team notification and PR approval.**
+
+
+### Framework boundary: what counts as an agentic framework
+
+LangGraph is removed. `grep -rn "langgraph" agents/ coordinator/` returns nothing, and
+the three investigation agents run as CrewAI Flows with the Coordinator on Google ADK.
+
+`langchain-core` is still imported in two places and this is deliberate:
+
+* `common/llm_client.py` - `BaseChatModel`, `BaseMessage`, `BaseTool` and
+  `langchain-google-genai` as the Gemini client.
+* `agents/jenkins_agent/agent.py` - the message types and `StructuredTool` used to
+  declare its read-only tools.
+
+In both it is the **model and message layer**, not the agent framework: it chooses no
+steps, holds no state, and decides nothing about control flow. Orchestration - which
+step runs, when the loop stops, who talks to whom - is entirely CrewAI and ADK.
+
+Removing it would mean rewriting the shared `LLMClient` and the Jenkins agent's tool
+declarations against another provider SDK, changing assertions in three test files for
+no behavioural gain. If the requirement is read strictly enough to forbid it, that is a
+deliberate, separately scoped piece of work on shared code and needs P1's agreement,
+since `llm_client.py` is hers.

@@ -9,7 +9,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import aio_pika
 from aio_pika.exceptions import AMQPConnectionError
@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from common.audit import AuditLog, build_audit_log
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence
+from coordinator.a2a_contract import evidence_ready
 
 from .audit import completion_details, record_findings
 from .config import MetricsAgentSettings, load_settings
@@ -87,9 +88,17 @@ class MetricsInvestigationFlow(Flow):
 class MetricsAgent:
     """Receives incident events and hands them to the Investigator."""
 
-    def __init__(self, investigator: Investigator, audit: AuditLog | None = None) -> None:
+    def __init__(
+        self,
+        investigator: Investigator,
+        audit: AuditLog | None = None,
+        notifier: Callable[[Any], Awaitable[None]] | None = None,
+    ) -> None:
         self.investigator = investigator
         self._audit = audit
+        # Optional A2A sink. The notification carries no findings; the Coordinator
+        # reads the evidence from the blackboard.
+        self._notifier = notifier
 
     def handle_incident(self, event: IncidentCreatedEvent) -> Evidence:
         """Investigate synchronously (blocking Prometheus calls); no audit trail."""
@@ -105,13 +114,31 @@ class MetricsAgent:
         A failure is audited as `agent_failed` and re-raised for the caller to handle.
         """
         if self._audit is None:
-            return await asyncio.to_thread(self.handle_incident, event)
+            evidence = await asyncio.to_thread(self.handle_incident, event)
+            await self._announce(evidence)
+            return evidence
         async with self._audit.agent_run(event.incident_id, AGENT_NAME) as details:
             # Investigation does blocking HTTP; keep the event loop (heartbeats) free.
             evidence = await asyncio.to_thread(self.handle_incident, event)
             await record_findings(self._audit, evidence)
             details.update(completion_details(evidence))
+            await self._announce(evidence)
             return evidence
+
+    async def _announce(self, evidence: Evidence) -> None:
+        """Tell the Coordinator over A2A that this agent's evidence is published.
+
+        Best effort: the evidence is already on the blackboard, so a notification
+        that cannot be delivered must not fail the investigation.
+        """
+        if self._notifier is None:
+            return
+        try:
+            await self._notifier(evidence_ready(evidence.incident_id, evidence.agent))
+        except Exception:
+            logger.exception(
+                "a2a notification failed", extra={"incident_id": str(evidence.incident_id)}
+            )
 
 
 def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> MetricsAgent:

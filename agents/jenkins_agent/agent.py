@@ -35,6 +35,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
+from coordinator.a2a_contract import evidence_ready
 
 
 logger = logging.getLogger(__name__)
@@ -512,6 +513,7 @@ class JenkinsInvestigationAgent:
         total_timeout: float = 180.0,
         llm_timeout: float = 30.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        notifier: Callable[[Any], Awaitable[None]] | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.evidence_store = evidence_store
@@ -520,6 +522,9 @@ class JenkinsInvestigationAgent:
         self.total_timeout = total_timeout
         self.llm_timeout = llm_timeout
         self.sleep = sleep
+        # Optional A2A sink. The notification carries no findings; the Coordinator
+        # reads the evidence from the blackboard.
+        self.notifier = notifier
 
     async def _timed_jenkins_call(
         self,
@@ -880,6 +885,21 @@ class JenkinsInvestigationAgent:
                 ToolMessage(content=redact(observation), tool_call_id=call.get("id", ""), name=name)
             )
 
+    async def _announce(self, evidence: Evidence) -> None:
+        """Tell the Coordinator over A2A that this agent's evidence is published.
+
+        Best effort: the evidence is already on the blackboard, so a notification
+        that cannot be delivered must not fail the investigation.
+        """
+        if self.notifier is None:
+            return
+        try:
+            await self.notifier(evidence_ready(evidence.incident_id, evidence.agent))
+        except Exception:
+            logger.exception(
+                "a2a notification failed", extra={"incident_id": str(evidence.incident_id)}
+            )
+
     def _next_node(self, state: AgentState) -> str:
         if state.get("evidence") is not None:
             return "finalize"
@@ -894,6 +914,7 @@ class JenkinsInvestigationAgent:
             evidence = _fallback_evidence(state)
         evidence = Evidence.model_validate(evidence.model_dump())
         await asyncio.wait_for(self.evidence_store.write(evidence), timeout=self.per_call_timeout)
+        await self._announce(evidence)
         state["evidence"] = evidence
         return state
 
@@ -929,6 +950,7 @@ class JenkinsInvestigationAgent:
             )
             fallback = _fallback_evidence(state, status="insufficient_evidence")
             await asyncio.wait_for(self.evidence_store.write(fallback), timeout=self.per_call_timeout)
+            await self._announce(fallback)
             return fallback
         evidence = result.get("evidence")
         if not isinstance(evidence, Evidence):
