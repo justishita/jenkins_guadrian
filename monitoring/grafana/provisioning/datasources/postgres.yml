@@ -1,0 +1,19 @@
+apiVersion: 1
+
+# The audit trail (audit_events) written by the agents and the Coordinator when
+# DATABASE_URL is set. Credentials come from the Grafana container's environment.
+datasources:
+  - name: Audit (Postgres)
+    uid: postgres
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: postgres:5432
+    user: ${POSTGRES_USER}
+    editable: false
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
