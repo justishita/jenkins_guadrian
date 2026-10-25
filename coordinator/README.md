@@ -36,12 +36,18 @@ it is the baseline LLM-assisted fusion will be measured against.
 | --- | --- |
 | Agreement | each additional agent naming the same cause adds **0.1** |
 | Disagreement | each competing cause costs **0.15**, and is named in the report |
-| A tie on agent count | `conflicting` - confidence orders candidates but never breaks a tie |
+| A tie on agent count | `conflicting` when the strongest claims are within **0.10** (`TIE_MARGIN`); a wider gap is a lead, and the losing cause is still recorded and costs confidence |
+| Completeness | `missing_agents` and `failed_agents` say who did not contribute; `complete` is independent of `actionable` |
 | Abstention | insufficient-evidence and failed agents are findings, never votes |
 | Floor | below **0.5** the report names no cause and is not `actionable` |
+| Ceiling | the fused verdict never exceeds **0.95** - agents can share a blind spot, so agreement is strong evidence, not proof |
 
 Cited evidence IDs are namespaced by agent (`code_agent:file-1`), because each agent
 numbers its evidence independently and `file-1` is ambiguous once merged.
+
+The running service (`app.py`) calls `synthesize` after every dispatch and keeps the
+latest report per incident in `CoordinatorRuntime.reports`. Fusion there is best effort:
+the dispatch has already completed, so a fusion error is logged and never re-raised.
 
 ## Remediation gate (Week 6)
 
@@ -82,6 +88,45 @@ with `is None`, never with `if verdict:`, or a denial reads as "no verdict".
 Rules live in `policies/` and are documented there; see `policies/README.md` before
 changing one.
 
+## Fused report (P2, alongside `synthesis.py`)
+
+`synthesis.py` (P3) is the report the remediation engine and the policy gate read. P2 added
+a second, more detailed fusion next to it so the two can be compared before either is made
+authoritative: `fusion.py`, `report.py` (`FusedReport`), `report_store.py` and `fused.py`
+(`synthesize_fused`: collect, fuse, store, audit `synthesis_completed`). Neither alters the
+agents' evidence.
+
+`fuse(view, config, now=...)` is pure and deterministic, independent of the order the
+agents' documents arrive in:
+
+- **One vote per agent**: its primary verdict. Other hypotheses it listed are shown in the
+  report (`alternative_hypotheses`) but not scored.
+- **Score** = noisy-OR (default) of `confidence x relevance`; the weighted-mean score is
+  always recorded alongside (`docs/fusion_method_comparison.md`). **Uncalibrated, not
+  probabilities.**
+- **Relevance** (`AGENT_RELEVANCE`) and **type relations** (`TYPE_RELATIONS`) are
+  *proposals pending team sign-off*; a relation not signed off counts as unclassified,
+  which is treated as a conflict and tagged, unless `trust_proposed_relations` is set.
+- **Negative evidence** is gated (relevant agent, not failed, declared
+  `investigation_coverage >= min_coverage` for "found nothing"), deduplicated by
+  `(agent, failure_type, evidence id)`, and capped (0.30).
+- **Separate fields**: `verdict`, `completeness`, `conflict_status` and
+  `ready_for_policy_review`, a precondition flag only. OPA stays authoritative.
+- **No vote -> `unknown`** at confidence 0, never a winner from zero scores.
+
+Replay a stored incident without the stack:
+
+```bash
+python scripts/synthesize_incident.py <incident_id>
+```
+
+### Optional A2A listener (`service.py`, `a2a_client.py`)
+
+`service.py` is an A2A endpoint that waits for all three agents (read from the blackboard)
+or `COORDINATOR_TIMEOUT_SECONDS`, then writes the fused report; a late agent replaces an
+incomplete one. `a2a_client.A2ANotifier` is the matching sender. **Neither is wired into
+`docker-compose.yml` or the agents**: P3's `app.py` dispatcher is the live path. Pending
+timers are in memory and the endpoint has no authentication.
 ## A2A contract
 
 The contract lives in `common/a2a_contract.py`, not here: every agent imports it, and

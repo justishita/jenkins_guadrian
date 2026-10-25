@@ -7,3 +7,5 @@ crewai>=1.15.0
 mcp>=1.0.0
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
+prometheus-client>=0.20.0  # common.monitoring imports it at module load
+uvicorn>=0.30.0  # a2a_app.py imports it; previously only arrived via crewai -> chromadb

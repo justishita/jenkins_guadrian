@@ -139,6 +139,7 @@ class Investigator:
                 findings.append(Finding(spec, issues=sanity.issues, quality=sanity.quality))
 
         verdict = synthesize(findings)
+        coverage, coverage_notes = self._coverage(findings)
         return make_evidence(
             incident_id=event.incident_id,
             status=verdict.status,
@@ -150,7 +151,28 @@ class Investigator:
             tool_calls=tool_calls,
             next_steps=verdict.next_steps,
             failed_stage=event.failed_stage,
+            coverage=coverage,
+            coverage_notes=coverage_notes,
         )
+
+    @staticmethod
+    def _coverage(findings: list[Finding]) -> tuple[float | None, list[str]]:
+        """How much of the planned investigation produced usable data, not whether anything was found.
+
+        Mean data quality over every planned query; a query that errored or failed the sanity
+        check counts as zero. A coordinator may only read "found nothing" as evidence of
+        absence when this is high.
+        """
+        if not findings:
+            return None, []
+        notes = []
+        for finding in findings:
+            if finding.error:
+                notes.append(f"{finding.spec.name}: query error")
+            elif finding.issues:
+                notes.append(f"{finding.spec.name}: unusable ({', '.join(str(i) for i in finding.issues)})")
+        usable = sum(f.quality for f in findings if f.detection is not None)
+        return round(usable / len(findings), 4), notes
 
     def _settle(self, failure_time: datetime, now: datetime) -> datetime:
         """Let Prometheus catch up with a very recent failure; the wait is capped at `settle`."""

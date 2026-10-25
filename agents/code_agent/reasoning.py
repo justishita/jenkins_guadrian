@@ -161,7 +161,10 @@ def _dependency_hypothesis(
     if any(change.is_upgrade_or_downgrade for change in changes):
         confidence += 0.1
         notes.append("a pinned version moved")
-    if context.stage_mentions("build", "install", "test", "compile"):
+    # "setup" because target_app/Jenkinsfile runs `pip install` in its Setup stage, so
+    # that is where a bad pin actually fails. A test reads the Jenkinsfile to keep
+    # this list in step with the real pipeline.
+    if context.stage_mentions("setup", "build", "install", "test", "compile"):
         confidence += 0.1
         notes.append(f"the {context.failed_stage} stage is where dependency problems surface")
 

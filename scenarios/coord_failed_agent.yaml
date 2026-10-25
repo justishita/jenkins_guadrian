@@ -1,0 +1,33 @@
+id: coord-failed-agent
+name: An Agent Failed
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Code wrote a failed evidence document. A failed agent casts no vote, for or against, and the
+  report is incomplete even though all three documents exist.
+
+truth: timeout
+
+agents:
+  jenkins_agent: {failure_type: timeout, confidence: 0.85}
+  metrics_agent: {failure_type: timeout, confidence: 0.80}
+  code_agent: {failure_type: config_error, confidence: 0.90, status: failed}
+
+expected:
+  verdict: timeout
+  confidence: 0.9154
+  completeness: incomplete
+  missing_agents: []
+  failed_agents: [code_agent]
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [timeout]
+  ready_for_policy_review: false
+  blocking: [incomplete]
+  negative: []

@@ -1,0 +1,38 @@
+id: coord-compatible-close
+name: Close Scores On Compatible Types
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Jenkins reports a timeout and Metrics reports resource exhaustion at equal confidence.
+  Resource pressure commonly causes timeouts, so (with the proposed relation honoured) the
+  pair is compatible: no conflict, and the cause outranks the symptom through relevance.
+  This scenario enables trust_proposed_relations; by default the pair would be unclassified.
+
+truth: resource_exhaustion
+
+config:
+  trust_proposed_relations: true
+
+agents:
+  jenkins_agent: {failure_type: timeout, confidence: 0.80}
+  metrics_agent: {failure_type: resource_exhaustion, confidence: 0.80}
+  code_agent: {failure_type: unknown, confidence: 0.10}
+
+expected:
+  verdict: resource_exhaustion
+  confidence: 0.80
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [resource_exhaustion, timeout]
+  ready_for_policy_review: true
+  blocking: []
+  negative: []

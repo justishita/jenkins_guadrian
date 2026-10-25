@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from common.evidence_store import FileEvidenceStore
 from common.models import IncidentCreatedEvent
 from coordinator.agent import CoordinatorAgent
+from coordinator.synthesis import IncidentReport
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,9 @@ class CoordinatorRuntime:
         self.consumer_tag: str | None = None
         self.client: httpx.AsyncClient | None = None
         self.adk_agent: CoordinatorAgent | None = None
+        # Latest fused report per incident, so the running service's verdict can be
+        # inspected without re-reading the blackboard.
+        self.reports: dict[str, IncidentReport] = {}
 
     async def start(self) -> None:
         if not self.rabbitmq_url:
@@ -138,6 +142,7 @@ class CoordinatorRuntime:
                             "reporting_agents": list(view.reporting_agents),
                         },
                     )
+                    await self._synthesize(event)
                 return result
             except (httpx.TimeoutException, httpx.TransportError):
                 if attempt == 2:
@@ -148,6 +153,40 @@ class CoordinatorRuntime:
                     raise
                 await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
         raise RuntimeError("Jenkins A2A dispatch attempts were exhausted")
+
+    async def _synthesize(self, event: IncidentCreatedEvent) -> IncidentReport | None:
+        """Fuse whatever is on the blackboard into the incident report (Week 4).
+
+        Best effort by design: the dispatch has already completed and its evidence is
+        safely on the blackboard, so a fusion error is logged and never re-raised. A
+        partial blackboard still yields a report; ``findings`` says who contributed.
+        """
+        if self.adk_agent is None:
+            return None
+        try:
+            report = await self.adk_agent.synthesize(event.incident_id)
+        except Exception as error:  # noqa: BLE001 - must not fail a completed dispatch
+            logger.error(
+                "Coordinator synthesis failed (%s)",
+                type(error).__name__,
+                extra={"incident_id": str(event.incident_id)},
+            )
+            return None
+        if report is None:
+            return None
+        self.reports[str(event.incident_id)] = report
+        logger.info(
+            "Coordinator fused incident report",
+            extra={
+                "incident_id": str(event.incident_id),
+                "status": report.status,
+                "failure_type": report.failure_type.value,
+                "confidence": report.confidence,
+                "actionable": report.actionable,
+                "reporting_agents": list(report.reporting_agents),
+            },
+        )
+        return report
 
     async def stop(self) -> None:
         if self.queue is not None and self.consumer_tag is not None:

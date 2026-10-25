@@ -17,6 +17,7 @@ from common.models import Evidence, EvidenceHypothesis, EvidenceItem, FailureTax
 from coordinator.synthesis import (
 	AGREEMENT_BONUS,
 	CONFLICT_PENALTY,
+	MAX_FUSED_CONFIDENCE,
 	MAX_UNKNOWN_CONFIDENCE,
 	MIN_REPORTABLE_CONFIDENCE,
 	synthesize,
@@ -99,10 +100,18 @@ def test_three_agents_agreeing_is_the_strongest_case() -> None:
 	assert len(report.agreeing_agents) == 3
 
 
-def test_agreement_never_pushes_confidence_past_one() -> None:
+def test_agreement_never_claims_certainty() -> None:
+	"""Agents can share a blind spot, so even unanimous agreement stops short of 1.0."""
 	report = synthesize([ev(a, DEP, 0.98) for a in ("code_agent", "jenkins_agent", "metrics_agent")], now=NOW)
 
-	assert report.confidence <= 1.0
+	assert report.confidence == pytest.approx(MAX_FUSED_CONFIDENCE)
+
+
+def test_a_single_very_sure_agent_is_also_capped() -> None:
+	"""The ceiling is the system's, not just agreement's."""
+	report = synthesize([ev("metrics_agent", FailureTaxonomy.TIMEOUT, 0.97)], now=NOW)
+
+	assert report.confidence == pytest.approx(MAX_FUSED_CONFIDENCE)
 
 
 # --- disagreement -------------------------------------------------------------

@@ -1,0 +1,396 @@
+{
+  "agent": "jenkins_agent",
+  "confidence": 0.9,
+  "created_at": "2026-10-06T03:49:13.270418Z",
+  "error_signature": "6dd3e672010db05cabc9e31fea0f3920f896f9666030f24c1a0cf37549feab6f",
+  "evidence_items": [
+    {
+      "content": "{\"name\": \"Declarative: Checkout SCM\", \"result\": \"SUCCESS\", \"duration_ms\": 2589.0}",
+      "id": "stages[0]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Checkout\", \"result\": \"SUCCESS\", \"duration_ms\": 2121.0}",
+      "id": "stages[1]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Setup\", \"result\": \"SUCCESS\", \"duration_ms\": 5275.0}",
+      "id": "stages[2]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Lint\", \"result\": \"SUCCESS\", \"duration_ms\": 1828.0}",
+      "id": "stages[3]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Test\", \"result\": \"FAILED\", \"duration_ms\": 3132.0}",
+      "id": "stages[4]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Build\", \"result\": \"SUCCESS\", \"duration_ms\": 1688.0}",
+      "id": "stages[5]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Deploy\", \"result\": \"FAILED\", \"duration_ms\": 1442.0}",
+      "id": "stages[6]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"name\": \"Declarative: Post Actions\", \"result\": \"UNSTABLE\", \"duration_ms\": 1597.0}",
+      "id": "stages[7]",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "Deploy",
+      "id": "failed_stage",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "ImportError while importing test module '/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py'.",
+      "id": "compiler_errors[0]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "ModuleNotFoundError: No module named 'target_app'",
+      "id": "compiler_errors[1]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:13.534Z] ERROR: script returned exit code 2",
+      "id": "compiler_errors[2]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:16.956Z] ERROR: script returned exit code 1",
+      "id": "compiler_errors[3]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "Branch indexing\nConnecting to https://api.github.com with no credentials, anonymous access\nObtained target_app/Jenkinsfile from 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d\n[Pipeline] Start of Pipeline\n[Pipeline] node\nRunning on Jenkins in /var/jenkins_home/workspace/target-app_main\n[Pipeline] {\n[Pipeline] stage\n[Pipeline] { (Declarative: Checkout SCM)\n[Pipeline] checkout\nSelected Git installation does not exist. Using Default\nThe recommended git tool is: NONE\nWarning: CredentialId \"github-ssh\" could not be found.\n > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/target-app_main/.git # timeout=10\nFetching changes from the remote Git repository\n > git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10\nFetching without tags\nFetching upstream changes from https://github.com/justishita/jenkins_guadrian.git\n > git --version # timeout=10\n > git --version # 'git version 2.47.3'\n > git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10\nChecking out Revision 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d (main)\n > git config core.sparsecheckout # timeout=10\n > git checkout -f 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d # timeout=10\nCommit message: \"Week 3 Shreya metrics-agent: audit trail, scenario suite, correlated detection and confidence\"\n > git rev-list --no-walk f85dd0f6794ff60bc75b0b5d87e128e147c933c9 # timeout=10\n\n\n\n\n\n}\n\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] withEnv\n[Pipeline] {\n[Pipeline] withEnv\n[Pipeline] {\n[Pipeline] timestamps\n[Pipeline] {\n[Pipeline] timeout\n[2026-10-05T19:02:01.200Z] Timeout set to expire in 15 min\n[Pipeline] {\n[Pipeline] stage\n[Pipeline] { (Checkout)\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] checkout\n[2026-10-05T19:02:01.921Z] Selected Git installation does not exist. Using Default\n[2026-10-05T19:02:01.922Z] The recommended git tool is: NONE\n[2026-10-05T19:02:01.922Z] Warning: CredentialId \"github-ssh\" could not be found.\n[2026-10-05T19:02:01.924Z]  > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/target-app_main/.git # timeout=10\n[2026-10-05T19:02:01.944Z] Fetching changes from the remote Git repository\n[2026-10-05T19:02:01.950Z]  > git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10\n[2026-10-05T19:02:01.972Z] Fetching without tags\n[2026-10-05T19:02:01.972Z] Fetching upstream changes from https://github.com/justishita/jenkins_guadrian.git\n[2026-10-05T19:02:01.972Z]  > git --version # timeout=10\n[2026-10-05T19:02:01.986Z]  > git --version # 'git version 2.47.3'\n[2026-10-05T19:02:01.987Z]  > git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10\n[2026-10-05T19:02:02.748Z] Checking out Revision 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d (main)\n[2026-10-05T19:02:02.748Z]  > git config core.sparsecheckout # timeout=10\n[2026-10-05T19:02:02.764Z]  > git checkout -f 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d # timeout=10\n[2026-10-05T19:02:02.799Z] Commit message: \"Week 3 Shreya metrics-agent: audit trail, scenario suite, correlated detection and confidence\"\n[2026-10-05T19:02:02.903Z] \n[2026-10-05T19:02:02.903Z] Could not update commit status. Message: {\"message\":\"API rate limit exceeded for 103.139.190.238. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)\",\"documentation_url\":\"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting\"}\n[2026-10-05T19:02:02.903Z] \n[2026-10-05T19:02:02.903Z] \n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] }\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Setup)\n[Pipeline] dir\n[2026-10-05T19:02:03.629Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] sh\n[2026-10-05T19:02:04.258Z] + python3 -m venv .venv\n[2026-10-05T19:02:07.490Z] + .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: asyncpg==0.30.0 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 1)) (0.30.0)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: fastapi==0.115.12 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 2)) (0.115.12)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: flake8==7.1.1 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 3)) (7.1.1)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: httpx==0.28.1 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 4)) (0.28.1)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: prometheus-client==0.21.1 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 5)) (0.21.1)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: psutil==7.0.0 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 6)) (7.0.0)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: pydantic==2.11.3 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 7)) (2.11.3)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: PyYAML==6.0.2 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 8)) (6.0.2)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: pytest==8.3.5 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 9)) (8.3.5)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: pytest-asyncio==0.26.0 in ./.venv/lib/python3.13/site-packages (from -r requirements.txt (line 10)) (0.26.0)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: uvicorn==0.34.0 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (0.34.0)\n[2026-10-05T19:02:08.402Z] Requirement already satisfied: starlette<0.47.0,>=0.40.0 in ./.venv/lib/python3.13/site-packages (from fastapi==0.115.12->-r requirements.txt (line 2)) (0.46.2)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: typing-extensions>=4.8.0 in ./.venv/lib/python3.13/site-packages (from fastapi==0.115.12->-r requirements.txt (line 2)) (4.16.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: annotated-types>=0.6.0 in ./.venv/lib/python3.13/site-packages (from pydantic==2.11.3->-r requirements.txt (line 7)) (0.8.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: pydantic-core==2.33.1 in ./.venv/lib/python3.13/site-packages (from pydantic==2.11.3->-r requirements.txt (line 7)) (2.33.1)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: typing-inspection>=0.4.0 in ./.venv/lib/python3.13/site-packages (from pydantic==2.11.3->-r requirements.txt (line 7)) (0.4.4)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: mccabe<0.8.0,>=0.7.0 in ./.venv/lib/python3.13/site-packages (from flake8==7.1.1->-r requirements.txt (line 3)) (0.7.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: pycodestyle<2.13.0,>=2.12.0 in ./.venv/lib/python3.13/site-packages (from flake8==7.1.1->-r requirements.txt (line 3)) (2.12.1)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: pyflakes<3.3.0,>=3.2.0 in ./.venv/lib/python3.13/site-packages (from flake8==7.1.1->-r requirements.txt (line 3)) (3.2.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: anyio in ./.venv/lib/python3.13/site-packages (from httpx==0.28.1->-r requirements.txt (line 4)) (4.15.1)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: certifi in ./.venv/lib/python3.13/site-packages (from httpx==0.28.1->-r requirements.txt (line 4)) (2026.7.22)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: httpcore==1.* in ./.venv/lib/python3.13/site-packages (from httpx==0.28.1->-r requirements.txt (line 4)) (1.0.9)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: idna in ./.venv/lib/python3.13/site-packages (from httpx==0.28.1->-r requirements.txt (line 4)) (3.20)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: iniconfig in ./.venv/lib/python3.13/site-packages (from pytest==8.3.5->-r requirements.txt (line 9)) (2.3.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: packaging in ./.venv/lib/python3.13/site-packages (from pytest==8.3.5->-r requirements.txt (line 9)) (26.3)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: pluggy<2,>=1.5 in ./.venv/lib/python3.13/site-packages (from pytest==8.3.5->-r requirements.txt (line 9)) (1.6.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: click>=7.0 in ./.venv/lib/python3.13/site-packages (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (8.5.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: h11>=0.8 in ./.venv/lib/python3.13/site-packages (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (0.16.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: httptools>=0.6.3 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (0.8.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: python-dotenv>=0.13 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (1.2.4)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: uvloop!=0.15.0,!=0.15.1,>=0.14.0 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (0.23.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: watchfiles>=0.13 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (1.3.0)\n[2026-10-05T19:02:08.403Z] Requirement already satisfied: websockets>=10.4 in ./.venv/lib/python3.13/site-packages (from uvicorn[standard]==0.34.0->-r requirements.txt (line 11)) (17.2)\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] }\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Lint)\n[Pipeline] dir\n[2026-10-05T19:02:08.955Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] sh\n[2026-10-05T19:02:09.548Z] + .venv/bin/flake8 --exit-zero app tests\n[2026-10-05T19:02:09.799Z] app/__init__.py:1:42: W292 no newline at end of file\n[2026-10-05T19:02:09.800Z] app/config.py:30:80: E501 line too long (88 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/config.py:31:80: E501 line too long (82 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/config.py:62:80: E501 line too long (81 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/config.py:65:43: W292 no newline at end of file\n[2026-10-05T19:02:09.800Z] app/db_client.py:8:1: E402 module level import not at top of file\n[2026-10-05T19:02:09.800Z] app/db_client.py:10:1: E402 module level import not at top of file\n[2026-10-05T19:02:09.800Z] app/db_client.py:12:1: E402 module level import not at top of file",
+      "id": "error_blocks[0]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:09.800Z] app/main.py:143:80: E501 line too long (93 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/main.py:155:80: E501 line too long (94 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/main.py:156:80: E501 line too long (97 > 79 characters)\n[2026-10-05T19:02:09.800Z] app/main.py:174:19: W292 no newline at end of file\n[2026-10-05T19:02:09.800Z] tests/test_intentional_failure.py:2:55: W292 no newline at end of file\n[2026-10-05T19:02:09.800Z] tests/test_orders.py:69:80: E501 line too long (82 > 79 characters)\n[2026-10-05T19:02:09.800Z] tests/test_orders.py:71:80: E501 line too long (94 > 79 characters)\n[2026-10-05T19:02:09.800Z] tests/test_orders.py:73:80: E501 line too long (85 > 79 characters)\n[2026-10-05T19:02:09.800Z] tests/test_orders.py:76:80: E501 line too long (81 > 79 characters)\n[2026-10-05T19:02:09.800Z] tests/test_orders.py:92:59: W292 no newline at end of file\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] }\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Test)\n[Pipeline] dir\n[2026-10-05T19:02:10.909Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] sh\n[2026-10-05T19:02:11.764Z] + mkdir -p reports\n[2026-10-05T19:02:11.764Z] + .venv/bin/pytest -q --junitxml=reports/junit.xml\n[2026-10-05T19:02:12.317Z] /var/jenkins_home/workspace/target-app_main/target_app/.venv/lib/python3.13/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\n[2026-10-05T19:02:12.317Z] The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: \"function\", \"class\", \"module\", \"package\", \"session\"\n[2026-10-05T19:02:12.317Z] \n[2026-10-05T19:02:12.317Z]   warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))\n[2026-10-05T19:02:13.230Z] \n[2026-10-05T19:02:13.230Z] ==================================== ERRORS ====================================\n[2026-10-05T19:02:13.230Z] ____________________ ERROR collecting tests/test_orders.py _____________________\n[2026-10-05T19:02:13.230Z] ImportError while importing test module '/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py'.\n[2026-10-05T19:02:13.230Z] Hint: make sure your test modules/packages have valid Python names.\n[2026-10-05T19:02:13.230Z] Traceback:\n[2026-10-05T19:02:13.230Z] /usr/lib/python3.13/importlib/__init__.py:88: in import_module\n[2026-10-05T19:02:13.230Z]     return _bootstrap._gcd_import(name[level:], package, level)\n[2026-10-05T19:02:13.230Z] tests/test_orders.py:10: in <module>\n[2026-10-05T19:02:13.230Z]     from target_app.app.config import Settings\n[2026-10-05T19:02:13.230Z] E   ModuleNotFoundError: No module named 'target_app'\n[2026-10-05T19:02:13.230Z] =============================== warnings summary ===============================\n[2026-10-05T19:02:13.230Z] .venv/lib/python3.13/site-packages/starlette/testclient.py:37\n[2026-10-05T19:02:13.230Z]   /var/jenkins_home/workspace/target-app_main/target_app/.venv/lib/python3.13/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.\n[2026-10-05T19:02:13.230Z]     _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]\n[2026-10-05T19:02:13.230Z] \n[2026-10-05T19:02:13.230Z] -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n[2026-10-05T19:02:13.230Z] - generated xml file: /var/jenkins_home/workspace/target-app_main/target_app/reports/junit.xml -\n[2026-10-05T19:02:13.230Z] =========================== short test summary info ============================\n[2026-10-05T19:02:13.230Z] ERROR tests/test_orders.py\n[2026-10-05T19:02:13.230Z] !!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n[2026-10-05T19:02:13.230Z] 1 warning, 1 error in 1.00s\n[Pipeline] }\n[2026-10-05T19:02:13.534Z] ERROR: script returned exit code 2\n[2026-10-05T19:02:13.534Z] Setting overall build result to FAILURE\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Build)\n[Pipeline] dir\n[2026-10-05T19:02:14.144Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] sh\n[2026-10-05T19:02:14.988Z] + .venv/bin/python -m compileall app\n[2026-10-05T19:02:14.988Z] Listing 'app'...\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] }\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Deploy)\n[Pipeline] dir\n[2026-10-05T19:02:15.902Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] catchError\n[Pipeline] {\n[Pipeline] script\n[Pipeline] {\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] sh\n[2026-10-05T19:02:16.650Z] + bash deploy/deploy.sh\n[2026-10-05T19:02:16.650Z] DEPRECATED: The legacy builder is deprecated and will be removed in a future release.\n[2026-10-05T19:02:16.650Z]             Install the buildx component to build images with BuildKit:\n[2026-10-05T19:02:16.650Z]             https://docs.docker.com/go/buildx/\n[2026-10-05T19:02:16.650Z] \n[2026-10-05T19:02:16.901Z] permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Post \"http://%2Fvar%2Frun%2Fdocker.sock/v1.45/build?buildargs=%7B%7D&cachefrom=%5B%5D&cgroupparent=&cpuperiod=0&cpuquota=0&cpusetcpus=&cpusetmems=&cpushares=0&dockerfile=Dockerfile&labels=%7B%7D&memory=0&memswap=0&networkmode=default&rm=1&shmsize=0&t=orders-service%3Alocal&target=&ulimits=%5B%5D&version=1\": dial unix /var/run/docker.sock: connect: permission denied\n[Pipeline] }\n[2026-10-05T19:02:16.956Z] ERROR: script returned exit code 1\n[Pipeline] // catchError\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] stage\n[Pipeline] { (Declarative: Post Actions)\n[Pipeline] dir\n[2026-10-05T19:02:17.381Z] Running in /var/jenkins_home/workspace/target-app_main/target_app\n[Pipeline] {\n[Pipeline] junit\n[2026-10-05T19:02:17.472Z] Recording test results\n[2026-10-05T19:02:17.518Z] [Checks API] No suitable checks publisher found.\n[Pipeline] }\n[Pipeline] // dir\n[Pipeline] script\n[Pipeline] {\n[Pipeline] withCredentials\n[2026-10-05T19:02:17.773Z] Masking supported pattern matches of $WEBHOOK_TOKEN\n[Pipeline] {\n[Pipeline] withEnv\n[Pipeline] {\n[Pipeline] sh\n[2026-10-05T19:02:18.312Z] + date -u +%Y-%m-%dT%H:%M:%SZ\n[2026-10-05T19:02:18.313Z] + jq -n --arg job_name target-app/main --arg build_number 8 --arg build_url http://localhost:8080/job/target-app/job/main/8/ --arg branch main --arg git_commit 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d --arg failed_stage  --arg timestamp 2026-10-05T19:02:18Z --arg incident_id  --arg remediation_attempt 0 --arg result  {\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tjob_name: $job_name,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tbuild_number: $build_number,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tbuild_url: $build_url,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tbranch: $branch,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tgit_commit: $git_commit,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tfailed_stage: $failed_stage,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\ttimestamp: $timestamp,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tincident_id: $incident_id,\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t\tremediation_attempt: $remediation_attempt\n[2026-10-05T19:02:18.313Z] \t\t\t\t\t} + (if $result == \"\" then {} else {result: $result} end)\n[2026-10-05T19:02:18.313Z] + payload={\n[2026-10-05T19:02:18.313Z]   \"job_name\": \"target-app/main\",\n[2026-10-05T19:02:18.313Z]   \"build_number\": \"8\",\n[2026-10-05T19:02:18.313Z]   \"build_url\": \"http://localhost:8080/job/target-app/job/main/8/\",\n[2026-10-05T19:02:18.313Z]   \"branch\": \"main\",\n[2026-10-05T19:02:18.313Z]   \"git_commit\": \"303d50670ed1d40ba10be6a7f6dd761c9cb21f5d\",\n[2026-10-05T19:02:18.313Z]   \"failed_stage\": \"\",\n[2026-10-05T19:02:18.313Z]   \"timestamp\": \"2026-10-05T19:02:18Z\",\n[2026-10-05T19:02:18.313Z]   \"incident_id\": \"\",\n[2026-10-05T19:02:18.313Z]   \"remediation_attempt\": \"0\"\n[2026-10-05T19:02:18.313Z] }\n[2026-10-05T19:02:18.313Z] + curl --silent --show-error --max-time 10 --retry 3 --request POST --header X-Webhook-Token: [REDACTED] --header Content-Type: application/json --data {\n[2026-10-05T19:02:18.313Z]   \"job_name\": \"target-app/main\",\n[2026-10-05T19:02:18.313Z]   \"build_number\": \"8\",\n[2026-10-05T19:02:18.313Z]   \"build_url\": \"http://localhost:8080/job/target-app/job/main/8/\",\n[2026-10-05T19:02:18.313Z]   \"branch\": \"main\",\n[2026-10-05T19:02:18.313Z]   \"git_commit\": \"303d50670ed1d40ba10be6a7f6dd761c9cb21f5d\",\n[2026-10-05T19:02:18.313Z]   \"failed_stage\": \"\",\n[2026-10-05T19:02:18.313Z]   \"timestamp\": \"2026-10-05T19:02:18Z\",\n[2026-10-05T19:02:18.313Z]   \"incident_id\": \"\",\n[2026-10-05T19:02:18.313Z]   \"remediation_attempt\": \"0\"\n[2026-10-05T19:02:18.313Z] } http://agent-api:8000/webhooks/jenkins\n[2026-10-05T19:02:18.565Z] {\"status\":\"accepted\",\"incident_id\":\"1bf496ad-2958-4adc-9a0f-dfb38ae3aa2c\"}\n[Pipeline] }\n[Pipeline] // withEnv\n[Pipeline] }\n[Pipeline] // withCredentials\n[Pipeline] }\n[Pipeline] // script\n[Pipeline] }\n[Pipeline] // stage\n[Pipeline] }\n[Pipeline] // timeout\n[Pipeline] }\n[Pipeline] // timestamps\n[Pipeline] }\n[Pipeline] // withEnv\n[Pipeline] }\n[Pipeline] // withEnv\n[Pipeline] }\n[Pipeline] // node\n[Pipeline] End of Pipeline\n\nCould not update commit status. Message: {\"message\":\"API rate limit exceeded for 103.139.190.238. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)\",\"documentation_url\":\"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting\"}\n\n\nFinished: FAILURE",
+      "id": "error_blocks[1]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git rev-parse --resolve-git-dir /var/jenkins_home/workspace/target-app_main/.git # timeout=10",
+      "id": "timeouts[0]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10",
+      "id": "timeouts[1]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git --version # timeout=10",
+      "id": "timeouts[2]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10",
+      "id": "timeouts[3]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git config core.sparsecheckout # timeout=10",
+      "id": "timeouts[4]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git checkout -f 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d # timeout=10",
+      "id": "timeouts[5]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "> git rev-list --no-walk f85dd0f6794ff60bc75b0b5d87e128e147c933c9 # timeout=10",
+      "id": "timeouts[6]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[Pipeline] timeout",
+      "id": "timeouts[7]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:01.200Z] Timeout set to expire in 15 min",
+      "id": "timeouts[8]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:01.924Z]  > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/target-app_main/.git # timeout=10",
+      "id": "timeouts[9]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:01.950Z]  > git config remote.origin.url https://github.com/justishita/jenkins_guadrian.git # timeout=10",
+      "id": "timeouts[10]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:01.972Z]  > git --version # timeout=10",
+      "id": "timeouts[11]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:01.987Z]  > git fetch --no-tags --force --progress -- https://github.com/justishita/jenkins_guadrian.git +refs/heads/main:refs/remotes/origin/main # timeout=10",
+      "id": "timeouts[12]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:02.748Z]  > git config core.sparsecheckout # timeout=10",
+      "id": "timeouts[13]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:02.764Z]  > git checkout -f 303d50670ed1d40ba10be6a7f6dd761c9cb21f5d # timeout=10",
+      "id": "timeouts[14]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[Pipeline] // timeout",
+      "id": "timeouts[15]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[2026-10-05T19:02:16.901Z] permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Post \"http://%2Fvar%2Frun%2Fdocker.sock/v1.45/build?buildargs=%7B%7D&cachefrom=%5B%5D&cgroupparent=&cpuperiod=0&cpuquota=0&cpusetcpus=&cpusetmems=&cpushares=0&dockerfile=Dockerfile&labels=%7B%7D&memory=0&memswap=0&networkmode=default&rm=1&shmsize=0&t=orders-service%3Alocal&target=&ulimits=%5B%5D&version=1\": dial unix /var/run/docker.sock: connect: permission denied",
+      "id": "auth_signals[0]",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "6dd3e672010db05cabc9e31fea0f3920f896f9666030f24c1a0cf37549feab6f",
+      "id": "error_signature",
+      "kind": "log_excerpt",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"number\": 8, \"result\": \"FAILURE\", \"building\": false, \"timestamp\": 1791226912477, \"duration\": 26950, \"displayName\": \"#8\"}",
+      "id": "build_summary",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "{\"_class\": \"hudson.tasks.junit.TestResult\", \"testActions\": [], \"duration\": 0.998, \"empty\": false, \"failCount\": 1, \"passCount\": 0, \"skipCount\": 0, \"suites\": [{\"cases\": [{\"testActions\": [], \"age\": 8, \"className\": \"\", \"duration\": 0.0, \"errorDetails\": \"collection failure\", \"errorStackTrace\": \"ImportError while importing test module '/var/jenkins_home/workspace/target-app_main/target_app/tests/test_orders.py'.\\nHint: make sure your test modules/packages have valid Python names.\\nTraceback:\\n/usr/lib/python3.13/importlib/__init__.py:88: in import_module\\n    return _bootstrap._gcd_import(name[level:], package, level)\\ntests/test_orders.py:10: in <module>\\n    from target_app.app.config import Settings\\nE   ModuleNotFoundError: No module named 'target_app'\", \"failedSince\": 1, \"flakyFailures\": [], \"name\": \"tests.test_orders\", \"properties\": {}, \"rerunFailures\": [], \"skipped\": false, \"skippedMessage\": null, \"status\": \"FAILED\", \"stderr\": null, \"stdout\": null}], \"duration\": 0.998, \"enclosingBlockNames\": [\"Declarative: Post Actions\"], \"enclosingBlocks\": [\"133\"], \"id\": null, \"name\": \"pytest\", \"nodeId\": \"136\", \"properties\": {}, \"stderr\": null, \"stdout\": null, \"timestamp\": \"2026-10-05T19:02:12.088675+00:00\"}]}",
+      "id": "test_report",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    },
+    {
+      "content": "[{\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 726171, \"number\": 11, \"result\": \"FAILURE\", \"timestamp\": 1791230275297, \"url\": \"http://localhost:8080/job/target-app/job/main/11/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 651095, \"number\": 10, \"result\": \"FAILURE\", \"timestamp\": 1791229270511, \"url\": \"http://localhost:8080/job/target-app/job/main/10/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 50406, \"number\": 9, \"result\": \"FAILURE\", \"timestamp\": 1791229071054, \"url\": \"http://localhost:8080/job/target-app/job/main/9/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 26950, \"number\": 8, \"result\": \"FAILURE\", \"timestamp\": 1791226912477, \"url\": \"http://localhost:8080/job/target-app/job/main/8/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 70396, \"number\": 7, \"result\": \"FAILURE\", \"timestamp\": 1791225451792, \"url\": \"http://localhost:8080/job/target-app/job/main/7/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 22288, \"number\": 6, \"result\": \"FAILURE\", \"timestamp\": 1791221854572, \"url\": \"http://localhost:8080/job/target-app/job/main/6/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 369235, \"number\": 5, \"result\": \"FAILURE\", \"timestamp\": 1791220338923, \"url\": \"http://localhost:8080/job/target-app/job/main/5/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 55990, \"number\": 4, \"result\": \"FAILURE\", \"timestamp\": 1791213559695, \"url\": \"http://localhost:8080/job/target-app/job/main/4/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 2622373, \"number\": 2, \"result\": \"FAILURE\", \"timestamp\": 1791203060132, \"url\": \"http://localhost:8080/job/target-app/job/main/2/\"}, {\"_class\": \"org.jenkinsci.plugins.workflow.job.WorkflowRun\", \"building\": false, \"duration\": 452183, \"number\": 1, \"result\": \"FAILURE\", \"timestamp\": 1791199217361, \"url\": \"http://localhost:8080/job/target-app/job/main/1/\"}]",
+      "id": "build_history",
+      "kind": "test_result",
+      "source": "jenkins:target-app/main#8",
+      "timestamp": "2026-10-05T19:02:18Z"
+    }
+  ],
+  "failed_stage": "Deploy",
+  "failing_tests": [],
+  "failure_type": "dependency_regression",
+  "incident_id": "1bf496ad-2958-4adc-9a0f-dfb38ae3aa2c",
+  "log_truncated": false,
+  "recommended_next_steps": [
+    "Review the cited evidence and confirm the suspected cause before remediation."
+  ],
+  "redaction_applied": true,
+  "root_cause_hypotheses": [
+    {
+      "confidence": 0.65,
+      "contradicting_evidence": [],
+      "failure_type": "dependency_regression",
+      "hypothesis": "Dependency resolution or import evidence suggests a dependency regression; confirm the change in GitHub.",
+      "supporting_evidence": [
+        "compiler_errors[1]",
+        "error_blocks[0]",
+        "error_blocks[1]"
+      ]
+    },
+    {
+      "confidence": 0.85,
+      "contradicting_evidence": [],
+      "failure_type": "timeout",
+      "hypothesis": "A timeout signal occurred in the failed Test stage.",
+      "supporting_evidence": [
+        "stages[4]",
+        "timeouts[0]",
+        "timeouts[1]",
+        "timeouts[2]",
+        "timeouts[3]",
+        "timeouts[4]",
+        "timeouts[5]",
+        "timeouts[6]",
+        "timeouts[7]",
+        "timeouts[8]",
+        "timeouts[9]",
+        "timeouts[10]",
+        "timeouts[11]",
+        "timeouts[12]",
+        "timeouts[13]",
+        "timeouts[14]",
+        "timeouts[15]"
+      ]
+    },
+    {
+      "confidence": 0.9,
+      "contradicting_evidence": [],
+      "failure_type": "auth_failure",
+      "hypothesis": "The build reported an authentication or authorization failure.",
+      "supporting_evidence": [
+        "auth_signals[0]"
+      ]
+    },
+    {
+      "confidence": 0.85,
+      "contradicting_evidence": [],
+      "failure_type": "config_error",
+      "hypothesis": "The failed deployment stage reports a configuration problem.",
+      "supporting_evidence": [
+        "stages[6]",
+        "failed_stage",
+        "error_blocks[0]",
+        "error_blocks[1]"
+      ]
+    }
+  ],
+  "schema_version": "0.1-stub",
+  "status": "completed",
+  "summary": "Dependency resolution or import evidence suggests a dependency regression; confirm the change in GitHub.",
+  "tool_calls": [
+    {
+      "args": {
+        "job_name": "target-app/main",
+        "limit": 30
+      },
+      "duration_ms": 567.3577529960312,
+      "ok": true,
+      "tool": "jenkins.get_build_history"
+    },
+    {
+      "args": {
+        "build_number": 8,
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 878.5082300018985,
+      "ok": true,
+      "tool": "jenkins.get_test_report"
+    },
+    {
+      "args": {
+        "build_number": 8,
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 886.1890860134736,
+      "ok": true,
+      "tool": "jenkins.get_test_report_xml"
+    },
+    {
+      "args": {
+        "build_number": 8,
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 949.9715070123784,
+      "ok": true,
+      "tool": "jenkins.get_build"
+    },
+    {
+      "args": {
+        "build_number": 8,
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 962.5821649970021,
+      "ok": true,
+      "tool": "jenkins.get_stage_summary"
+    },
+    {
+      "args": {
+        "build_number": 8,
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 990.8184960077051,
+      "ok": true,
+      "tool": "jenkins.get_console_text"
+    },
+    {
+      "args": {
+        "job_name": "target-app/main"
+      },
+      "duration_ms": 1360.939915990457,
+      "ok": false,
+      "tool": "jenkins.get_previous_successful_build"
+    }
+  ],
+  "version": 1
+}

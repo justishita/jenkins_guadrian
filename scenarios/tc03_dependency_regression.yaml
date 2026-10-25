@@ -22,7 +22,8 @@ fault:
 incident:
   branch: main
   git_commit: a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
-  failed_stage: Test
+  # Setup is where target_app/Jenkinsfile runs pip install, so it is where a bad pin fails.
+  failed_stage: Setup
 
 # The commit as GitHub reports it. Only the fields the code agent reads are listed.
 commit:

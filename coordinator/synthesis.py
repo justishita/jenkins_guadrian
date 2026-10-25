@@ -27,6 +27,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from common.a2a_contract import AGENT_NAMES
 from common.models import Evidence, EvidenceHypothesis, FailureTaxonomy
 
 
@@ -41,9 +42,18 @@ MAX_UNKNOWN_CONFIDENCE = 0.4
 #: agents can be wrong together, and agreement raises confidence rather than settling it.
 AGREEMENT_BONUS = 0.1
 
+#: No fused verdict may claim certainty. Agreement between agents is strong evidence,
+#: not proof - they can share a blind spot - so the system's verdict stops short of
+#: 1.0 however many agents agree, and however sure any single one of them is.
+MAX_FUSED_CONFIDENCE = 0.95
+
 #: What an unresolved conflict costs. Larger than the agreement bonus on purpose -
 #: being contradicted should hurt more than being corroborated helps.
 CONFLICT_PENALTY = 0.15
+
+#: Two causes backed by the same number of agents only tie when their strongest claims are
+#: this close. A 0.90 claim against a 0.55 one is a clear lead, not a deadlock.
+TIE_MARGIN = 0.10
 
 ABSTAINING_STATUSES = frozenset({"insufficient_evidence", "failed"})
 
@@ -98,6 +108,7 @@ class IncidentReport(BaseModel):
     findings: tuple[AgentFinding, ...] = ()
     agreeing_agents: tuple[str, ...] = ()
     abstaining_agents: tuple[str, ...] = ()
+    missing_agents: tuple[str, ...] = ()
     conflicts: tuple[Conflict, ...] = ()
     hypotheses: tuple[EvidenceHypothesis, ...] = ()
     recommended_next_steps: tuple[str, ...] = ()
@@ -122,6 +133,19 @@ class IncidentReport(BaseModel):
     def reporting_agents(self) -> tuple[str, ...]:
         return tuple(finding.agent for finding in self.findings)
 
+    @property
+    def failed_agents(self) -> tuple[str, ...]:
+        return tuple(finding.agent for finding in self.findings if finding.status == "failed")
+
+    @property
+    def complete(self) -> bool:
+        """Every expected agent reported and none of them failed.
+
+        Independent of ``actionable``: an incomplete report can still name a cause, but a
+        reader must know that part of the investigation is missing.
+        """
+        return not self.missing_agents and not self.failed_agents
+
     def to_markdown(self) -> str:
         """Render the report for a human reviewer."""
         lines = [
@@ -129,7 +153,22 @@ class IncidentReport(BaseModel):
             "",
             f"**Cause:** {self.failure_type.value}  ",
             f"**Confidence:** {self.confidence:.2f}  ",
-            f"**Status:** {self.status}",
+            f"**Status:** {self.status}" + ("" if self.complete else "  "),
+            *(
+                []
+                if self.complete
+                else [
+                    "**Incomplete:** "
+                    + "; ".join(
+                        part
+                        for part in (
+                            f"no evidence from {', '.join(self.missing_agents)}" if self.missing_agents else "",
+                            f"{', '.join(self.failed_agents)} failed" if self.failed_agents else "",
+                        )
+                        if part
+                    )
+                ]
+            ),
             "",
             self.summary,
             "",
@@ -210,7 +249,12 @@ def _next_steps(documents: Sequence[Evidence], failure_type: FailureTaxonomy) ->
     return tuple(steps)
 
 
-def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> IncidentReport:
+def synthesize(
+    evidence: Iterable[Evidence],
+    *,
+    now: datetime | None = None,
+    expected_agents: Sequence[str] = AGENT_NAMES,
+) -> IncidentReport:
     """Fuse every agent's evidence for one incident into a single report.
 
     Raises ``ValueError`` when handed nothing, or documents for different incidents -
@@ -230,6 +274,8 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
     abstaining = tuple(finding.agent for finding in findings if finding.abstained)
     substantive = [finding for finding in findings if finding.is_substantive]
     hypotheses = _all_hypotheses(documents)
+    reporting = {finding.agent for finding in findings}
+    missing = tuple(agent for agent in expected_agents if agent not in reporting)
 
     # --- nobody named a cause -------------------------------------------------
     if not substantive:
@@ -248,6 +294,7 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
             ),
             findings=findings,
             abstaining_agents=abstaining,
+            missing_agents=missing,
             hypotheses=hypotheses,
             recommended_next_steps=(
                 "Widen the investigation window or gather more evidence before proposing a fix.",
@@ -282,11 +329,19 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
     if conflicts:
         confidence -= CONFLICT_PENALTY * len(conflicts)
 
-    confidence = _clamp(confidence)
+    confidence = min(_clamp(confidence), MAX_FUSED_CONFIDENCE)
 
-    # Several causes each backed by the same number of agents means none is actually
-    # leading: confidence breaks the sort order, but it must not break the tie.
-    tied_groups = sum(1 for _, group in ranked if len(group) == len(leading_group))
+    # Causes backed by the same number of agents tie only when their strongest claims
+    # are within TIE_MARGIN of each other. A near-equal split (0.90 vs 0.85) is a real
+    # deadlock and stays `conflicting`; a clear gap (0.90 vs 0.55) is a lead, though the
+    # losing cause is still recorded as a conflict and still costs confidence.
+    leader_strength = max(finding.confidence for finding in leading_group)
+    tied_groups = sum(
+        1
+        for _, group in ranked
+        if len(group) == len(leading_group)
+        and leader_strength - max(finding.confidence for finding in group) <= TIE_MARGIN
+    )
 
     status: Literal["resolved_cause", "insufficient_evidence", "conflicting"]
     if confidence < MIN_REPORTABLE_CONFIDENCE:
@@ -313,6 +368,7 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
         else ""
     )
     abstain_note = f" {', '.join(abstaining)} found nothing in their evidence." if abstaining else ""
+    missing_note = f" Incomplete: no evidence from {', '.join(missing)}." if missing else ""
 
     return IncidentReport(
         incident_id=incident_id,
@@ -322,11 +378,12 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
         confidence=confidence,
         summary=(
             f"{leading_type.value} at {confidence:.2f} confidence - {agreement_note}."
-            f"{conflict_note}{abstain_note}"
+            f"{conflict_note}{abstain_note}{missing_note}"
         ),
         findings=findings,
         agreeing_agents=agreeing,
         abstaining_agents=abstaining,
+        missing_agents=missing,
         conflicts=conflicts,
         hypotheses=hypotheses,
         recommended_next_steps=_next_steps(documents, leading_type),
@@ -336,8 +393,10 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
 __all__ = [
     "AGREEMENT_BONUS",
     "CONFLICT_PENALTY",
+    "MAX_FUSED_CONFIDENCE",
     "MAX_UNKNOWN_CONFIDENCE",
     "MIN_REPORTABLE_CONFIDENCE",
+    "TIE_MARGIN",
     "AgentFinding",
     "Conflict",
     "IncidentReport",

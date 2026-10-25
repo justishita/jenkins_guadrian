@@ -23,3 +23,15 @@ the URL printed (defaults to `http://localhost:8080`).
 To delete a pushed and local injection branch, check out any other branch and
 run `python scripts/inject_fault.py revert fault/<scenario>-<UTC timestamp>`.
 Fault creation refuses to run from `main`, detached HEAD, or a dirty tree.
+
+## P3 pipeline demo
+
+`python scripts/get_opa.py` downloads the pinned, checksum-verified `opa` binary into
+`.bin/` (git-ignored). `conftest.py` and the demo find it there, so the real-policy
+tests run instead of silently skipping.
+
+`python scripts/demo_p3.py` runs the P3 pipeline end to end with no Docker, Jenkins,
+network or API key: the CrewAI code agent, A2A, the Google ADK Coordinator, synthesis,
+remediation and the real OPA policies. GitHub is an in-memory fake and the Jenkins and
+metrics agents' evidence is recorded. It exits non-zero if any expectation fails. See
+`docs/p3_demo.md`.

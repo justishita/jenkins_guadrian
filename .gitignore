@@ -8,6 +8,7 @@ venv/
 .ruff_cache/
 data/evidence/
 data/audit/
+data/reports/
 data/fault_backups/
 
 # Environment and secrets
@@ -28,3 +29,5 @@ node_modules/
 
 data/*.json
 data/*.txt
+# Local tool binaries (scripts/get_opa.py)
+.bin/
