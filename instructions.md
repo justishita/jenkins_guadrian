@@ -16,7 +16,7 @@ Keep these ownership boundaries explicit in code. Agent-to-agent communication i
 
 ## Stack
 
-Use Python 3.11, FastAPI, LangGraph, RabbitMQ (`pika` or `aio-pika`), PostgreSQL, Pydantic v2, pytest, and Docker Compose. Follow the libraries and patterns already established in the repository when choosing between supported alternatives.
+Use Python 3.11, FastAPI, CrewAI (investigation agents), Google ADK (Coordinator), RabbitMQ (`pika` or `aio-pika`), PostgreSQL, Pydantic v2, pytest, and Docker Compose. Follow the libraries and patterns already established in the repository when choosing between supported alternatives.
 
 ## Engineering Rules
 

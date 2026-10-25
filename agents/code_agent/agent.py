@@ -1,4 +1,4 @@
-"""LangGraph Code & Remediation agent and its RabbitMQ worker.
+"""CrewAI Code & Remediation agent and its RabbitMQ worker.
 
 **Owner:** P3. One of three agents that investigate an incident independently. It never
 calls another agent: it reads GitHub, forms its own view of whether a recent change
@@ -24,7 +24,7 @@ from typing import Any, Protocol, TypedDict
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
-from langgraph.graph import END, StateGraph
+from crewai.flow.flow import Flow, listen, start
 from pydantic import ValidationError
 
 from agents.code_agent.config import CodeAgentSettings, load_settings
@@ -48,6 +48,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
+from coordinator.a2a_contract import evidence_ready
 
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,42 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class CodeInvestigationFlow(Flow):
+    """Runs the four investigation steps in order, replacing the LangGraph graph.
+
+    There is no LLM in this agent, so CrewAI is used purely as the orchestration
+    primitive: each step calls the matching agent method and merges what it returns
+    into the shared state, exactly as the graph's node returns used to. An exception
+    propagates out of ``kickoff_async`` so ``run_event`` can still record a crash as
+    evidence rather than as silence.
+    """
+
+    def __init__(self, agent: "CodeInvestigationAgent", state: CodeAgentState) -> None:
+        super().__init__()
+        self._agent = agent
+        self._pipeline_state = state
+
+    @start()
+    async def fetch_context(self) -> str:
+        self._pipeline_state.update(await self._agent.fetch_context(self._pipeline_state))
+        return "fetch_context"
+
+    @listen(fetch_context)
+    async def analyze(self, _: str) -> str:
+        self._pipeline_state.update(await self._agent.analyze(self._pipeline_state))
+        return "analyze"
+
+    @listen(analyze)
+    async def reason(self, _: str) -> str:
+        self._pipeline_state.update(await self._agent.reason(self._pipeline_state))
+        return "reason"
+
+    @listen(reason)
+    async def finalize(self, _: str) -> str:
+        self._pipeline_state.update(await self._agent.finalize(self._pipeline_state))
+        return "finalize"
+
+
 class CodeInvestigationAgent:
     """Investigates the code side of one incident and writes its evidence."""
 
@@ -92,25 +129,16 @@ class CodeInvestigationAgent:
         audit_log: AuditLog,
         *,
         commit_lookback: int = 10,
+        notifier: Any | None = None,
     ) -> None:
         self._github = github
         self._evidence_store = evidence_store
         self._audit = audit_log
         self._commit_lookback = commit_lookback
-        self._graph = self._build_graph()
-
-    def _build_graph(self) -> Any:
-        graph = StateGraph(CodeAgentState)
-        graph.add_node("fetch_context", self.fetch_context)
-        graph.add_node("analyze", self.analyze)
-        graph.add_node("reason", self.reason)
-        graph.add_node("finalize", self.finalize)
-        graph.set_entry_point("fetch_context")
-        graph.add_edge("fetch_context", "analyze")
-        graph.add_edge("analyze", "reason")
-        graph.add_edge("reason", "finalize")
-        graph.add_edge("finalize", END)
-        return graph.compile()
+        # Optional A2A sink. When set, the agent announces that its evidence is on the
+        # blackboard; the notification carries no findings, so the store stays the only
+        # route by which evidence moves.
+        self._notifier = notifier
 
     # --- tool plumbing --------------------------------------------------------
 
@@ -267,6 +295,7 @@ class CodeInvestigationAgent:
         """Build the evidence document and persist it to the shared store."""
         evidence = build_evidence(state)
         await self._evidence_store.write(evidence)
+        await self._announce(evidence)
         await self._audit.record(
             AuditRecord(
                 incident_id=evidence.incident_id,
@@ -284,6 +313,22 @@ class CodeInvestigationAgent:
         )
         return {"evidence": evidence}
 
+    async def _announce(self, evidence: Evidence) -> None:
+        """Tell the Coordinator over A2A that this agent's evidence is published.
+
+        Best effort: a notification that cannot be delivered must not fail an
+        investigation that has already been written to the blackboard, which the
+        Coordinator reads anyway.
+        """
+        if self._notifier is None:
+            return
+        try:
+            await self._notifier(evidence_ready(evidence.incident_id, AGENT_NAME))
+        except Exception:
+            logger.exception(
+                "a2a notification failed", extra={"incident_id": str(evidence.incident_id)}
+            )
+
     # --- entry point ----------------------------------------------------------
 
     async def run_event(self, event: IncidentCreatedEvent) -> Evidence:
@@ -300,7 +345,9 @@ class CodeInvestigationAgent:
         }
         async with self._audit.agent_run(event.incident_id, AGENT_NAME) as details:
             try:
-                final: CodeAgentState = await self._graph.ainvoke(state)  # type: ignore[assignment]
+                # The flow mutates `state` in place, so it is the final state.
+                await CodeInvestigationFlow(self, state).kickoff_async()
+                final: CodeAgentState = state
             except Exception as error:
                 logger.exception(
                     "code investigation failed", extra={"incident_id": str(event.incident_id)}
@@ -311,8 +358,8 @@ class CodeInvestigationAgent:
                 return evidence
 
             evidence = final.get("evidence")
-            if evidence is None:  # pragma: no cover - the graph always finalizes
-                evidence = failed_evidence(final, RuntimeError("graph produced no evidence"))
+            if evidence is None:  # pragma: no cover - the flow always finalizes
+                evidence = failed_evidence(final, RuntimeError("flow produced no evidence"))
                 await self._evidence_store.write(evidence)
             details.update(
                 {

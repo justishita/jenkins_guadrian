@@ -1,4 +1,4 @@
-"""LangGraph Jenkins build investigator and RabbitMQ worker."""
+"""CrewAI Jenkins build investigator and RabbitMQ worker."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import StructuredTool
-from langgraph.graph import END, StateGraph
+from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from agents.jenkins_agent.classifier import Hypothesis, rule_based_classify
@@ -462,6 +462,43 @@ def _tools_for_state(state: AgentState) -> list[StructuredTool]:
     ]
 
 
+class JenkinsInvestigationFlow(Flow):
+    """Runs fetch_context, the bounded ReAct loop, then finalize.
+
+    Replaces the LangGraph graph. The old conditional edge from ``reason`` back to
+    itself becomes a loop here, driven by the same ``_next_node`` decision, so the
+    step budget and the stop conditions are unchanged.
+    """
+
+    def __init__(self, agent: "JenkinsInvestigationAgent", state: AgentState) -> None:
+        super().__init__()
+        self._agent = agent
+        self._pipeline_state = state
+
+    def _merge(self, update: Any) -> None:
+        # Nodes either mutate and return the state itself, or return a partial update.
+        if update and update is not self._pipeline_state:
+            self._pipeline_state.update(update)
+
+    @start()
+    async def fetch_context(self) -> str:
+        self._merge(await self._agent.fetch_context(self._pipeline_state))
+        return "fetch_context"
+
+    @listen(fetch_context)
+    async def reason(self, _: str) -> str:
+        while True:
+            self._merge(await self._agent.reason(self._pipeline_state))
+            if self._agent._next_node(self._pipeline_state) != "reason":
+                break
+        return "reason"
+
+    @listen(reason)
+    async def finalize(self, _: str) -> str:
+        self._merge(await self._agent.finalize(self._pipeline_state))
+        return "finalize"
+
+
 class JenkinsInvestigationAgent:
     """Fetch context, reason with bounded read-only tools, and persist Evidence."""
 
@@ -483,19 +520,6 @@ class JenkinsInvestigationAgent:
         self.total_timeout = total_timeout
         self.llm_timeout = llm_timeout
         self.sleep = sleep
-        graph = StateGraph(AgentState)
-        graph.add_node("fetch_context", self.fetch_context)
-        graph.add_node("reason", self.reason)
-        graph.add_node("finalize", self.finalize)
-        graph.set_entry_point("fetch_context")
-        graph.add_edge("fetch_context", "reason")
-        graph.add_conditional_edges(
-            "reason",
-            self._next_node,
-            {"reason": "reason", "finalize": "finalize"},
-        )
-        graph.add_edge("finalize", END)
-        self.graph = graph.compile()
 
     async def _timed_jenkins_call(
         self,
@@ -892,7 +916,12 @@ class JenkinsInvestigationAgent:
             "last_success_test_report": None,
         }
         try:
-            result = await asyncio.wait_for(self.graph.ainvoke(state), timeout=self.total_timeout)
+            # The flow mutates `state` in place, so it is the final state.
+            await asyncio.wait_for(
+                JenkinsInvestigationFlow(self, state).kickoff_async(),
+                timeout=self.total_timeout,
+            )
+            result = state
         except asyncio.TimeoutError:
             logger.warning(
                 "Jenkins investigation exceeded total timeout",

@@ -11,7 +11,7 @@ All team members must adhere to these decisions to maintain integration compatib
 
 | # | Decision Area | Agreed Standard | Rationale & Impact |
 |---|---|---|---|
-| **1** | **Agent Framework** | **LangGraph** (primary) | Ensures seamless integration, standard state management, and unified execution across all three agents (Jenkins, Metrics, Code) and the Coordinator. |
+| **1** | **Agent Framework** | **CrewAI** for the three investigation agents; **Google ADK** for the Coordinator | Superseded LangGraph. The investigation agents run as CrewAI Flows (deterministic, no LLM required for orchestration); the Coordinator is an ADK agent, and the two talk over the A2A protocol. No other agentic framework is permitted. |
 | **2** | **LLM & Client Wrapper** | **Gemini Flash** via `common/llm_client.py` | Cost-effective free tier. Standardized behind `LLMClient` to abstract provider details, enforce rate limiting, and support offline testing. **Each team member must generate and use their own free API key in `.env` to prevent shared quota depletion.** |
 | **3** | **Failure-Type Taxonomy** | **Unified Enum** (see section below) | Canonical classification taxonomy across all investigation agents, evidence store entries, and coordinator reports. |
 | **4** | **Time Standard** | **UTC, ISO-8601 with 'Z'** (`2026-10-01T09:30:00Z`) | Absolute requirement. Metrics correlation, log parsing windowing, and incident sequence synthesis will break if non-UTC timestamps are used. |

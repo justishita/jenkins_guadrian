@@ -349,3 +349,75 @@ def test_a_malformed_message_body_is_rejected() -> None:
 def test_a_message_missing_required_fields_is_rejected() -> None:
 	with pytest.raises(ValueError):
 		parse_event(b'{"incident_id": "11111111-2222-3333-4444-555555555555"}')
+
+
+# --- A2A notification ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_it_announces_over_a2a_once_evidence_is_published(tmp_path: Path) -> None:
+	from coordinator.a2a_contract import parse_evidence_ready
+
+	sent: list[Any] = []
+	github = routed_github(HEALTHY_ROUTES)
+	store = FileEvidenceStore(tmp_path / "evidence")
+	agent = CodeInvestigationAgent(
+		github, store, FileAuditLog(tmp_path / "audit"), notifier=lambda m: _collect(sent, m)
+	)
+
+	evidence = await agent.run_event(incident_event())
+
+	assert len(sent) == 1
+	incident_id, who = parse_evidence_ready(sent[0])
+	assert incident_id == evidence.incident_id
+	assert who == AGENT_NAME
+
+
+async def _collect(sink: list[Any], message: Any) -> None:
+	sink.append(message)
+
+
+@pytest.mark.asyncio
+async def test_the_announcement_carries_no_findings(tmp_path: Path) -> None:
+	"""A2A notifies; the blackboard is still the only route evidence travels."""
+	sent: list[Any] = []
+	agent = CodeInvestigationAgent(
+		routed_github(HEALTHY_ROUTES),
+		FileEvidenceStore(tmp_path / "evidence"),
+		FileAuditLog(tmp_path / "audit"),
+		notifier=lambda m: _collect(sent, m),
+	)
+
+	await agent.run_event(incident_event())
+	text = " ".join(part.text for part in sent[0].parts).lower()
+
+	for leaked in ("dependency_regression", "confidence", "httpx", "hypothesis"):
+		assert leaked not in text
+
+
+@pytest.mark.asyncio
+async def test_a_failing_notifier_does_not_fail_the_investigation(tmp_path: Path) -> None:
+	"""The evidence is already on the blackboard; a dropped notice must not undo it."""
+
+	async def broken(_: Any) -> None:
+		raise ConnectionError("coordinator unreachable")
+
+	store = FileEvidenceStore(tmp_path / "evidence")
+	agent = CodeInvestigationAgent(
+		routed_github(HEALTHY_ROUTES), store, FileAuditLog(tmp_path / "audit"), notifier=broken
+	)
+
+	evidence = await agent.run_event(incident_event())
+
+	assert evidence.status == "completed"
+	assert await store.read(INCIDENT_ID, AGENT_NAME) is not None
+
+
+@pytest.mark.asyncio
+async def test_without_a_notifier_nothing_is_sent(tmp_path: Path) -> None:
+	github = routed_github(HEALTHY_ROUTES)
+	agent, store, _ = build(tmp_path, github)
+
+	evidence = await agent.run_event(incident_event())
+
+	assert evidence.status == "completed"

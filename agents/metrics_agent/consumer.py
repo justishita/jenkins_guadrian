@@ -13,6 +13,7 @@ from typing import TypeVar
 
 import aio_pika
 from aio_pika.exceptions import AMQPConnectionError
+from crewai.flow.flow import Flow, start
 from pydantic import ValidationError
 
 from common.audit import AuditLog, build_audit_log
@@ -63,6 +64,26 @@ async def connect_with_retry(
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+class MetricsInvestigationFlow(Flow):
+    """Runs one metrics investigation as a CrewAI Flow.
+
+    This agent never used LangGraph, so this adds the orchestration layer the project
+    standardises on without touching the investigation itself: the query plan, the
+    sanity checks, the detectors and the evidence write all stay inside Investigator.
+    """
+
+    def __init__(self, investigator: Investigator, event: IncidentCreatedEvent) -> None:
+        super().__init__()
+        self._investigator = investigator
+        self._event = event
+        self.evidence: Evidence | None = None
+
+    @start()
+    def investigate(self) -> str:
+        self.evidence = self._investigator.investigate(self._event)
+        return "investigate"
+
+
 class MetricsAgent:
     """Receives incident events and hands them to the Investigator."""
 
@@ -73,7 +94,10 @@ class MetricsAgent:
     def handle_incident(self, event: IncidentCreatedEvent) -> Evidence:
         """Investigate synchronously (blocking Prometheus calls); no audit trail."""
         logger.info("investigating incident", extra={"incident_id": str(event.incident_id)})
-        return self.investigator.investigate(event)
+        flow = MetricsInvestigationFlow(self.investigator, event)
+        flow.kickoff()
+        assert flow.evidence is not None  # investigate() always yields evidence
+        return flow.evidence
 
     async def run_event(self, event: IncidentCreatedEvent) -> Evidence:
         """Investigate in a worker thread and, when an audit log is set, record the run.

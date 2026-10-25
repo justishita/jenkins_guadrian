@@ -6,7 +6,7 @@
 
 Run locally with `python -m agents.jenkins_agent.agent`. The worker consumes
 `incident.created` from the durable `jenkins_agent.incident.created` quorum
-queue, investigates with a read-only LangGraph tool set, and upserts validated
+queue, investigates with a read-only CrewAI Flow tool set, and upserts validated
 Evidence to `./data/evidence/<incident_id>/jenkins_agent.json` before
 acknowledging the delivery. Repeated processing
 failures are requeued up to the queue delivery limit and then dead-lettered.
