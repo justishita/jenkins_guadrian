@@ -28,10 +28,7 @@ from common.evidence_store import EvidenceStore
 from common.models import Evidence
 
 from common.a2a_contract import AGENT_NAMES, A2AContractError, parse_evidence_ready
-<<<<<<< HEAD
-=======
 from coordinator.synthesis import IncidentReport, synthesize
->>>>>>> 18b2ea4e0ec9d07f944c96ab1c6d1d805b858638
 
 
 logger = logging.getLogger(__name__)

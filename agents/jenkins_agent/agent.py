@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 import yaml
 
 from agents.jenkins_agent.classifier import Hypothesis, rule_based_classify
+from agents.jenkins_agent.confidence import compute_confidence
 from agents.jenkins_agent.config import JenkinsAgentSettings, load_settings
 from agents.jenkins_agent.parsing import ParsedBuild, parse_build
 from agents.jenkins_agent.tools.jenkins_client import JenkinsClient
@@ -219,35 +220,56 @@ def _fallback_evidence(
     status: str = "completed",
     log_truncated: bool = False,
     partial: bool = False,
+    history: list[dict[str, Any]] | None = None,
 ) -> Evidence:
     """Build deterministic rule-based Evidence when LLM is unavailable or fails."""
     primary = hypotheses[0] if hypotheses else None
     failure_type = primary.failure_type if primary else FailureTaxonomy.UNKNOWN
-    confidence_adjustment = 0.75 if log_truncated or partial else 1.0
-    confidence = (primary.rule_confidence if primary else 0.2) * confidence_adjustment
 
-    valid_evidence_ids = {item.id for item in evidence_items}
+    breakdown = compute_confidence(
+        parsed=parsed,
+        rule_hypotheses=hypotheses,
+        llm_hypotheses=None,
+        log_meta={"truncated": log_truncated, "partial": partial},
+        history=history or [],
+    )
+    confidence = breakdown.total
+
+    source = redact(f"jenkins:{event.job_name}#{event.build_number}")
+    items = list(evidence_items)
+    if not any(item.id == "confidence_breakdown" for item in items):
+        items.append(breakdown.as_evidence_item(source=source, timestamp=event.timestamp))
+
+    valid_evidence_ids = {item.id for item in items}
     root_cause_hypotheses: list[EvidenceHypothesis] = []
 
     for hyp in hypotheses[:3]:
         matched = [eid for eid in hyp.matched_evidence_ids if eid in valid_evidence_ids]
+        hyp_conf = breakdown.hypothesis_confidences.get(
+            hyp.failure_type,
+            hyp.rule_confidence * (0.8 if log_truncated or partial else 1.0),
+        )
         root_cause_hypotheses.append(
             EvidenceHypothesis(
                 hypothesis=hyp.reason,
                 failure_type=hyp.failure_type,
-                confidence=hyp.rule_confidence * confidence_adjustment,
+                confidence=hyp_conf,
                 supporting_evidence=matched,
                 contradicting_evidence=[],
             )
         )
 
     if not root_cause_hypotheses:
+        unknown_conf = breakdown.hypothesis_confidences.get(
+            FailureTaxonomy.UNKNOWN,
+            0.2 * (0.8 if log_truncated or partial else 1.0),
+        )
         root_cause_hypotheses.append(
             EvidenceHypothesis(
                 hypothesis="Insufficient evidence to determine exact failure cause",
                 failure_type=FailureTaxonomy.UNKNOWN,
-                confidence=0.2 * confidence_adjustment,
-                supporting_evidence=[item.id for item in evidence_items[:2]],
+                confidence=unknown_conf,
+                supporting_evidence=[item.id for item in items[:2]],
                 contradicting_evidence=[],
             )
         )
@@ -260,7 +282,7 @@ def _fallback_evidence(
         failure_type=failure_type,
         summary=f"Rule-based classification: {failure_type.value}",
         root_cause_hypotheses=root_cause_hypotheses,
-        evidence_items=evidence_items,
+        evidence_items=items,
         tool_calls=tool_calls,
         confidence=confidence,
         recommended_next_steps=["Inspect CI logs at point of failure"],
@@ -552,31 +574,50 @@ class JenkinsInvestigationAgent:
 
         # 3. Finalize
         if draft is not None:
+            breakdown = compute_confidence(
+                parsed=parsed,
+                rule_hypotheses=rule_hypotheses,
+                llm_hypotheses=draft.root_cause_hypotheses,
+                log_meta={"truncated": console_truncated, "partial": console_partial},
+                history=history,
+            )
+
+            source = redact(f"jenkins:{event.job_name}#{event.build_number}")
+            items = list(evidence_items)
+            if not any(item.id == "confidence_breakdown" for item in items):
+                items.append(breakdown.as_evidence_item(source=source, timestamp=event.timestamp))
+
             # Ensure cited evidence IDs exist
-            valid_ids = {item.id for item in evidence_items}
+            valid_ids = {item.id for item in items}
             sanitized_hypotheses: list[EvidenceHypothesis] = []
             for h in draft.root_cause_hypotheses:
                 supporting = [eid for eid in h.supporting_evidence if eid in valid_ids]
                 if not supporting and valid_ids:
                     supporting = [list(valid_ids)[0]]
+                hyp_conf = breakdown.hypothesis_confidences.get(
+                    h.failure_type,
+                    h.confidence * (0.8 if console_truncated or console_partial else 1.0),
+                )
                 sanitized_hypotheses.append(
                     EvidenceHypothesis(
                         hypothesis=h.hypothesis,
                         failure_type=h.failure_type,
-                        confidence=h.confidence
-                        * (0.75 if console_truncated or console_partial else 1.0),
+                        confidence=hyp_conf,
                         supporting_evidence=supporting,
                         contradicting_evidence=[],
                     )
                 )
 
             if not sanitized_hypotheses and rule_hypotheses:
+                rule_conf = breakdown.hypothesis_confidences.get(
+                    rule_hypotheses[0].failure_type,
+                    rule_hypotheses[0].rule_confidence * (0.8 if console_truncated or console_partial else 1.0),
+                )
                 sanitized_hypotheses.append(
                     EvidenceHypothesis(
                         hypothesis=rule_hypotheses[0].reason,
                         failure_type=rule_hypotheses[0].failure_type,
-                        confidence=rule_hypotheses[0].rule_confidence
-                        * (0.75 if console_truncated or console_partial else 1.0),
+                        confidence=rule_conf,
                         supporting_evidence=[list(valid_ids)[0]] if valid_ids else [],
                         contradicting_evidence=[],
                     )
@@ -590,10 +631,9 @@ class JenkinsInvestigationAgent:
                 failure_type=draft.failure_type if draft.failure_type != FailureTaxonomy.UNKNOWN and sanitized_hypotheses else (sanitized_hypotheses[0].failure_type if sanitized_hypotheses else FailureTaxonomy.UNKNOWN),
                 summary=draft.summary,
                 root_cause_hypotheses=sanitized_hypotheses,
-                evidence_items=evidence_items,
+                evidence_items=items,
                 tool_calls=tool_calls,
-                confidence=draft.confidence
-                * (0.75 if console_truncated or console_partial else 1.0),
+                confidence=breakdown.total,
                 recommended_next_steps=draft.recommended_next_steps or ["Inspect build logs"],
                 failed_stage=parsed.failed_stage,
                 failing_tests=[
@@ -613,6 +653,7 @@ class JenkinsInvestigationAgent:
                 tool_calls=tool_calls,
                 log_truncated=console_truncated,
                 partial=console_partial,
+                history=history,
             )
 
         # Post to Blackboard
