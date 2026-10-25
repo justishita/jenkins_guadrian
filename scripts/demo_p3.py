@@ -472,7 +472,7 @@ async def scenario_tc15(workdir: Path, opa: str) -> Checks:
         failure_type=FailureTaxonomy.CODE_TEST_FAILURE,
         confidence=0.9,
         base_ref=BREAKING_SHA,
-        branch_name="remediation/11111111-code_test_failure-a0",
+        branch_name="ai-fix/11111111-1515-4515-8515-000000000015-0",
         commit_message="Make the build green",
         rationale="Skip the failing test.",
         edits=(FileEdit(path="target_app/tests/test_orders.py",

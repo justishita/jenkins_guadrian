@@ -232,13 +232,25 @@ def test_a_substring_is_not_a_match() -> None:
 # --- plan shape ---------------------------------------------------------------
 
 
-def test_branch_names_are_git_safe_and_unique_per_attempt() -> None:
-	first = branch_name_for(INCIDENT, DEP, 0)
-	second = branch_name_for(INCIDENT, DEP, 1)
+def test_branch_names_follow_the_ai_fix_convention() -> None:
+	assert branch_name_for(INCIDENT, 0) == "ai-fix/11111111-2222-3333-4444-555555555555-0"
+	assert branch_name_for(INCIDENT, 3) == "ai-fix/11111111-2222-3333-4444-555555555555-3"
 
-	assert first == "remediation/11111111-dependency_regression-a0"
-	assert first != second
-	assert " " not in first and ".." not in first
+
+def test_a_generated_plan_uses_its_own_incident_and_attempt() -> None:
+	plan = propose_fix(report(DEP), [TC03], base_ref=BASE, attempt=2)
+	assert isinstance(plan, FixPlan)
+
+	assert plan.branch_name == f"ai-fix/{INCIDENT}-2"
+
+
+def test_a_plan_with_an_unlinkable_branch_is_refused() -> None:
+	plan = propose_fix(report(DEP), [TC03], base_ref=BASE)
+	assert isinstance(plan, FixPlan)
+
+	for bad in ("remediation/x", f"ai-fix/{INCIDENT}-1", "ai-fix/11111111-0000-0000-0000-000000000000-0"):
+		with pytest.raises(ValueError, match="branch_name must be"):
+			FixPlan.model_validate({**plan.model_dump(), "branch_name": bad})
 
 
 def test_the_policy_input_matches_what_the_rego_reads() -> None:
@@ -319,7 +331,7 @@ def test_the_real_policy_blocks_a_fix_that_skips_a_test() -> None:
 		failure_type=FailureTaxonomy.CODE_TEST_FAILURE,
 		confidence=0.9,
 		base_ref=BASE,
-		branch_name="remediation/x",
+		branch_name="ai-fix/11111111-2222-3333-4444-555555555555-0",
 		commit_message="skip it",
 		rationale="make it green",
 		edits=(

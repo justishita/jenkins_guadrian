@@ -25,10 +25,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-import re
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agents.code_agent.diff_analysis import (
     ConfigurationChange,
@@ -42,6 +41,7 @@ from agents.code_agent.diff_analysis import (
 from agents.code_agent.reasoning import suspicious_configuration_reasons
 from agents.code_agent.tools.github_client import FileChange
 from agents.code_agent.tools.github_writer import GitHubWriter
+from common.fix_branch import format_fix_branch, parse_fix_branch
 from common.models import FailureTaxonomy
 from common.redaction import redact
 from coordinator.synthesis import IncidentReport
@@ -51,8 +51,6 @@ from coordinator.synthesis import IncidentReport
 SUPPORTED_FAILURE_TYPES = frozenset(
     {FailureTaxonomy.DEPENDENCY_REGRESSION, FailureTaxonomy.CONFIG_ERROR}
 )
-
-_BRANCH_UNSAFE = re.compile(r"[^a-z0-9._-]+")
 
 
 class EditNotApplicable(ValueError):
@@ -110,6 +108,21 @@ class FixPlan(BaseModel):
     rationale: str = Field(min_length=1)
     edits: tuple[FileEdit, ...] = Field(min_length=1)
     verification: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def branch_links_to_this_plan(self) -> "FixPlan":
+        """Refuse a branch that would not link back to this incident and attempt.
+
+        Validation runs are matched to incidents by branch name alone, so a plan with
+        any other name would open a PR whose re-validation could never be linked.
+        """
+        parsed = parse_fix_branch(self.branch_name)
+        if parsed != (self.incident_id, self.attempt):
+            raise ValueError(
+                f"branch_name must be {format_fix_branch(self.incident_id, self.attempt)!r}, "
+                f"got {self.branch_name!r}"
+            )
+        return self
 
     @property
     def changed_paths(self) -> tuple[str, ...]:
@@ -246,10 +259,10 @@ def _configuration_edits(files: Sequence[FileChange]) -> list[FileEdit]:
     return edits
 
 
-def branch_name_for(incident_id: UUID, failure_type: FailureTaxonomy, attempt: int) -> str:
-    """A git-safe, unique-per-attempt branch name that says what it is for."""
-    slug = _BRANCH_UNSAFE.sub("-", failure_type.value.lower()).strip("-")
-    return f"remediation/{str(incident_id)[:8]}-{slug}-a{attempt}"
+def branch_name_for(incident_id: UUID, attempt: int) -> str:
+    """``ai-fix/<incident_id>-<attempt>`` - parseable back to both, so re-validation
+    runs link to their incident automatically (``common.fix_branch``)."""
+    return format_fix_branch(incident_id, attempt)
 
 
 def propose_fix(
@@ -321,7 +334,7 @@ def propose_fix(
         confidence=report.confidence,
         attempt=attempt,
         base_ref=base_ref,
-        branch_name=branch_name_for(incident_id, report.failure_type, attempt),
+        branch_name=branch_name_for(incident_id, attempt),
         commit_message=f"{title} (incident {short})\n\n{rationale}",
         rationale=rationale,
         edits=tuple(edits),

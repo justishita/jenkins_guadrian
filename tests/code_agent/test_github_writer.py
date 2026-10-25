@@ -103,7 +103,7 @@ def plan(*edits: FileEdit) -> FixPlan:
 		failure_type=FailureTaxonomy.DEPENDENCY_REGRESSION,
 		confidence=0.9,
 		base_ref=BASE,
-		branch_name="remediation/11111111-dependency_regression-a0",
+		branch_name="ai-fix/11111111-2222-3333-4444-555555555555-0",
 		commit_message="Pin httpx back",
 		rationale="Revert the pin.",
 		edits=edits or (FileEdit(path="target_app/requirements.txt", before="httpx==0.99.0", after="httpx==0.28.1"),),
@@ -120,7 +120,7 @@ async def test_the_fix_lands_on_a_new_branch_from_the_breaking_commit() -> None:
 	async with writer_for(fake) as writer:
 		result = await apply_plan_to_branch(plan(), writer)
 
-	assert result.branch == "remediation/11111111-dependency_regression-a0"
+	assert result.branch == "ai-fix/11111111-2222-3333-4444-555555555555-0"
 	assert fake.branches[result.branch] == BASE
 	assert fake.files["target_app/requirements.txt"] == "fastapi==0.115.12\nhttpx==0.28.1\nuvicorn==0.34.0\n"
 	assert len(result.commits) == 1
@@ -161,13 +161,13 @@ async def test_nothing_is_pushed_to_the_base_branch() -> None:
 		await apply_plan_to_branch(plan(), writer)
 
 	puts = [body for method, _, body in fake.calls if method == "PUT"]
-	assert all(body["branch"].startswith("remediation/") for body in puts)
+	assert all(body["branch"].startswith("ai-fix/") for body in puts)
 
 
 @pytest.mark.asyncio
 async def test_a_reused_branch_is_refused_not_overwritten() -> None:
 	fake = FakeGitHub({"target_app/requirements.txt": REQS})
-	fake.branches["remediation/11111111-dependency_regression-a0"] = "old"
+	fake.branches["ai-fix/11111111-2222-3333-4444-555555555555-0"] = "old"
 
 	async with writer_for(fake) as writer:
 		with pytest.raises(BranchExists):
@@ -208,7 +208,7 @@ async def test_a_pull_request_is_always_a_draft() -> None:
 	fake = FakeGitHub({})
 
 	async with writer_for(fake) as writer:
-		pr = await writer.open_draft_pull_request(head="remediation/x", base="main", title="t", body="b")
+		pr = await writer.open_draft_pull_request(head="ai-fix/x", base="main", title="t", body="b")
 
 	assert fake.prs[0]["draft"] is True
 	assert pr.draft is True
@@ -226,7 +226,7 @@ async def test_a_write_with_an_unknown_outcome_is_not_retried() -> None:
 
 	writer = GitHubWriter("o/r", "t", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 	with pytest.raises(GitHubWriteError, match="not retried"):
-		await writer.create_branch("remediation/x", BASE)
+		await writer.create_branch("ai-fix/x", BASE)
 
 	assert len(attempts) == 1
 
@@ -244,7 +244,7 @@ async def test_a_write_that_never_connected_is_retried() -> None:
 	writer = GitHubWriter(
 		"o/r", "t", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)), connect_retries=2
 	)
-	await writer.create_branch("remediation/x", BASE)
+	await writer.create_branch("ai-fix/x", BASE)
 
 	assert len(attempts) == 2
 
@@ -256,7 +256,7 @@ async def test_a_rejected_write_does_not_leak_the_token_in_its_error() -> None:
 
 	writer = GitHubWriter("o/r", "t", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 	with pytest.raises(GitHubWriteError) as error:
-		await writer.create_branch("remediation/x", BASE)
+		await writer.create_branch("ai-fix/x", BASE)
 
 	assert "ghp_abcdef1234567890" not in str(error.value)
 
