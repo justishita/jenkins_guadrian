@@ -47,8 +47,11 @@ async def init_db() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables initialized successfully.")
-    except Exception as e:
-        logger.warning("Database init failed (will retry on incoming requests if DB starts late): %s", e)
+    except Exception as error:
+        logger.warning(
+            "Database initialization failed; requests will retry (%s)",
+            type(error).__name__,
+        )
 
 
 async def check_db_health() -> bool:
@@ -57,6 +60,6 @@ async def check_db_health() -> bool:
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
             return result.scalar() == 1
-    except Exception as e:
-        logger.error("Database healthcheck failed: %s", e)
+    except Exception as error:
+        logger.error("Database healthcheck failed (%s)", type(error).__name__)
         return False

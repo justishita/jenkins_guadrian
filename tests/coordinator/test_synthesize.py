@@ -10,11 +10,11 @@ import pytest
 from common.audit import FileAuditLog
 from common.evidence_store import FileEvidenceStore
 from common.models import FailureTaxonomy
-from coordinator.agent import CoordinatorAgent
+from coordinator.fused import synthesize_fused
 from coordinator.report import (
     Completeness,
     ConflictStatus,
-    IncidentReport,
+    FusedReport,
     render_markdown,
 )
 from coordinator.report_store import ReportStore
@@ -35,14 +35,19 @@ def blackboard(tmp_path):
     return FileEvidenceStore(tmp_path / "evidence")
 
 
+class Fused:
+    """The fused synthesis bound to one blackboard, with a fixed clock."""
+
+    def __init__(self, store, **kwargs):
+        self._store, self._kwargs = store, kwargs
+
+    async def synthesize(self, incident_id):
+        return await synthesize_fused(self._store, incident_id, now=NOW, **self._kwargs)
+
+
 @pytest.fixture
 def coordinator(blackboard, tmp_path):
-    return CoordinatorAgent(
-        blackboard,
-        report_store=ReportStore(tmp_path / "reports"),
-        audit=FileAuditLog(tmp_path / "audit"),
-        clock=lambda: NOW,
-    )
+    return Fused(blackboard, report_store=ReportStore(tmp_path / "reports"), audit=FileAuditLog(tmp_path / "audit"))
 
 
 async def test_real_incident_fuses_to_the_jenkins_verdict_with_config_error_as_alternative(coordinator):
@@ -105,7 +110,7 @@ async def test_report_is_stored_as_json_and_markdown_and_round_trips(coordinator
     store = ReportStore(tmp_path / "reports")
     assert (tmp_path / "reports" / f"{INCIDENT}.md").read_text(encoding="utf-8") == render_markdown(report)
     loaded = await store.read(INCIDENT)
-    assert isinstance(loaded, IncidentReport) and loaded == report
+    assert isinstance(loaded, FusedReport) and loaded == report
 
 
 async def test_markdown_shows_raw_confidence_weight_and_both_method_scores(coordinator):
@@ -134,5 +139,5 @@ async def test_unknown_incident_yields_an_incomplete_unknown_report(coordinator)
 
 
 async def test_synthesize_works_without_storage_or_audit(blackboard):
-    report = await CoordinatorAgent(blackboard, clock=lambda: NOW).synthesize(INCIDENT)
+    report = await Fused(blackboard).synthesize(INCIDENT)
     assert report.verdict == FailureTaxonomy.DEPENDENCY_REGRESSION

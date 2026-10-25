@@ -26,7 +26,7 @@ sys.path.insert(0, str(REPO))
 
 from common.audit import build_audit_log
 from common.evidence_store import FileEvidenceStore
-from coordinator.agent import CoordinatorAgent
+from coordinator.fused import synthesize_fused
 from coordinator.report import render_markdown
 from coordinator.report_store import ReportStore
 
@@ -42,12 +42,13 @@ def latest_incident(evidence_root: Path) -> UUID:
 
 
 async def synthesize(incident: UUID) -> str:
-    coordinator = CoordinatorAgent(
+    report = await synthesize_fused(
         FileEvidenceStore(DATA / "evidence"),
+        incident,
         report_store=ReportStore(DATA / "reports"),
         audit=build_audit_log(root=DATA / "audit"),
     )
-    return render_markdown(await coordinator.synthesize(incident))
+    return render_markdown(report)
 
 
 def wait_for_report(incident: UUID, seconds: float) -> str:

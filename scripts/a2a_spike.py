@@ -40,7 +40,7 @@ from starlette.applications import Starlette
 
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence, FailureTaxonomy
-from coordinator.a2a_contract import (
+from common.a2a_contract import (
     AGENT_NAMES,
     A2AContractError,
     evidence_ready,

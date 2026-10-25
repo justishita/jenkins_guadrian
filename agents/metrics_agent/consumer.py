@@ -19,8 +19,7 @@ from pydantic import ValidationError
 from common.audit import AuditLog, build_audit_log
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence
-from coordinator.a2a_client import notifier_from_env
-from coordinator.a2a_contract import evidence_ready
+from common.a2a_contract import evidence_ready
 
 from .audit import completion_details, record_findings
 from .config import MetricsAgentSettings, load_settings
@@ -152,7 +151,7 @@ def build_agent(settings: MetricsAgentSettings, tool: PrometheusTool) -> Metrics
     )
     writer = SharedStoreEvidenceWriter(FileEvidenceStore(Path(settings.EVIDENCE_DIR)))
     audit = build_audit_log(database_url=settings.DATABASE_URL or None, root=Path(settings.AUDIT_DIR))
-    return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config), audit, notifier_from_env())
+    return MetricsAgent(Investigator(tool, CatalogPlanner(), writer, config), audit)
 
 
 def parse_event(body: bytes) -> IncidentCreatedEvent:

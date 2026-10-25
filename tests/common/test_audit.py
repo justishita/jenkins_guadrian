@@ -73,12 +73,11 @@ def test_non_string_payload_values_survive_redaction() -> None:
 	assert entry.payload == {"duration": 12.5, "ok": True, "count": 3, "missing": None}
 
 
-def test_naive_timestamps_are_treated_as_utc() -> None:
+def test_naive_timestamps_are_rejected() -> None:
 	from datetime import datetime
 
-	entry = record(created_at=datetime(2026, 10, 5, 9, 30))
-	assert entry.created_at.utcoffset() is not None
-	assert entry.created_at.isoformat().endswith("+00:00")
+	with pytest.raises(ValueError, match="created_at must include a timezone"):
+		record(created_at=datetime(2026, 10, 5, 9, 30))
 
 
 def test_negative_duration_is_rejected() -> None:

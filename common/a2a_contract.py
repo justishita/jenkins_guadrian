@@ -1,4 +1,4 @@
-"""A2A messages and agent cards for the investigation agents.
+"""Shared A2A message contracts and agent cards.
 
 **Owner:** P3. The three investigation agents announce their findings to the
 Coordinator over the A2A protocol instead of being called directly. The message says

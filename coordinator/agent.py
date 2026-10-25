@@ -5,38 +5,30 @@ This is the only component allowed to see all three evidence documents, and it i
 built on Google ADK so the system uses both required frameworks with a real division
 of labour: CrewAI runs the investigations, ADK coordinates them.
 
-**Scope.** ``collect`` is the transport and collection layer: it receives A2A
-evidence-ready notifications and reads the blackboard, returning what each agent
-concluded, unchanged and unranked (``BlackboardView`` has no combined verdict, and a
-test keeps it that way). Fusion is a separate, pure step in ``coordinator.fusion``;
-``synthesize`` chains collect -> fuse -> report store -> audit and returns an
-``IncidentReport`` (added by P2, see coordinator/README.md).
+**Scope.** It receives A2A evidence-ready notifications and reads the blackboard.
+``collect`` returns what each agent concluded, unchanged and unranked; ``synthesize``
+fuses those conclusions into one ``IncidentReport`` (``coordinator.synthesis``).
+The two are kept separate so the raw, unfused view is always available - a reviewer
+can see what each agent said before seeing what the Coordinator made of it.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import logging
-import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
 from google.adk.agents import BaseAgent
 from google.genai import types as genai_types
 
 from a2a.types import Message
-from common.audit import AuditLog, AuditRecord
 from common.evidence_store import EvidenceStore
 from common.models import Evidence
 
-from coordinator.a2a_contract import AGENT_NAMES, A2AContractError, parse_evidence_ready
-from coordinator.report import IncidentReport
-from coordinator.report_store import ReportStore
-
-if TYPE_CHECKING:
-    from coordinator.fusion import FusionConfig
+from common.a2a_contract import AGENT_NAMES, A2AContractError, parse_evidence_ready
+from coordinator.synthesis import IncidentReport, synthesize
 
 
 logger = logging.getLogger(__name__)
@@ -89,31 +81,14 @@ class _Inbox:
 
 
 class CoordinatorAgent(BaseAgent):
-    """ADK agent that collects the three agents' evidence off the blackboard.
-
-    ``collect`` and ``on_evidence_ready`` hold no opinion about the evidence;
-    ``synthesize`` derives one through ``coordinator.fusion`` without altering it.
-    """
+    """ADK agent that collects the agents' evidence off the blackboard and fuses it."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
 
-    def __init__(
-        self,
-        evidence_store: EvidenceStore,
-        name: str = COORDINATOR_NAME,
-        *,
-        report_store: ReportStore | None = None,
-        audit: AuditLog | None = None,
-        fusion_config: FusionConfig | None = None,
-        clock: Callable[[], datetime] | None = None,
-    ) -> None:
+    def __init__(self, evidence_store: EvidenceStore, name: str = COORDINATOR_NAME) -> None:
         super().__init__(name=name)
         self._store = evidence_store
         self._inbox = _Inbox()
-        self._report_store = report_store
-        self._audit = audit
-        self._fusion_config = fusion_config
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     async def on_evidence_ready(self, message: Message) -> BlackboardView:
         """Handle one A2A notification and return the blackboard as it now stands.
@@ -135,45 +110,19 @@ class CoordinatorAgent(BaseAgent):
         evidence = await self._store.read_all(identifier)
         return BlackboardView(incident_id=identifier, evidence=tuple(evidence))
 
-    async def synthesize(self, incident_id: UUID | str) -> IncidentReport:
-        """collect -> fuse -> store -> audit. The view and the evidence stay unchanged.
+    async def synthesize(self, incident_id: UUID | str) -> IncidentReport | None:
+        """Fuse whatever is on the blackboard into one report, or ``None`` if empty.
 
-        Fusion lives in ``coordinator.fusion`` and is a pure function; this method only
-        orchestrates it. Storage and audit are best-effort add-ons: the report is
-        returned even when neither is configured.
+        It does not wait for every agent: a partial report is still a report, and
+        ``IncidentReport.findings`` says exactly who contributed.
         """
-        from coordinator.fusion import fuse  # fusion imports BlackboardView from this module
-
-        started = time.perf_counter()
         view = await self.collect(incident_id)
-        report = fuse(view, self._fusion_config, now=self._clock())
-        if self._report_store is not None:
-            await self._report_store.write(report)
-        if self._audit is not None:
-            await self._audit.record(
-                AuditRecord(
-                    incident_id=report.incident_id,
-                    actor=self.name,
-                    event_type="synthesis_completed",
-                    summary=report.narrative,
-                    payload={
-                        "verdict": report.verdict.value,
-                        "confidence": report.confidence,
-                        "completeness": report.completeness.value,
-                        "conflict_status": report.conflict_status.value,
-                        "fusion_method": report.fusion_method.value,
-                        "missing_agents": report.missing_agents,
-                        "failed_agents": report.failed_agents,
-                        "ready_for_policy_review": report.ready_for_policy_review,
-                    },
-                    duration_ms=(time.perf_counter() - started) * 1000,
-                    ok=True,
-                )
-            )
-        return report
+        if not view.evidence:
+            return None
+        return synthesize(view.evidence)
 
     async def _run_async_impl(self, ctx: Any) -> AsyncGenerator[Any, None]:
-        """ADK entry point: synthesize the report for the incident in session state.
+        """ADK entry point: report the blackboard for the incident in session state.
 
         The incident id is read from the invocation's session state under
         ``incident_id``; without one there is nothing to collect and the agent says so
@@ -187,7 +136,12 @@ class CoordinatorAgent(BaseAgent):
             text = "No incident_id in session state; nothing to collect."
         else:
             try:
-                text = (await self.synthesize(incident_id)).narrative
+                report = await self.synthesize(incident_id)
+                text = (
+                    report.to_markdown()
+                    if report is not None
+                    else f"No agent has written evidence for incident {incident_id} yet."
+                )
             except (ValueError, A2AContractError) as error:
                 text = f"Could not read the blackboard: {error}"
 

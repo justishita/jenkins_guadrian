@@ -14,12 +14,13 @@ import pytest
 import pytest_asyncio
 import uvicorn
 
+from common.a2a_contract import evidence_ready
 from common.audit import FileAuditLog
 from common.evidence_store import FileEvidenceStore
 from common.models import FailureTaxonomy
 from coordinator.a2a_client import A2ANotifier, notifier_from_env
-from coordinator.a2a_contract import evidence_ready
 from coordinator.agent import CoordinatorAgent
+from coordinator.fused import synthesize_fused
 from coordinator.report import Completeness
 from coordinator.report_store import ReportStore
 from coordinator.service import build_app
@@ -39,10 +40,12 @@ async def service(tmp_path):
     store = FileEvidenceStore(tmp_path / "evidence")
     reports = ReportStore(tmp_path / "reports")
     audit = FileAuditLog(tmp_path / "audit")
-    coordinator = CoordinatorAgent(store, report_store=reports, audit=audit)
     port = free_port()
     url = f"http://127.0.0.1:{port}"
-    app = build_app(coordinator, url, timeout_seconds=0.6)
+    async def synthesize(incident_id):
+        return await synthesize_fused(store, incident_id, report_store=reports, audit=audit)
+
+    app = build_app(CoordinatorAgent(store), url, 0.6, synthesize)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     task = asyncio.create_task(server.serve())
     while not server.started:

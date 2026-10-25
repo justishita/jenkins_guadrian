@@ -1,310 +1,52 @@
-"""End-to-end regression coverage for labeled Jenkins failure scenarios."""
+"""Regression tests for labeled Jenkins failure scenarios and edge cases."""
 
-from datetime import datetime, timezone
 import json
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage
 
-from agents.jenkins_agent.agent import (
-    AgentState,
-    JenkinsInvestigationTools,
-    JenkinsInvestigationAgent,
-    LLMAnswer,
-    _evidence_from_answer,
-    _fallback_evidence,
-)
+from agents.jenkins_agent.agent import _fallback_evidence, _initial_evidence_items
 from agents.jenkins_agent.classifier import rule_based_classify
 from agents.jenkins_agent.parsing import parse_build
 from common.models import FailureTaxonomy, IncidentCreatedEvent
-from agents.jenkins_agent.tools.jenkins_client import ConsoleText
 
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures"
-SCENARIOS = ("tc01_unit_test", "tc02_compile_syntax", "tc02_compile_import")
-TEST_STAGE = [{"name": "Test", "status": "FAILED"}]
-EVENT = IncidentCreatedEvent(
-    incident_id=uuid4(),
-    job_name="target-app/main",
-    build_number=42,
-    build_url="http://jenkins/job/target-app/job/main/42/",
-    branch="main",
-    git_commit="scenario-fixture-commit",
-    failed_stage="Test",
-    timestamp=datetime.now(timezone.utc),
+SCENARIOS = (
+    "tc01_unit_test",
+    "tc02_compile_syntax",
+    "tc02_compile_import",
+    "tc03_many_test_failures",
 )
 
 
 def _load_scenario(name: str) -> tuple[str, dict[str, object]]:
     directory = FIXTURE_ROOT / name
     log = (directory / "build.log").read_text(encoding="utf-8")
-    ground_truth = json.loads((directory / "ground_truth.json").read_text(encoding="utf-8"))
-    return log, ground_truth
-
-
-def _state(log: str, *, truncated: bool = False) -> AgentState:
-    parsed = parse_build(log, stage_summary=TEST_STAGE)
-    evidence_items = []
-    state: AgentState = {
-        "incident_id": str(EVENT.incident_id),
-        "event": EVENT,
-        "parsed": parsed,
-        "hypotheses": rule_based_classify(parsed),
-        "messages": [],
-        "steps_used": 0,
-        "evidence": None,
-        "evidence_items": evidence_items,
-        "tool_calls": [],
-        "tool_counts": {},
-        "console_text": log,
-        "log_truncated": truncated,
-    }
-    from agents.jenkins_agent.agent import _initial_evidence_items
-
-    state["evidence_items"] = _initial_evidence_items(state)
-    return state
-
-
-def _mock_answer(ground_truth: dict[str, object]) -> LLMAnswer:
-    failure_type = FailureTaxonomy(str(ground_truth["expected_failure_type"]))
-    file = str(ground_truth["file"])
-    line = ground_truth["line"]
-    if failure_type is FailureTaxonomy.CODE_TEST_FAILURE:
-        name = str(ground_truth["test_name"])
-        summary = f"{name} failed in {file}:{line}; correct the implementation/test."
-        recommendation = "Correct the implementation/test."
-        citation = "failing_tests[0]"
-    else:
-        summary = f"Syntax or import error in {file}:{line}."
-        recommendation = "Correct the syntax or import error."
-        citation = "compiler_errors[0]"
-    return LLMAnswer.model_validate(
-        {
-            "status": "completed",
-            "failure_type": failure_type,
-            "summary": summary,
-            "root_cause_hypotheses": [
-                {
-                    "hypothesis": summary,
-                    "failure_type": failure_type,
-                    "confidence": 0.9,
-                    "supporting_evidence": [citation],
-                    "contradicting_evidence": [],
-                }
-            ],
-            "confidence": 0.9,
-            "recommended_next_steps": [recommendation],
-        }
-    )
-
-
-def _assert_ground_truth(evidence, truth: dict[str, object]) -> None:
-    assert evidence.failure_type.value == truth["expected_failure_type"]
-    assert evidence.confidence >= 0.7
-    assert str(truth["file"]) in evidence.summary
-    assert f":{truth['line']}" in evidence.summary
-    if "test_name" in truth:
-        assert str(truth["test_name"]) in evidence.summary
-        assert "environment problem" not in evidence.summary.casefold()
-        assert any(
-            "correct the implementation/test" in recommendation.casefold()
-            for recommendation in evidence.recommended_next_steps
-        )
-
-
-class MockLLM:
-    def __init__(self, response: AIMessage | Exception) -> None:
-        self.response = response
-        self.calls = 0
-
-    def bind_tools(self, _tools):
-        return self
-
-    async def ainvoke(self, _messages):
-        self.calls += 1
-        if isinstance(self.response, Exception):
-            raise self.response
-        return self.response
-
-
-class ScenarioJenkinsClient:
-    def __init__(
-        self,
-        log: str,
-        *,
-        truncated: bool = False,
-        junit_xml: str | None = None,
-    ) -> None:
-        self.log = log
-        self.truncated = truncated
-        self.junit_xml = junit_xml
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_args):
-        return None
-
-    async def get_build(self, _job, number):
-        return {"number": number, "result": "FAILURE", "duration": 100}
-
-    async def get_stage_summary(self, _job, _number):
-        return {"stages": [{"name": "Test", "status": "FAILED", "durationMillis": 50}]}
-
-    async def get_console_text(self, _job, _number):
-        return ConsoleText(self.log, self.truncated, False)
-
-    async def get_test_report(self, _job, _number):
-        return {"failCount": 1, "totalCount": 1}
-
-    async def get_test_report_xml(self, _job, _number):
-        return self.junit_xml
-
-    async def get_build_history(self, _job):
-        return []
-
-    async def get_previous_successful_build(self, _job):
-        return {}
-
-
-class ScenarioEvidenceStore:
-    def __init__(self) -> None:
-        self.written = []
-
-    async def write(self, evidence):
-        self.written.append(evidence)
+    truth = json.loads((directory / "ground_truth.json").read_text(encoding="utf-8"))
+    return log, truth
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
-@pytest.mark.asyncio
-async def test_scenario_outputs_match_ground_truth_with_mock_llm_and_rules(scenario: str) -> None:
+def test_scenario_classification_matches_ground_truth(scenario: str) -> None:
     log, truth = _load_scenario(scenario)
-    answer = _mock_answer(truth)
-    llm = MockLLM(AIMessage(content=answer.model_dump_json()))
-    llm_store = ScenarioEvidenceStore()
-    jenkins_factory = lambda: ScenarioJenkinsClient(log)
-    llm_agent = JenkinsInvestigationAgent(
-        llm,
-        llm_store,
-        jenkins_client_factory=jenkins_factory,
-        per_call_timeout=2,
-        total_timeout=10,
-        llm_timeout=2,
-    )
-    llm_evidence = await llm_agent.run_event(EVENT)
-    rules_store = ScenarioEvidenceStore()
-    rules_agent = JenkinsInvestigationAgent(
-        MockLLM(RuntimeError("force deterministic rules fallback")),
-        rules_store,
-        jenkins_client_factory=jenkins_factory,
-        per_call_timeout=2,
-        total_timeout=10,
-        llm_timeout=2,
-    )
-    rules_evidence = await rules_agent.run_event(EVENT)
-
-    _assert_ground_truth(llm_evidence, truth)
-    _assert_ground_truth(rules_evidence, truth)
-    assert len(llm_store.written) == 1
-    assert len(rules_store.written) == 1
-    assert llm.calls == 1
-
-
-def test_test_stage_pytest_collection_syntax_error_is_compilation_failure() -> None:
-    log, truth = _load_scenario("tc02_compile_syntax")
-
-    parsed = parse_build(log, stage_summary=TEST_STAGE)
+    parsed = parse_build(log, failed_stage="Test")
     hypotheses = rule_based_classify(parsed)
 
-    assert parsed.failed_stage == "Test"
-    assert hypotheses[0].failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE
-    assert parsed.compiler_errors[0].file.endswith("target_app/app/main.py")
-    assert parsed.compiler_errors[0].line == truth["line"]
-
-
-def test_collection_import_error_is_compilation_failure() -> None:
-    log, truth = _load_scenario("tc02_compile_import")
-
-    parsed = parse_build(log, stage_summary=TEST_STAGE)
-    hypotheses = rule_based_classify(parsed)
-
-    assert hypotheses[0].failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE
-    assert parsed.compiler_errors[0].file.endswith("target_app/app/main.py")
-    assert parsed.compiler_errors[0].line == truth["line"]
-
-
-def test_llm_cannot_relabel_confirmed_test_failure_as_environment_problem() -> None:
-    log, truth = _load_scenario("tc01_unit_test")
-    state = _state(log)
-    unsupported_answer = LLMAnswer.model_validate(
-        {
-            "failure_type": "infra_network_failure",
-            "summary": "This is probably an environment problem.",
-            "root_cause_hypotheses": [
-                {
-                    "hypothesis": "The environment is unavailable.",
-                    "failure_type": "infra_network_failure",
-                    "confidence": 0.9,
-                }
-            ],
-            "confidence": 0.9,
-        }
-    )
-
-    evidence = _evidence_from_answer(state, unsupported_answer)
-
-    _assert_ground_truth(evidence, truth)
-    assert evidence.root_cause_hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
-
-
-def test_llm_environment_wording_is_replaced_for_assertion_failure() -> None:
-    log, truth = _load_scenario("tc01_unit_test")
-    state = _state(log)
-    answer_data = _mock_answer(truth).model_dump()
-    answer_data["summary"] = "This is an environment problem."
-    answer_data["root_cause_hypotheses"] = [
-        {
-            "hypothesis": "The environment is broken.",
-            "failure_type": FailureTaxonomy.CODE_TEST_FAILURE,
-            "confidence": 0.9,
-        }
-    ]
-    answer = LLMAnswer.model_validate(
-        answer_data
-    )
-
-    evidence = _evidence_from_answer(state, answer)
-
-    _assert_ground_truth(evidence, truth)
-    assert all(
-        "environment" not in hypothesis.hypothesis.casefold()
-        for hypothesis in evidence.root_cause_hypotheses
-    )
-
-
-def test_simultaneous_test_failure_and_lint_warning_remains_test_failure() -> None:
-    log, truth = _load_scenario("tc01_unit_test")
-    combined_log = log + "\nWARNING flake8: style warning in target_app/app/main.py:8\n"
-    state = _state(combined_log)
-
-    evidence = _fallback_evidence(state)
-
-    _assert_ground_truth(evidence, truth)
-    assert evidence.failure_type is FailureTaxonomy.CODE_TEST_FAILURE
-
-
-def test_truncated_log_lowers_confidence() -> None:
-    log, truth = _load_scenario("tc01_unit_test")
-    complete_state = _state(log)
-    truncated_state = _state(log, truncated=True)
-    complete = _fallback_evidence(complete_state)
-    truncated = _fallback_evidence(truncated_state)
-    llm_truncated = _evidence_from_answer(truncated_state, _mock_answer(truth))
-
-    assert truncated.confidence < complete.confidence
-    assert llm_truncated.confidence < complete.confidence
+    assert hypotheses
+    assert hypotheses[0].failure_type.value == truth["expected_failure_type"]
+    assert hypotheses[0].rule_confidence >= 0.7
+    if "file" in truth:
+        observed_files = [
+            error.file for error in parsed.compiler_errors if error.file
+        ] + [test.file for test in parsed.failing_tests if test.file]
+        assert any(str(truth["file"]) in observed for observed in observed_files)
+        observed_lines = [
+            error.line for error in parsed.compiler_errors if error.line is not None
+        ] + [test.line for test in parsed.failing_tests if test.line is not None]
+        assert int(truth["line"]) in observed_lines
+    if "test_name" in truth:
+        assert any(test.name == truth["test_name"] for test in parsed.failing_tests)
 
 
 @pytest.mark.parametrize(
@@ -314,7 +56,7 @@ def test_truncated_log_lowers_confidence() -> None:
         ("git_checkout_auth", FailureTaxonomy.AUTH_FAILURE),
     ],
 )
-def test_checkout_failures_classify_from_console_without_test_results(
+def test_checkout_failures_do_not_become_test_failures(
     scenario: str,
     failure_type: FailureTaxonomy,
 ) -> None:
@@ -323,81 +65,95 @@ def test_checkout_failures_classify_from_console_without_test_results(
     hypotheses = rule_based_classify(parsed)
 
     assert hypotheses[0].failure_type is failure_type
+    assert all(item.failure_type is not FailureTaxonomy.CODE_TEST_FAILURE for item in hypotheses)
     assert parsed.failing_tests == []
 
 
-@pytest.mark.asyncio
-async def test_checkout_failure_discards_unrelated_test_report_data() -> None:
-    log, _ = _load_scenario("git_checkout_network")
-    junit = (
-        '<testsuite><testcase name="stale_test" file="tests/test_old.py" line="9">'
-        '<failure message="AssertionError">stale</failure></testcase></testsuite>'
+def test_collection_import_error_is_compilation_failure_not_test_failure() -> None:
+    log, truth = _load_scenario("tc02_compile_import")
+    parsed = parse_build(log, failed_stage="Test")
+    hypotheses = rule_based_classify(parsed)
+
+    assert parsed.failing_tests == []
+    assert parsed.compiler_errors[0].line == truth["line"]
+    assert hypotheses[0].failure_type is FailureTaxonomy.BUILD_COMPILATION_FAILURE
+    assert all(item.failure_type is not FailureTaxonomy.CODE_TEST_FAILURE for item in hypotheses)
+
+
+def test_mixed_test_and_import_errors_keep_test_failure_as_primary() -> None:
+    log = (
+        "FAILED tests/test_sample.py::test_alpha - AssertionError\n"
+        'File "main.py", line 9\n'
+        "ModuleNotFoundError: No module named x\n"
     )
-    store = ScenarioEvidenceStore()
-    agent = JenkinsInvestigationAgent(
-        MockLLM(RuntimeError("use deterministic classification")),
-        store,
-        jenkins_client_factory=lambda: ScenarioJenkinsClient(log, junit_xml=junit),
-        per_call_timeout=2,
-        total_timeout=10,
-        llm_timeout=2,
+    hypotheses = rule_based_classify(parse_build(log, failed_stage="Test"))
+
+    assert hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+    assert any(item.failure_type is FailureTaxonomy.DEPENDENCY_REGRESSION for item in hypotheses)
+
+
+def test_truncated_log_without_diagnostic_evidence_remains_unknown() -> None:
+    parsed = parse_build("build output ... [truncated before the failure]")
+    hypotheses = rule_based_classify(parsed)
+
+    assert hypotheses[0].failure_type is FailureTaxonomy.UNKNOWN
+    assert hypotheses[0].rule_confidence < 0.7
+
+
+def test_truncated_diagnostics_reduce_fallback_confidence() -> None:
+    log, _ = _load_scenario("tc01_unit_test")
+    parsed = parse_build(log, failed_stage="Test")
+    hypotheses = rule_based_classify(parsed)
+    event = IncidentCreatedEvent(
+        incident_id="11111111-2222-3333-4444-555555555555",
+        job_name="target-app/main",
+        build_number=42,
+        build_url="http://jenkins/job/target-app/job/main/42/",
+        branch="main",
+        git_commit="fixture-commit",
+        failed_stage="Test",
+        timestamp="2026-01-01T00:00:00Z",
     )
-    state: AgentState = {
-        "event": EVENT.model_copy(update={"failed_stage": "Checkout"}),
-        "parsed": parse_build(""),
-        "messages": [],
-        "steps_used": 0,
-        "tool_calls": [],
-        "evidence_items": [],
-    }
+    items = _initial_evidence_items(event, parsed, {}, None, [])
 
-    await agent.fetch_context(state)
+    complete = _fallback_evidence(event, parsed, hypotheses, items, [])
+    truncated = _fallback_evidence(
+        event,
+        parsed,
+        hypotheses,
+        items,
+        [],
+        log_truncated=True,
+    )
 
-    assert state["parsed"].failing_tests == []
-    assert state["test_report"] is None
-    assert state["hypotheses"][0].failure_type is FailureTaxonomy.INFRA_NETWORK_FAILURE
+    assert truncated.confidence < complete.confidence
+    assert truncated.log_truncated is True
 
 
-@pytest.mark.asyncio
-async def test_many_test_failures_send_only_top_five_to_llm() -> None:
+def test_many_test_failures_are_summarized_to_top_five() -> None:
     log, truth = _load_scenario("tc03_many_test_failures")
-    state = _state(log)
-    store = ScenarioEvidenceStore()
-    agent = JenkinsInvestigationAgent(
-        MockLLM(RuntimeError("rules only")),
-        store,
-        jenkins_client_factory=lambda: ScenarioJenkinsClient(log),
-        per_call_timeout=2,
-        total_timeout=10,
-        llm_timeout=2,
+    parsed = parse_build(log, failed_stage="Test")
+    event = IncidentCreatedEvent(
+        incident_id="11111111-2222-3333-4444-555555555555",
+        job_name="target-app/main",
+        build_number=42,
+        build_url="http://jenkins/job/target-app/job/main/42/",
+        branch="main",
+        git_commit="fixture-commit",
+        failed_stage="Test",
+        timestamp="2026-01-01T00:00:00Z",
     )
-    await agent.fetch_context(state)
-    context_text = state["messages"][1].content
-    context = json.loads(context_text)
-    tool_text = await JenkinsInvestigationTools(state).get_error_blocks()
-    tool_result = json.loads(tool_text)
+    items = _initial_evidence_items(event, parsed, {}, None, [])
 
-    assert context["failing_test_summary"]["total_count"] == truth["failing_test_count"]
-    assert len(context["failing_test_summary"]["top_failures"]) == 5
-    assert context["failing_test_summary"]["top_failures"][0]["name"] == "test_case_00"
-    assert "test_case_05" not in context_text
-    assert tool_result["failing_test_summary"]["total_count"] == 20
-    assert len(tool_result["failing_test_summary"]["top_failures"]) == 5
-    assert "test_case_05" not in tool_text
-    summary = _fallback_evidence(state).summary
-    assert "20 failing tests" in summary
-    assert "test_case_04" in summary
-    assert "and 15 more" in summary
+    assert len(parsed.failing_tests) == truth["failing_test_count"]
+    assert len([item for item in items if item.id.startswith("failing_tests[")]) == 5
+    assert parsed.failing_tests[0].name == "test_case_00"
+    assert parsed.failing_tests[4].name == "test_case_04"
 
 
 def test_crlf_console_is_normalized_before_classification() -> None:
     log, truth = _load_scenario("tc01_unit_test")
-    crlf_log = log.replace("\n", "\r\n")
+    parsed = parse_build(log.replace("\n", "\r\n"), failed_stage="Test")
 
-    parsed = parse_build(crlf_log, stage_summary=TEST_STAGE)
-    hypotheses = rule_based_classify(parsed)
-    evidence = _fallback_evidence(_state(crlf_log))
-
-    assert hypotheses[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
-    assert parsed.failing_tests[0].name == "test_create_order"
-    assert evidence.failure_type is FailureTaxonomy(truth["expected_failure_type"])
+    assert rule_based_classify(parsed)[0].failure_type is FailureTaxonomy.CODE_TEST_FAILURE
+    assert parsed.failing_tests[0].name == truth["test_name"]

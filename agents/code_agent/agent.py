@@ -48,8 +48,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
-from coordinator.a2a_client import notifier_from_env
-from coordinator.a2a_contract import evidence_ready
+from common.a2a_contract import evidence_ready
 
 
 logger = logging.getLogger(__name__)
@@ -470,7 +469,6 @@ def build_agent(settings: CodeAgentSettings) -> tuple[CodeInvestigationAgent, Gi
         FileEvidenceStore(Path(settings.EVIDENCE_DIR)),
         build_audit_log(database_url=settings.DATABASE_URL or None, root=Path(settings.AUDIT_DIR)),
         commit_lookback=settings.COMMIT_LOOKBACK,
-        notifier=notifier_from_env(),
     )
     return agent, github
 

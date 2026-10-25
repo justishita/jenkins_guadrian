@@ -1,4 +1,4 @@
-"""Deterministic fusion of the three agents' evidence into an ``IncidentReport``.
+"""Deterministic fusion of the three agents' evidence into an ``FusedReport``.
 
 **Owner:** P2 (fusion slice), on top of P3's ``BlackboardView``. ``fuse`` is a pure
 function: for a fixed view, configuration and ``now`` it returns the same report
@@ -33,7 +33,7 @@ from coordinator.report import (
     ConflictStatus,
     Contribution,
     FusionMethod,
-    IncidentReport,
+    FusedReport,
     NegativeContribution,
     NegativeKind,
     NegativeStatus,
@@ -252,7 +252,7 @@ def _narrative(
     return text
 
 
-def fuse(view: BlackboardView, config: FusionConfig | None = None, *, now: datetime) -> IncidentReport:
+def fuse(view: BlackboardView, config: FusionConfig | None = None, *, now: datetime) -> FusedReport:
     """Fuse one incident's evidence. Pure and deterministic; ``now`` is the only clock."""
     config = config or FusionConfig()
     evidence_by_agent = {e.agent: e for e in sorted(view.evidence, key=lambda e: (e.agent, e.created_at))}
@@ -365,7 +365,7 @@ def fuse(view: BlackboardView, config: FusionConfig | None = None, *, now: datet
             if step not in steps:
                 steps.append(step)
 
-    return IncidentReport(
+    return FusedReport(
         incident_id=view.incident_id,
         generated_at=now,
         verdict=verdict,

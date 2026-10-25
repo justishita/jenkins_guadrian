@@ -1,4 +1,4 @@
-"""The unified incident report: the Coordinator's derived conclusions plus their provenance.
+"""The fused report: the Coordinator's derived conclusions plus their provenance (P2).
 
 **Owner:** P2 (fusion slice), built on P3's Coordinator skeleton. The report is *derived*
 from the agents' evidence and never replaces it: each agent's own verdict is copied in
@@ -136,7 +136,7 @@ class BlockingReason(_Model):
     detail: str
 
 
-class IncidentReport(_Model):
+class FusedReport(_Model):
     incident_id: UUID
     generated_at: datetime
     schema_version: str = "1"
@@ -176,7 +176,7 @@ def _pct(value: float) -> str:
     return f"{value:.2f}"
 
 
-def render_markdown(report: IncidentReport) -> str:
+def render_markdown(report: FusedReport) -> str:
     """Render the report for people. Every number here is also in the JSON form."""
     lines: list[str] = [f"# Incident report {report.incident_id}", ""]
     lines += [
@@ -270,8 +270,8 @@ __all__ = [
     "Completeness",
     "ConflictStatus",
     "Contribution",
+    "FusedReport",
     "FusionMethod",
-    "IncidentReport",
     "NegativeContribution",
     "NegativeKind",
     "NegativeStatus",

@@ -41,7 +41,7 @@ class IncidentCreatedEvent(BaseModel):
 	@classmethod
 	def ensure_utc(cls, value: datetime) -> datetime:
 		if value.tzinfo is None:
-			return value.replace(tzinfo=timezone.utc)
+			raise ValueError("timestamp must include a timezone")
 		return value.astimezone(timezone.utc)
 
 
@@ -57,6 +57,15 @@ class EvidenceItem(BaseModel):
 	timestamp: datetime | None = None
 	content: str
 	location: EvidenceLocation | None = None
+
+	@field_validator("timestamp")
+	@classmethod
+	def ensure_timestamp_utc(cls, value: datetime | None) -> datetime | None:
+		if value is None:
+			return None
+		if value.tzinfo is None:
+			raise ValueError("timestamp must include a timezone")
+		return value.astimezone(timezone.utc)
 
 
 class EvidenceHypothesis(BaseModel):
@@ -114,7 +123,7 @@ class Evidence(BaseModel):
 	@classmethod
 	def ensure_created_at_utc(cls, value: datetime) -> datetime:
 		if value.tzinfo is None:
-			return value.replace(tzinfo=timezone.utc)
+			raise ValueError("created_at must include a timezone")
 		return value.astimezone(timezone.utc)
 
 	@model_validator(mode="after")

@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from uuid import UUID
 
-from coordinator.report import IncidentReport, render_markdown
+from coordinator.report import FusedReport, render_markdown
 
 
 class ReportStore:
@@ -23,23 +23,23 @@ class ReportStore:
     def path(self, incident_id: UUID | str, suffix: str = "json") -> Path:
         return self.root / f"{UUID(str(incident_id))}.{suffix}"
 
-    async def write(self, report: IncidentReport) -> Path:
+    async def write(self, report: FusedReport) -> Path:
         await asyncio.to_thread(self._write_sync, report)
         return self.path(report.incident_id)
 
-    async def read(self, incident_id: UUID | str) -> IncidentReport | None:
+    async def read(self, incident_id: UUID | str) -> FusedReport | None:
         return await asyncio.to_thread(self._read_sync, incident_id)
 
-    def _write_sync(self, report: IncidentReport) -> None:
+    def _write_sync(self, report: FusedReport) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self._atomic(self.path(report.incident_id, "md"), render_markdown(report))
         self._atomic(self.path(report.incident_id), report.model_dump_json(indent=2))
 
-    def _read_sync(self, incident_id: UUID | str) -> IncidentReport | None:
+    def _read_sync(self, incident_id: UUID | str) -> FusedReport | None:
         path = self.path(incident_id)
         if not path.is_file():
             return None
-        return IncidentReport.model_validate_json(path.read_text(encoding="utf-8"))
+        return FusedReport.model_validate_json(path.read_text(encoding="utf-8"))
 
     @staticmethod
     def _atomic(path: Path, text: str) -> None:

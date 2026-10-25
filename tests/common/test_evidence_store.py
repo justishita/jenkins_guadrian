@@ -20,7 +20,7 @@ def make_evidence(*, redaction_applied: bool = True) -> Evidence:
 
 
 @pytest.mark.asyncio
-async def test_file_store_implements_interface_and_upserts_with_version(tmp_path):
+async def test_file_store_is_idempotent_for_unchanged_evidence(tmp_path):
     store = FileEvidenceStore(tmp_path / "evidence")
     evidence = make_evidence()
 
@@ -35,10 +35,16 @@ async def test_file_store_implements_interface_and_upserts_with_version(tmp_path
         / f"{evidence.agent}.json"
     )
     document = json.loads(filepath.read_text(encoding="utf-8"))
-    assert document["version"] == 2
+    assert document["version"] == 1
     assert len(list(filepath.parent.glob("*.json"))) == 1
     assert await store.read(evidence.incident_id, evidence.agent) == evidence
     assert await store.read_all(evidence.incident_id) == [evidence]
+
+    updated = evidence.model_copy(update={"summary": "Updated evidence."})
+    await store.write(updated)
+    document = json.loads(filepath.read_text(encoding="utf-8"))
+    assert document["version"] == 2
+    assert await store.read(evidence.incident_id, evidence.agent) == updated
     assert await store.read("d8fb2fb4-43f4-48de-94dc-a4d17b647b5d", evidence.agent) is None
     assert await store.read_all("d8fb2fb4-43f4-48de-94dc-a4d17b647b5d") == []
 
@@ -60,7 +66,7 @@ async def test_atomic_write_failure_preserves_existing_file_and_cleans_temp(
 ):
     store = FileEvidenceStore(tmp_path / "evidence")
     evidence = make_evidence()
-    await store.write(evidence)
+    await store.write(evidence.model_copy(update={"summary": "Changed evidence."}))
     filepath = (
         tmp_path
         / "evidence"

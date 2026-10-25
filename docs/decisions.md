@@ -1,4 +1,4 @@
- # Project Decisions & Team Contract
+# Project Decisions & Team Contract
 
 **Project Name:** AI-Powered DevOps Incident Investigation & Remediation  
 **Repository:** `devops-ai-agents`  
@@ -11,12 +11,15 @@ All team members must adhere to these decisions to maintain integration compatib
 
 | # | Decision Area | Agreed Standard | Rationale & Impact |
 |---|---|---|---|
-| **1** | **Agent Framework** | **CrewAI** for the three investigation agents; **Google ADK** for the Coordinator | Superseded LangGraph. The investigation agents run as CrewAI Flows (deterministic, no LLM required for orchestration); the Coordinator is an ADK agent, and the two talk over the A2A protocol. No other agentic framework is permitted. |
-| **2** | **LLM & Client Wrapper** | **Gemini Flash** via `common/llm_client.py` | Cost-effective free tier. Standardized behind `LLMClient` to abstract provider details, enforce rate limiting, and support offline testing. **Each team member must generate and use their own free API key in `.env` to prevent shared quota depletion.** |
+| **1** | **Agent Framework** | **CrewAI** for Jenkins, Metrics and Code agents; **Google ADK** for the Coordinator | CrewAI for the three investigation agents. Google ADK for the Coordinator. No other agentic framework permitted (no LangChain, no LangGraph). |
+| **2** | **LLM & Client Wrapper** | **Gemini Flash** via `common/llm_client.py` | Cost-effective free tier. CrewAI reaches it through a `BaseLLM` adapter (`CrewLLMAdapter`), ADK uses Gemini natively. Own free key per person. |
 | **3** | **Failure-Type Taxonomy** | **Unified Enum** (see section below) | Canonical classification taxonomy across all investigation agents, evidence store entries, and coordinator reports. |
 | **4** | **Time Standard** | **UTC, ISO-8601 with 'Z'** (`2026-10-01T09:30:00Z`) | Absolute requirement. Metrics correlation, log parsing windowing, and incident sequence synthesis will break if non-UTC timestamps are used. |
 | **5** | **Git Workflow** | **Feature Branches + PR to `develop`** | `main` is protected (production-ready). `develop` is the primary integration branch. Individual work occurs on `p1/...`, `p2/...`, `p3/...` feature branches. All PRs require at least 1 team review before merging. **Never force-push `main` or `develop`.** |
 | **6** | **Folder Ownership & Boundaries** | Strict ownership by team role (see section below) | Prevents merge conflicts and unauthorized cross-service coupling. Cross-agent imports are strictly prohibited. |
+| **7** | **Context Sharing** | **Blackboard** (`common/blackboard.py`) is mandatory | Append-only, versioned shared state. RabbitMQ stays for events. `TRIGGER_MODE=a2a` (default) or `rabbitmq` for the messaging comparison in evaluation. |
+| **8** | **Inter-Agent Protocol** | **A2A** (`a2a-sdk`) | Coordinator <-> agent communication via A2A protocol. Each agent is its own container and virtualenv, because CrewAI and ADK dependency pins can conflict. |
+| **9** | **Tool Protocol** | **MCP** servers under `mcp_servers/` | Official `mcp` SDK (FastMCP). Agents never import tool code directly. |
 
 ---
 
@@ -42,25 +45,9 @@ All agents must restrict their hypothesis classifications to the following enum 
 
 Each top-level directory has a single clear owner. **Do not edit files outside your assigned directory without team notification and PR approval.**
 
-
 ### Framework boundary: what counts as an agentic framework
 
-LangGraph is removed. `grep -rn "langgraph" agents/ coordinator/` returns nothing, and
-the three investigation agents run as CrewAI Flows with the Coordinator on Google ADK.
-
-`langchain-core` is still imported in two places and this is deliberate:
-
-* `common/llm_client.py` - `BaseChatModel`, `BaseMessage`, `BaseTool` and
-  `langchain-google-genai` as the Gemini client.
-* `agents/jenkins_agent/agent.py` - the message types and `StructuredTool` used to
-  declare its read-only tools.
-
-In both it is the **model and message layer**, not the agent framework: it chooses no
-steps, holds no state, and decides nothing about control flow. Orchestration - which
-step runs, when the loop stops, who talks to whom - is entirely CrewAI and ADK.
-
-Removing it would mean rewriting the shared `LLMClient` and the Jenkins agent's tool
-declarations against another provider SDK, changing assertions in three test files for
-no behavioural gain. If the requirement is read strictly enough to forbid it, that is a
-deliberate, separately scoped piece of work on shared code and needs P1's agreement,
-since `llm_client.py` is hers.
+LangGraph and LangChain are strictly forbidden. The three investigation agents run on CrewAI (`crewai`) with the Coordinator on Google ADK (`google-adk`).
+No other agentic framework (no LangChain, no LangGraph, no LlamaIndex, no AutoGen, no Semantic Kernel) is permitted anywhere in code, requirements, Dockerfiles, or lockfiles.
+Agents never call other agents: they only read/write the Blackboard and answer A2A requests from the Coordinator.
+Tools are exposed only through MCP servers under `mcp_servers/`.

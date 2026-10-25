@@ -3,7 +3,7 @@
 **Owner:** P2 (live A2A slice). ``python -m coordinator.service`` hosts an A2A endpoint the
 three agents notify. For each incident it waits until all three agents have written (read
 from the blackboard, not trusted from the messages) or ``COORDINATOR_TIMEOUT_SECONDS``
-passes, then runs ``CoordinatorAgent.synthesize``. On timeout the report is built from
+passes, then runs the fused synthesis (``coordinator.fused``). On timeout the report is built from
 whatever is there and is marked incomplete; a late notification from a new agent triggers a
 fresh synthesis that replaces it.
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -34,10 +34,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from common.a2a_contract import A2AContractError, parse_evidence_ready
 from common.audit import build_audit_log
 from common.evidence_store import FileEvidenceStore
-from coordinator.a2a_contract import A2AContractError, parse_evidence_ready
 from coordinator.agent import CoordinatorAgent
+from coordinator.fused import synthesize_fused
+from coordinator.report import FusedReport
 from coordinator.report_store import ReportStore
 
 logger = logging.getLogger(__name__)
@@ -48,8 +50,14 @@ RPC_PATH = "/a2a"
 class IncidentTracker:
     """Decides when an incident is ready to synthesize: all agents present, or timed out."""
 
-    def __init__(self, coordinator: CoordinatorAgent, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        coordinator: CoordinatorAgent,
+        timeout_seconds: float,
+        synthesize: Callable[[UUID], Awaitable[FusedReport]],
+    ) -> None:
         self._coordinator = coordinator
+        self._synthesize = synthesize
         self._timeout = timeout_seconds
         self._timers: dict[UUID, asyncio.Task[None]] = {}
         self._synthesized: dict[UUID, frozenset[str]] = {}
@@ -88,7 +96,7 @@ class IncidentTracker:
         async with lock:
             if self._synthesized.get(incident_id) == present:
                 return "already synthesized"
-            report = await self._coordinator.synthesize(incident_id)
+            report = await self._synthesize(incident_id)
             self._synthesized[incident_id] = present
             logger.info(
                 "report written",
@@ -146,8 +154,13 @@ def agent_card(public_url: str) -> pb.AgentCard:
     return card
 
 
-def build_app(coordinator: CoordinatorAgent, public_url: str, timeout_seconds: float) -> Starlette:
-    tracker = IncidentTracker(coordinator, timeout_seconds)
+def build_app(
+    coordinator: CoordinatorAgent,
+    public_url: str,
+    timeout_seconds: float,
+    synthesize: Callable[[UUID], Awaitable[FusedReport]],
+) -> Starlette:
+    tracker = IncidentTracker(coordinator, timeout_seconds, synthesize)
     card = agent_card(public_url)
     handler = DefaultRequestHandler(
         agent_executor=CoordinatorExecutor(tracker), task_store=InMemoryTaskStore(), agent_card=card
@@ -178,17 +191,20 @@ def main() -> None:
 
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     port = int(os.environ.get("COORDINATOR_PORT", "8090"))
-    coordinator = CoordinatorAgent(
-        FileEvidenceStore(Path(os.environ.get("EVIDENCE_DIR", "data/evidence"))),
-        report_store=ReportStore(Path(os.environ.get("REPORTS_DIR", "data/reports"))),
-        audit=build_audit_log(
-            database_url=os.environ.get("DATABASE_URL") or None, root=Path(os.environ.get("AUDIT_DIR", "data/audit"))
-        ),
+    store = FileEvidenceStore(Path(os.environ.get("EVIDENCE_DIR", "data/evidence")))
+    reports = ReportStore(Path(os.environ.get("REPORTS_DIR", "data/reports")))
+    audit = build_audit_log(
+        database_url=os.environ.get("DATABASE_URL") or None, root=Path(os.environ.get("AUDIT_DIR", "data/audit"))
     )
+
+    async def synthesize(incident_id: UUID) -> FusedReport:
+        return await synthesize_fused(store, incident_id, report_store=reports, audit=audit)
+
     app = build_app(
-        coordinator,
+        CoordinatorAgent(store),
         os.environ.get("COORDINATOR_PUBLIC_URL", f"http://127.0.0.1:{port}"),
         float(os.environ.get("COORDINATOR_TIMEOUT_SECONDS", "120")),
+        synthesize,
     )
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 

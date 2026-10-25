@@ -22,7 +22,7 @@ import yaml
 
 from common.models import FailureTaxonomy
 from coordinator.fusion import FusionConfig, fuse
-from coordinator.report import FusionMethod, IncidentReport
+from coordinator.report import FusionMethod, FusedReport
 from tests.coordinator.helpers import NOW, make, view
 
 SCENARIO_DIR = Path(__file__).resolve().parents[2] / "scenarios"
@@ -50,7 +50,7 @@ def config_for(scenario: dict[str, Any], method: FusionMethod | None = None) -> 
     return replace(config, method=method) if method is not None else config
 
 
-def run_scenario(scenario: dict[str, Any], method: FusionMethod | None = None) -> IncidentReport:
+def run_scenario(scenario: dict[str, Any], method: FusionMethod | None = None) -> FusedReport:
     evidence = []
     for agent, spec in (scenario.get("agents") or {}).items():
         evidence.append(

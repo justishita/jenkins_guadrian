@@ -97,7 +97,7 @@ class AuditRecord(BaseModel):
 	@classmethod
 	def ensure_utc(cls, value: datetime) -> datetime:
 		if value.tzinfo is None:
-			return value.replace(tzinfo=timezone.utc)
+			raise ValueError("created_at must include a timezone")
 		return value.astimezone(timezone.utc)
 
 	@field_validator("summary")

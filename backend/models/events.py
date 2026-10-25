@@ -18,8 +18,7 @@ class JenkinsFailureEvent(BaseModel):
     @classmethod
     def ensure_tz_aware_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            # Treat naive timestamp as UTC
-            return v.replace(tzinfo=timezone.utc)
+            raise ValueError("timestamp must include a timezone")
         return v.astimezone(timezone.utc)
 
 
