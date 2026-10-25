@@ -75,6 +75,12 @@ class FileEvidenceStore(EvidenceStore):
             version = 1
             if path.exists():
                 existing = json.loads(path.read_text(encoding="utf-8"))
+                current_document = {
+                    key: value for key, value in existing.items() if key != "version"
+                }
+                new_document = evidence.model_dump(mode="json", exclude_none=True)
+                if current_document == new_document:
+                    return
                 version = int(existing["version"]) + 1
 
             path.parent.mkdir(parents=True, exist_ok=True)

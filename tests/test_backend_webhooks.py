@@ -84,6 +84,7 @@ def test_webhook_invalid_auth(client, valid_payload):
 
 def test_webhook_successful_incident_creation(client, auth_headers, valid_payload):
     mock_db = AsyncMock()
+    mock_db.add = MagicMock()
     # No existing incident
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
@@ -94,7 +95,7 @@ def test_webhook_successful_incident_creation(client, auth_headers, valid_payloa
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with patch("backend.routes.webhooks.publisher.publish_incident_created", new_callable=AsyncMock) as mock_pub:
+    with patch("backend.incidents.publisher.publish_incident_created", new_callable=AsyncMock) as mock_pub:
         mock_pub.return_value = True
 
         resp = client.post("/webhooks/jenkins", json=valid_payload, headers=auth_headers)
@@ -115,10 +116,10 @@ def test_webhook_successful_incident_creation(client, auth_headers, valid_payloa
     app.dependency_overrides.clear()
 
 
-def test_webhook_idempotency_returns_existing_incident(client, auth_headers, valid_payload):
+def test_webhook_idempotency_retries_event_delivery(client, auth_headers, valid_payload):
     # Simulate existing incident in DB
     existing_incident = Incident(
-        id="existing-uuid-1234",
+        id="11111111-2222-3333-4444-555555555555",
         job_name=valid_payload["job_name"],
         build_number=valid_payload["build_number"],
         build_url=valid_payload["build_url"],
@@ -132,6 +133,7 @@ def test_webhook_idempotency_returns_existing_incident(client, auth_headers, val
     )
 
     mock_db = AsyncMock()
+    mock_db.add = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = existing_incident
     mock_db.execute.return_value = mock_result
@@ -141,15 +143,16 @@ def test_webhook_idempotency_returns_existing_incident(client, auth_headers, val
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with patch("backend.routes.webhooks.publisher.publish_incident_created", new_callable=AsyncMock) as mock_pub:
+    with patch("backend.incidents.publisher.publish_incident_created", new_callable=AsyncMock) as mock_pub:
+        mock_pub.return_value = True
         resp = client.post("/webhooks/jenkins", json=valid_payload, headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "already_processed"
-        assert data["incident_id"] == "existing-uuid-1234"
+        assert data["incident_id"] == "11111111-2222-3333-4444-555555555555"
 
-        # Publisher should NOT be called again for duplicates
-        assert not mock_pub.called
+        # Re-delivery allows a retry to recover from an earlier publish failure.
+        assert mock_pub.called
 
     app.dependency_overrides.clear()
 
@@ -171,3 +174,67 @@ def test_webhook_validation_endpoint(client, auth_headers):
     )
     assert resp.status_code == 202
     assert resp.json()["status"] == "validation_received"
+
+
+def test_webhook_posts_to_blackboard_and_is_idempotent(client, auth_headers, valid_payload, tmp_path):
+    from common.blackboard import FileBlackboard, get_blackboard
+    import common.blackboard as bb_module
+    from uuid import UUID
+
+    test_bb = FileBlackboard(root=tmp_path / "blackboard")
+    bb_module._default_blackboard = test_bb
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    # First call: no existing incident
+    mock_result_none = MagicMock()
+    mock_result_none.scalar_one_or_none.return_value = None
+
+    # Incident created
+    new_incident = Incident(
+        id="11111111-2222-3333-4444-555555555555",
+        job_name=valid_payload["job_name"],
+        build_number=valid_payload["build_number"],
+        build_url=valid_payload["build_url"],
+        branch=valid_payload["branch"],
+        git_commit=valid_payload["git_commit"],
+        failed_stage=valid_payload["failed_stage"],
+        status="OPEN",
+        event_key="unique-key",
+        remediation_attempt=0,
+    )
+    mock_db.execute.return_value = mock_result_none
+
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    payload = dict(valid_payload)
+    payload["incident_id"] = "11111111-2222-3333-4444-555555555555"
+
+    with patch("backend.incidents.publisher.publish_incident_created", new_callable=AsyncMock) as mock_pub:
+        mock_pub.return_value = True
+        resp = client.post("/webhooks/jenkins", json=payload, headers=auth_headers)
+        assert resp.status_code == 202
+
+        # Assert Blackboard entry was posted
+        entry = test_bb.read(UUID("11111111-2222-3333-4444-555555555555"), section="context", key="incident_event")
+        assert entry is not None
+        assert entry.version == 1
+        assert entry.payload["job_name"] == valid_payload["job_name"]
+
+        # Duplicate call: existing incident is returned
+        mock_result_exist = MagicMock()
+        mock_result_exist.scalar_one_or_none.return_value = new_incident
+        mock_db.execute.return_value = mock_result_exist
+
+        resp2 = client.post("/webhooks/jenkins", json=payload, headers=auth_headers)
+        assert resp2.status_code == 200
+
+        # Assert duplicate webhook does not create a second version
+        history = test_bb.history(UUID("11111111-2222-3333-4444-555555555555"))
+        assert len(history) == 1
+        assert mock_pub.call_count == 2
+
+    app.dependency_overrides.clear()

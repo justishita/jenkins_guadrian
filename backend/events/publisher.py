@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 import aio_pika
 
 from backend.config import settings
+from common.redaction import redact_value
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,16 @@ class RabbitMQPublisher:
                     )
                     logger.info("Successfully connected to RabbitMQ and declared exchange '%s'.", self.exchange_name)
                     return True
-                except Exception as e:
-                    logger.warning("RabbitMQ connection attempt %d failed: %s", attempt, e)
+                except Exception as error:
+                    logger.warning(
+                        "RabbitMQ connection attempt %d failed (%s)",
+                        attempt,
+                        type(error).__name__,
+                    )
                     if attempt < max_retries:
-                        await asyncio.sleep(retry_interval * (2 ** (attempt - 1)))
+                        await asyncio.sleep(
+                            min(retry_interval * (2 ** (attempt - 1)), 8.0)
+                        )
                     else:
                         logger.error("Failed to connect to RabbitMQ after %d attempts.", max_retries)
             return False
@@ -55,18 +62,25 @@ class RabbitMQPublisher:
                     logger.error("Cannot publish message: RabbitMQ unavailable.")
                     return False
 
-            message_body = json.dumps(payload).encode("utf-8")
+            safe_payload = redact_value(payload)
+            message_body = json.dumps(safe_payload).encode("utf-8")
             message = aio_pika.Message(
                 body=message_body,
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 content_type="application/json",
             )
             # Publishes to exchange with routing key incident.created and publisher confirmation
-            await self.exchange.publish(message, routing_key="incident.created")
+            confirmed = await self.exchange.publish(message, routing_key="incident.created")
+            if confirmed is False:
+                logger.error("RabbitMQ did not confirm incident event delivery")
+                return False
             logger.info("Published incident.created event for incident_id: %s", payload.get("incident_id"))
             return True
-        except Exception as e:
-            logger.error("Failed to publish incident.created message: %s", e)
+        except Exception as error:
+            logger.error(
+                "Failed to publish incident.created message (%s)",
+                type(error).__name__,
+            )
             return False
 
     async def is_healthy(self) -> bool:
@@ -84,8 +98,11 @@ class RabbitMQPublisher:
                 if self.connection and not self.connection.is_closed:
                     await self.connection.close()
                 logger.info("RabbitMQ connection closed.")
-            except Exception as e:
-                logger.warning("Error closing RabbitMQ connection: %s", e)
+            except Exception as error:
+                logger.warning(
+                    "Error closing RabbitMQ connection (%s)",
+                    type(error).__name__,
+                )
 
 
 publisher = RabbitMQPublisher()

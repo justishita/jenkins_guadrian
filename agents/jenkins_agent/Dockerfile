@@ -12,4 +12,4 @@ COPY agents/__init__.py ./agents/__init__.py
 COPY agents/jenkins_agent ./agents/jenkins_agent
 COPY common ./common
 
-CMD ["python", "-m", "agents.jenkins_agent.agent"]
+CMD ["python", "-m", "agents.jenkins_agent.a2a_app"]

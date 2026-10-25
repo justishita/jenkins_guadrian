@@ -16,10 +16,17 @@ Keep these ownership boundaries explicit in code. Agent-to-agent communication i
 
 ## Stack
 
-Use Python 3.11, FastAPI, CrewAI (investigation agents), Google ADK (Coordinator), RabbitMQ (`pika` or `aio-pika`), PostgreSQL, Pydantic v2, pytest, and Docker Compose. Follow the libraries and patterns already established in the repository when choosing between supported alternatives.
+Python 3.11, FastAPI, CrewAI (Jenkins, Metrics, Code agents), Google ADK (Coordinator only), A2A protocol (a2a-sdk) for Coordinator<->agent communication, MCP (official `mcp` SDK) for tools, Blackboard (common/blackboard.py) for shared state, RabbitMQ (pika or aio-pika) for events, Postgres, pydantic v2, OpenTelemetry, pytest, Docker Compose.
 
 ## Engineering Rules
 
+- NEVER import langchain*, langgraph*, llama_index, autogen or any agentic framework other than crewai and google-adk.
+- Agents never call other agents (they only read/write the Blackboard and answer A2A requests from the Coordinator).
+- Every agent final output is a pydantic model (CrewAI output_pydantic / ADK output_schema).
+- Every Crew/Agent/Task has monitoring callbacks from common.monitoring.
+- Every text from logs, commits or users passes common.guardrails.screen_untrusted_text before reaching an LLM.
+- Tools are exposed only through MCP servers in mcp_servers/.
+- The Blackboard is append-only and each agent writes only its own namespace.
 - Add type hints to all functions, methods, and variables where practical; public APIs and boundary-facing data must be fully typed.
 - Use Pydantic v2 models for all data crossing a process, service, queue, persistence, API, or agent boundary. Keep the shared Evidence Store JSON schema canonical and version changes deliberately.
 - Represent timestamps as timezone-aware UTC values and serialize them as ISO-8601.

@@ -56,11 +56,16 @@ services:
       - devnet
 
   agent-api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - ./data/blackboard:/app/data/blackboard
+      - ./data/evidence:/app/data/evidence
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -137,9 +142,12 @@ services:
       context: .
       dockerfile: agents/metrics_agent/Dockerfile
     restart: unless-stopped
+    ports:
+      - "9102:9102"
     volumes:
       - ./data/evidence:/app/data/evidence
       - ./data/audit:/app/data/audit
+      - ./data/blackboard:/app/data/blackboard
     environment:
       # Empty -> JSON-lines audit trail under /app/data/audit; set -> PostgreSQL trail.
       DATABASE_URL: ${DATABASE_URL:-}
@@ -158,18 +166,35 @@ services:
       context: .
       dockerfile: agents/jenkins_agent/Dockerfile
     restart: unless-stopped
+    ports:
+      - "9101:9101"
     env_file:
       - .env
     volumes:
       - ./data/evidence:/app/data/evidence
+      - ./data/audit:/app/data/audit
+      - ./data/blackboard:/app/data/blackboard
     environment:
       JENKINS_URL: http://jenkins:8080
+      MCP_JENKINS_URL: http://mcp-jenkins:8081/mcp
+      MCP_ANALYTICS_URL: http://mcp-analytics:8082/mcp
+      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN:?Set A2A_SHARED_TOKEN in .env}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9101/.well-known/agent-card.json', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       rabbitmq:
         condition: service_healthy
       jenkins:
+        condition: service_healthy
+      mcp-jenkins:
+        condition: service_healthy
+      mcp-analytics:
         condition: service_healthy
     networks:
       - devnet
@@ -202,11 +227,14 @@ services:
       context: .
       dockerfile: agents/code_agent/Dockerfile
     restart: unless-stopped
+    ports:
+      - "9103:9103"
     env_file:
       - .env
     volumes:
       - ./data/evidence:/app/data/evidence
       - ./data/audit:/app/data/audit
+      - ./data/blackboard:/app/data/blackboard
     environment:
       OPA_URL: http://opa:8181
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
@@ -218,6 +246,93 @@ services:
         condition: service_healthy
       opa:
         condition: service_healthy
+    networks:
+      - devnet
+
+  # --- Services added for CrewAI + Google ADK + A2A + MCP Architecture ---
+
+  # Person 2 additions placeholder:
+  # - otel-collector (OTLP 4317)
+  # - jaeger (16686)
+  # - mcp-prometheus
+
+  # Person 3 additions placeholder:
+  # - mcp-github
+
+  coordinator:
+    build:
+      context: .
+      dockerfile: coordinator/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    environment:
+      PORT: "9100"
+      TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit_password}@rabbitmq:5672/
+      EVIDENCE_DIR: /app/data/evidence
+      COORDINATOR_QUEUE_NAME: coordinator.incident.created
+      A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN:?Set A2A_SHARED_TOKEN in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+      JENKINS_AGENT_URL: http://jenkins-agent:9101
+      METRICS_AGENT_URL: http://metrics-agent:9102
+      CODE_AGENT_URL: http://code-agent:9103
+    volumes:
+      - ./data/blackboard:/app/data/blackboard
+      - ./data/evidence:/app/data/evidence
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      jenkins-agent:
+        condition: service_healthy
+    networks:
+      - devnet
+
+  mcp-jenkins:
+    build:
+      context: .
+      dockerfile: mcp_servers/jenkins_mcp/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      JENKINS_URL: http://jenkins:8080
+      JENKINS_USER: ${JENKINS_USER:?Set JENKINS_USER in .env}
+      JENKINS_API_TOKEN: ${JENKINS_API_TOKEN:?Set JENKINS_API_TOKEN in .env}
+      PORT: "8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8081), timeout=2).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      jenkins:
+        condition: service_healthy
+    networks:
+      - devnet
+
+  mcp-analytics:
+    build:
+      context: .
+      dockerfile: mcp_servers/analytics_mcp/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: "8082"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8082), timeout=2).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - devnet
 

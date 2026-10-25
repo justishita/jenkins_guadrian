@@ -1,7 +1,7 @@
 import json
 import logging
 
-from langchain_core.messages import AIMessage, HumanMessage
+from common.llm_client import AIMessage, HumanMessage
 from pydantic import BaseModel
 import pytest
 

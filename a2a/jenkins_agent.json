@@ -1,0 +1,31 @@
+{
+  "name": "jenkins_agent",
+  "description": "Analyzes Jenkins CI build logs, pipeline stages, test reports, and git commits to diagnose pipeline failures.",
+  "version": "1.0.0",
+  "url": "http://localhost:9101",
+  "skills": [
+    {
+      "name": "investigate_incident",
+      "description": "Performs root-cause analysis on a failed Jenkins build incident and writes findings to the Blackboard.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "incident_id": { "type": "string", "format": "uuid" },
+          "attempt": { "type": "integer", "default": 0 }
+        },
+        "required": ["incident_id"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "evidence": { "type": "object" },
+          "blackboard_ref": { "type": "object" }
+        }
+      }
+    }
+  ],
+  "capabilities": {
+    "push": false,
+    "streaming": false
+  }
+}
