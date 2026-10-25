@@ -7,6 +7,8 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health", response_model=HealthResponse)
+@router.get("/health/live", response_model=HealthResponse)
+@router.get("/health/ready", response_model=HealthResponse)
 async def get_health(response: Response) -> HealthResponse:
     """Returns connectivity status of PostgreSQL and RabbitMQ."""
     db_ok = await check_db_health()
