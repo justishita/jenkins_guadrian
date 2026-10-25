@@ -1,0 +1,32 @@
+id: coord-partial-reporting
+name: Code Agent Has Not Reported
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Only Jenkins and Metrics have written evidence. The report still shows a defensible leading
+  hypothesis but is marked incomplete, names the missing agent, and is not ready for review.
+
+truth: timeout
+
+agents:
+  jenkins_agent: {failure_type: timeout, confidence: 0.85}
+  metrics_agent: {failure_type: timeout, confidence: 0.80}
+
+expected:
+  verdict: timeout
+  confidence: 0.9154
+  completeness: incomplete
+  missing_agents: [code_agent]
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [timeout]
+  ready_for_policy_review: false
+  blocking: [incomplete]
+  negative: []

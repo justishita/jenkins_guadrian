@@ -1,0 +1,33 @@
+id: coord-all-unknown
+name: Nobody Found Anything
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  All three agents report unknown. The verdict is unknown at confidence 0; the Coordinator
+  never promotes a winner out of zero-valued scores.
+
+truth: unknown
+
+agents:
+  jenkins_agent: {failure_type: unknown, confidence: 0.20}
+  metrics_agent: {failure_type: unknown, confidence: 0.20}
+  code_agent: {failure_type: unknown, confidence: 0.20}
+
+expected:
+  verdict: unknown
+  confidence: 0.0
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: []
+  ready_for_policy_review: false
+  blocking: [unknown_verdict]
+  negative: []

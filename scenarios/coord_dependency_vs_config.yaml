@@ -1,0 +1,35 @@
+id: coord-dependency-vs-config
+name: Jenkins And Code Disagree Clearly
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Modelled on real incident 1bf496ad (without the Code agent's contradicting files, which
+  have their own scenario): Jenkins says dependency_regression at 0.90, Code says config_error
+  at 0.55 and Metrics found nothing. The gap is wide, so the stronger vote wins without a
+  conflict, and config_error stays visible as the ranked alternative.
+
+truth: null   # the real incident's root cause was never established
+
+agents:
+  jenkins_agent: {failure_type: dependency_regression, confidence: 0.90}
+  metrics_agent: {failure_type: unknown, confidence: 0.20, status: insufficient_evidence}
+  code_agent: {failure_type: config_error, confidence: 0.55}
+
+expected:
+  verdict: dependency_regression
+  confidence: 0.90
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [dependency_regression, config_error]
+  ready_for_policy_review: true
+  blocking: []
+  negative: []

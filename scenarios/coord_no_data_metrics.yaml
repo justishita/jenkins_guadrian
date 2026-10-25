@@ -1,0 +1,33 @@
+id: coord-no-data-metrics
+name: Metrics Had No Data
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Metrics reports unknown with coverage 0.0: it could not look, which is not the same as
+  looking and finding nothing. It must not count against Jenkins' timeout.
+
+truth: timeout
+
+agents:
+  jenkins_agent: {failure_type: timeout, confidence: 0.85}
+  metrics_agent: {failure_type: unknown, confidence: 0.10, status: insufficient_evidence, coverage: 0.0}
+  code_agent: {failure_type: unknown, confidence: 0.10}
+
+expected:
+  verdict: timeout
+  confidence: 0.765
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: none
+  conflicting_types: []
+  unclassified_pairs: []
+  ranking: [timeout]
+  ready_for_policy_review: true
+  blocking: []
+  negative: []

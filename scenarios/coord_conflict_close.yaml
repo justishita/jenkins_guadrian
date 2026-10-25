@@ -1,0 +1,34 @@
+id: coord-conflict-close
+name: Close Scores On Unclassified Types
+owner: P2
+agent: coordinator
+
+# Required by the shared scenario schema; the Coordinator reads no incident metadata.
+incident:
+  job_name: target-app
+
+scenario: >
+  Jenkins says auth_failure and Code says config_error with nearly equal weighted scores.
+  Nobody has signed off that these can both be true, so the pair is unclassified and treated
+  as a conflict, visibly tagged. The leading type is reported but the report is not ready.
+
+truth: null   # genuinely ambiguous
+
+agents:
+  jenkins_agent: {failure_type: auth_failure, confidence: 0.70}
+  code_agent: {failure_type: config_error, confidence: 0.85}
+  metrics_agent: {failure_type: unknown, confidence: 0.10}
+
+expected:
+  verdict: auth_failure
+  confidence: 0.70
+  completeness: complete
+  missing_agents: []
+  failed_agents: []
+  conflict_status: conflicted
+  conflicting_types: [auth_failure, config_error]
+  unclassified_pairs: [[auth_failure, config_error]]
+  ranking: [auth_failure, config_error]
+  ready_for_policy_review: false
+  blocking: [conflicted]
+  negative: []
