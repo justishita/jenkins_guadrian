@@ -140,28 +140,4 @@ async def handle_jenkins_failure(
         ) from error
 
 
-@router.post("/jenkins/validation", status_code=status.HTTP_202_ACCEPTED)
-async def handle_jenkins_validation(
-    request: Request,
-    _: None = Depends(verify_webhook_token),
-) -> Response:
-    """Receive a bounded, redacted Jenkins re-validation event."""
-    body = await _read_limited_body(request)
-    try:
-        payload = json.loads(body)
-    except (UnicodeDecodeError, ValueError) as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON validation payload",
-        ) from error
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Validation payload must be a JSON object",
-        )
-    redact_value(payload)
-    logger.info("Received Jenkins re-validation event")
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content={"status": "validation_received"},
-    )
+# Note: /jenkins/validation is implemented in backend/routes/validation.py

@@ -14,6 +14,7 @@ from backend.events.publisher import publisher
 from backend.jenkins_catchup import JenkinsCatchup
 from backend.routes.health import router as health_router
 from backend.routes.webhooks import router as webhooks_router
+from backend.routes.validation import router as validation_router
 
 # Configure logging
 logging.basicConfig(
@@ -89,6 +90,7 @@ app.add_middleware(RequestIdMiddleware)
 # Include routers
 app.include_router(health_router)
 app.include_router(webhooks_router)
+app.include_router(validation_router)
 
 
 @app.get("/")

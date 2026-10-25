@@ -53,8 +53,8 @@ class RabbitMQPublisher:
                         logger.error("Failed to connect to RabbitMQ after %d attempts.", max_retries)
             return False
 
-    async def publish_incident_created(self, payload: Dict[str, Any]) -> bool:
-        """Publish an incident.created message to the topic exchange with persistent delivery."""
+    async def publish_event(self, routing_key: str, payload: Dict[str, Any]) -> bool:
+        """Publish a message to the incidents topic exchange with persistent delivery."""
         try:
             if not self.exchange or (self.connection and self.connection.is_closed):
                 connected = await self.connect(max_retries=3, retry_interval=1.0)
@@ -69,19 +69,31 @@ class RabbitMQPublisher:
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 content_type="application/json",
             )
-            # Publishes to exchange with routing key incident.created and publisher confirmation
-            confirmed = await self.exchange.publish(message, routing_key="incident.created")
+            confirmed = await self.exchange.publish(message, routing_key=routing_key)
             if confirmed is False:
-                logger.error("RabbitMQ did not confirm incident event delivery")
+                logger.error("RabbitMQ did not confirm %s event delivery", routing_key)
                 return False
-            logger.info("Published incident.created event for incident_id: %s", payload.get("incident_id"))
+            logger.info("Published %s event for incident_id: %s", routing_key, payload.get("incident_id"))
             return True
         except Exception as error:
             logger.error(
-                "Failed to publish incident.created message (%s)",
+                "Failed to publish %s message (%s)",
+                routing_key,
                 type(error).__name__,
             )
             return False
+
+    async def publish_incident_created(self, payload: Dict[str, Any]) -> bool:
+        """Publish an incident.created message to the topic exchange with persistent delivery."""
+        return await self.publish_event("incident.created", payload)
+
+    async def publish_validation_completed(self, payload: Dict[str, Any]) -> bool:
+        """Publish a validation.completed message to the incidents topic exchange."""
+        return await self.publish_event("validation.completed", payload)
+
+    async def publish_incident_reinvestigate(self, payload: Dict[str, Any]) -> bool:
+        """Publish an incident.reinvestigate message to the incidents topic exchange."""
+        return await self.publish_event("incident.reinvestigate", payload)
 
     async def is_healthy(self) -> bool:
         """Check if connection to RabbitMQ is currently alive."""
