@@ -39,9 +39,14 @@ it is the baseline LLM-assisted fusion will be measured against.
 | A tie on agent count | `conflicting` - confidence orders candidates but never breaks a tie |
 | Abstention | insufficient-evidence and failed agents are findings, never votes |
 | Floor | below **0.5** the report names no cause and is not `actionable` |
+| Ceiling | the fused verdict never exceeds **0.95** - agents can share a blind spot, so agreement is strong evidence, not proof |
 
 Cited evidence IDs are namespaced by agent (`code_agent:file-1`), because each agent
 numbers its evidence independently and `file-1` is ambiguous once merged.
+
+The running service (`app.py`) calls `synthesize` after every dispatch and keeps the
+latest report per incident in `CoordinatorRuntime.reports`. Fusion there is best effort:
+the dispatch has already completed, so a fusion error is logged and never re-raised.
 
 ## Remediation gate (Week 6)
 

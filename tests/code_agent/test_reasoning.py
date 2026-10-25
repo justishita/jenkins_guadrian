@@ -260,3 +260,33 @@ def test_every_hypothesis_cites_at_least_one_piece_of_evidence() -> None:
 		assert hypothesis.supporting_evidence
 		assert set(hypothesis.supporting_evidence) <= known
 		assert set(hypothesis.contradicting_evidence) <= known
+
+
+
+def test_the_setup_stage_counts_as_a_dependency_stage() -> None:
+	"""Setup is where pip install runs; a bad pin fails there, not at Test."""
+	assert run([DEPENDENCY_BUMP], failed_stage="Setup").confidence == pytest.approx(
+		run([DEPENDENCY_BUMP], failed_stage="Build").confidence
+	)
+
+
+def test_the_stage_that_installs_dependencies_in_the_real_pipeline_is_recognised() -> None:
+	"""Keeps the rule in step with target_app/Jenkinsfile rather than with assumptions.
+
+	Finds the stage whose steps run `pip install` and checks a dependency regression
+	failing there gets the stage bonus. If someone renames or moves that stage, this
+	fails instead of the agent silently under-scoring real failures.
+	"""
+	import re
+	from pathlib import Path
+
+	jenkinsfile = (Path(__file__).resolve().parents[2] / "target_app" / "Jenkinsfile").read_text(encoding="utf-8")
+	stage = None
+	for match in re.finditer(r"stage\('([^']+)'\)(.*?)(?=stage\('|\Z)", jenkinsfile, re.S):
+		if "pip install" in match.group(2):
+			stage = match.group(1)
+			break
+	assert stage is not None, "no stage in target_app/Jenkinsfile runs pip install"
+
+	unstaged = run([DEPENDENCY_BUMP], failed_stage="Lint").confidence
+	assert run([DEPENDENCY_BUMP], failed_stage=stage).confidence > unstaged, stage

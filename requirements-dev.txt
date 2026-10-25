@@ -1,0 +1,39 @@
+# One local environment for the whole test suite and scripts/demo_p3.py.
+#
+# In deployment every service is its own container with its own requirements, so the
+# pins at the bottom only matter when everything shares one venv - which the test
+# suite and the demo need. Two component pins conflict there:
+#
+#   * target_app pins fastapi==0.115.12 for its own container, while the backend
+#     needs fastapi>=0.162 (for starlette's HTTP_413_CONTENT_TOO_LARGE). target_app's
+#     own tests pass on 0.162.
+#   * google-adk 2.x requires opentelemetry<=1.44, while crewai 1.15 requires
+#     opentelemetry>=1.45.1. No version satisfies both. google-adk 1.x is also what
+#     coordinator/requirements.txt resolves to, since it pins opentelemetry>=1.45.1.
+#
+# Windows:  py -3.13 -m venv .venv
+#           .venv\Scripts\python -m pip install -r requirements-dev.txt
+#           .venv\Scripts\python scripts\get_opa.py
+# Then:     .venv\Scripts\python -m pytest
+#           .venv\Scripts\python scripts\demo_p3.py
+
+-r tests/requirements.txt
+-r backend/requirements.txt
+-r agents/code_agent/requirements.txt
+-r agents/jenkins_agent/requirements.txt
+-r agents/metrics_agent/requirements.txt
+-r coordinator/requirements.txt
+
+# target_app's runtime dependencies, without its container-specific exact pins.
+flake8
+prometheus-client
+psutil
+PyYAML
+
+# The combination that satisfies every component at once.
+google-adk>=1.14,<2
+crewai==1.15.30
+fastapi>=0.162.0,<1.0
+starlette>=0.49.1,<1.0
+opentelemetry-api>=1.45.1,<2
+opentelemetry-sdk>=1.45.1,<2

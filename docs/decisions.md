@@ -45,9 +45,13 @@ All agents must restrict their hypothesis classifications to the following enum 
 
 Each top-level directory has a single clear owner. **Do not edit files outside your assigned directory without team notification and PR approval.**
 
-### Framework boundary: what counts as an agentic framework
+### Framework boundary
 
-LangGraph and LangChain are strictly forbidden. The three investigation agents run on CrewAI (`crewai`) with the Coordinator on Google ADK (`google-adk`).
-No other agentic framework (no LangChain, no LangGraph, no LlamaIndex, no AutoGen, no Semantic Kernel) is permitted anywhere in code, requirements, Dockerfiles, or lockfiles.
-Agents never call other agents: they only read/write the Blackboard and answer A2A requests from the Coordinator.
-Tools are exposed only through MCP servers under `mcp_servers/`.
+LangGraph and LangChain are both gone. `grep -rn "langchain\|langgraph"` over `agents/`,
+`coordinator/`, `common/`, `backend/` and `mcp_servers/` returns nothing: the shared
+`LLMClient` no longer depends on LangChain either.
+
+The only agentic frameworks are the two the course requires. The investigation agents
+use CrewAI - the Jenkins agent as an LLM `Crew`, the code and metrics agents as
+deterministic `Flow`s - and the Coordinator is a Google ADK `BaseAgent`. A2A is the
+boundary between them.

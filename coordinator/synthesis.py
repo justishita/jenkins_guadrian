@@ -41,6 +41,11 @@ MAX_UNKNOWN_CONFIDENCE = 0.4
 #: agents can be wrong together, and agreement raises confidence rather than settling it.
 AGREEMENT_BONUS = 0.1
 
+#: No fused verdict may claim certainty. Agreement between agents is strong evidence,
+#: not proof - they can share a blind spot - so the system's verdict stops short of
+#: 1.0 however many agents agree, and however sure any single one of them is.
+MAX_FUSED_CONFIDENCE = 0.95
+
 #: What an unresolved conflict costs. Larger than the agreement bonus on purpose -
 #: being contradicted should hurt more than being corroborated helps.
 CONFLICT_PENALTY = 0.15
@@ -282,7 +287,7 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
     if conflicts:
         confidence -= CONFLICT_PENALTY * len(conflicts)
 
-    confidence = _clamp(confidence)
+    confidence = min(_clamp(confidence), MAX_FUSED_CONFIDENCE)
 
     # Several causes each backed by the same number of agents means none is actually
     # leading: confidence breaks the sort order, but it must not break the tie.
@@ -336,6 +341,7 @@ def synthesize(evidence: Iterable[Evidence], *, now: datetime | None = None) -> 
 __all__ = [
     "AGREEMENT_BONUS",
     "CONFLICT_PENALTY",
+    "MAX_FUSED_CONFIDENCE",
     "MAX_UNKNOWN_CONFIDENCE",
     "MIN_REPORTABLE_CONFIDENCE",
     "AgentFinding",

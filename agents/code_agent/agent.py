@@ -93,6 +93,12 @@ class CodeInvestigationFlow(Flow):
     evidence rather than as silence.
     """
 
+    # CrewAI prints emoji-decorated flow events to the console; on a Windows cp1252
+    # console every one raises UnicodeEncodeError inside CrewAI's handlers. This is
+    # CrewAI's documented switch for console quiet on a caller's own flow; it
+    # changes no behaviour and drops no evidence or audit records.
+    suppress_flow_events = True
+
     def __init__(self, agent: "CodeInvestigationAgent", state: CodeAgentState) -> None:
         super().__init__()
         self._agent = agent
