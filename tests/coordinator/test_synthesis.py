@@ -76,6 +76,7 @@ def test_one_agent_naming_a_cause_is_reported_with_its_own_confidence() -> None:
 	report = synthesize(
 		[ev("code_agent", DEP, 0.9), ev("metrics_agent", UNKNOWN, 0.2, status="insufficient_evidence")],
 		now=NOW,
+		expected_agents=("code_agent", "metrics_agent"),
 	)
 
 	assert report.status == "resolved_cause"

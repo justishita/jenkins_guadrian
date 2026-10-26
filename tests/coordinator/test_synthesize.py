@@ -124,7 +124,7 @@ async def test_markdown_shows_raw_confidence_weight_and_both_method_scores(coord
 async def test_synthesis_is_audited(coordinator, tmp_path):
     await coordinator.synthesize(INCIDENT)
     records = await FileAuditLog(tmp_path / "audit").read(INCIDENT)
-    [record] = [r for r in records if r.event_type == "synthesis_completed"]
+    [record] = [r for r in records if r.event_type == "fused_report_completed"]
     assert record.actor == "coordinator"
     assert record.payload["verdict"] == "dependency_regression"
     assert record.payload["completeness"] == "complete"

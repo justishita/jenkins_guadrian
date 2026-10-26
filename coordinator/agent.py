@@ -14,7 +14,7 @@ can see what each agent said before seeing what the Coordinator made of it.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass, field
 import logging
 from typing import Any
@@ -110,7 +110,9 @@ class CoordinatorAgent(BaseAgent):
         evidence = await self._store.read_all(identifier)
         return BlackboardView(incident_id=identifier, evidence=tuple(evidence))
 
-    async def synthesize(self, incident_id: UUID | str) -> IncidentReport | None:
+    async def synthesize(
+        self, incident_id: UUID | str, *, outcomes: Mapping[str, str] | None = None
+    ) -> IncidentReport | None:
         """Fuse whatever is on the blackboard into one report, or ``None`` if empty.
 
         It does not wait for every agent: a partial report is still a report, and
@@ -119,7 +121,7 @@ class CoordinatorAgent(BaseAgent):
         view = await self.collect(incident_id)
         if not view.evidence:
             return None
-        return synthesize(view.evidence)
+        return synthesize(view.evidence, outcomes=outcomes)
 
     async def _run_async_impl(self, ctx: Any) -> AsyncGenerator[Any, None]:
         """ADK entry point: report the blackboard for the incident in session state.

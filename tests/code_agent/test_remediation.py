@@ -164,6 +164,27 @@ def test_no_fix_from_an_unactionable_report(status: str, confidence: float) -> N
 
 
 @pytest.mark.parametrize(
+	"gap",
+	[
+		{"missing_agents": ("metrics_agent",)},
+		{"agent_outcomes": {"jenkins_agent": "completed", "metrics_agent": "timed_out"}},
+		{"agent_outcomes": {"metrics_agent": "failed"}},
+		{"agent_outcomes": {"code_agent": "not_dispatched"}},
+	],
+)
+def test_no_fix_from_an_incomplete_investigation(gap: dict) -> None:
+	"""A strong, resolved cause still must not drive a fix while part of the investigation is missing."""
+	complete = report(DEP, 0.95)
+	assert complete.actionable  # the same report is fine when nothing is missing
+	incomplete = complete.model_copy(update=gap)
+
+	result = propose_fix(incomplete, [TC03], base_ref=BASE)
+
+	assert isinstance(result, NoFix)
+	assert "not actionable" in result.reason
+
+
+@pytest.mark.parametrize(
 	"failure_type",
 	[FailureTaxonomy.CODE_TEST_FAILURE, FailureTaxonomy.TIMEOUT, FailureTaxonomy.RESOURCE_EXHAUSTION],
 )

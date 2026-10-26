@@ -68,6 +68,7 @@ async def test_dispatch_fuses_the_blackboard_into_a_report(tmp_path: Path) -> No
 	store = FileEvidenceStore(tmp_path / "evidence")
 	await store.write(evidence(event, "jenkins_agent", FailureTaxonomy.DEPENDENCY_REGRESSION, 0.65))
 	await store.write(evidence(event, "code_agent", FailureTaxonomy.DEPENDENCY_REGRESSION, 0.9))
+	await store.write(evidence(event, "metrics_agent", FailureTaxonomy.UNKNOWN, 0.2))
 
 	runtime = CoordinatorRuntime()
 	runtime.adk_agent = CoordinatorAgent(store)

@@ -70,7 +70,7 @@ async def test_all_three_agents_notify_and_a_complete_report_is_written(service)
     assert report is not None
     assert report.verdict == FailureTaxonomy.TIMEOUT and report.completeness == Completeness.COMPLETE
     events = [r.event_type for r in await audit.read(INCIDENT)]
-    assert events.count("synthesis_completed") == 1
+    assert events.count("fused_report_completed") == 1
 
 
 async def test_missing_agent_times_out_to_an_incomplete_report_and_a_late_agent_upgrades_it(service):
@@ -98,7 +98,7 @@ async def test_duplicate_notifications_do_not_resynthesize(service):
         await publish(store, notifier, agent)
     await notifier(evidence_ready(INCIDENT, "metrics_agent"))
     events = [r.event_type for r in await audit.read(INCIDENT)]
-    assert events.count("synthesis_completed") == 1
+    assert events.count("fused_report_completed") == 1
 
 
 async def test_a_malformed_notification_is_rejected_and_writes_nothing(service):

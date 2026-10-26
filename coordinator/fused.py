@@ -16,9 +16,10 @@ from uuid import UUID
 from common.audit import AuditLog, AuditRecord
 from common.evidence_store import EvidenceStore
 from coordinator.agent import BlackboardView
-from coordinator.fusion import FusionConfig, fuse
+from coordinator.fusion import FusionConfig, apply_gate, fuse
 from coordinator.report import FusedReport
 from coordinator.report_store import ReportStore
+from coordinator.synthesis import synthesize
 
 ACTOR = "coordinator"
 
@@ -36,7 +37,16 @@ async def synthesize_fused(
     started = time.perf_counter()
     identifier = UUID(str(incident_id))
     view = BlackboardView(incident_id=identifier, evidence=tuple(await store.read_all(identifier)))
-    report = fuse(view, config, now=now or datetime.now(timezone.utc))
+    moment = now or datetime.now(timezone.utc)
+    report = fuse(view, config, now=moment)
+    if view.evidence:
+        # The authoritative report decides whether anything may act; ours only advises.
+        gate = synthesize(view.evidence, now=moment)
+        report = apply_gate(
+            report,
+            actionable=gate.actionable,
+            detail=f"not actionable ({gate.status}, {gate.failure_type.value} at {gate.confidence:.2f})",
+        )
     if report_store is not None:
         await report_store.write(report)
     if audit is not None:
@@ -44,7 +54,7 @@ async def synthesize_fused(
             AuditRecord(
                 incident_id=report.incident_id,
                 actor=ACTOR,
-                event_type="synthesis_completed",
+                event_type="fused_report_completed",
                 summary=report.narrative,
                 payload={
                     "verdict": report.verdict.value,

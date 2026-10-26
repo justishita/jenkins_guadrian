@@ -20,7 +20,7 @@ Three principles decide everything here:
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -109,6 +109,9 @@ class IncidentReport(BaseModel):
     agreeing_agents: tuple[str, ...] = ()
     abstaining_agents: tuple[str, ...] = ()
     missing_agents: tuple[str, ...] = ()
+    # What the Coordinator saw for each dispatched agent: completed | failed | timed_out |
+    # not_dispatched. Empty when the report was built without dispatch information.
+    agent_outcomes: dict[str, str] = Field(default_factory=dict)
     # Duplicate linking (TC-19): earlier incidents with the same failure signature,
     # merged from every agent that reported them, and how often it has recurred.
     related_incident_ids: tuple[str, ...] = ()
@@ -126,11 +129,16 @@ class IncidentReport(BaseModel):
 
     @property
     def actionable(self) -> bool:
-        """Whether a remediation may be proposed from this report at all."""
+        """Whether a remediation may be proposed from this report at all.
+
+        An incomplete report (an agent missing, failed or timed out) is never actionable:
+        a fix must not rest on a partial investigation.
+        """
         return (
             self.status == "resolved_cause"
             and self.failure_type is not FailureTaxonomy.UNKNOWN
             and self.confidence >= MIN_REPORTABLE_CONFIDENCE
+            and self.complete
         )
 
     @property
@@ -148,12 +156,17 @@ class IncidentReport(BaseModel):
 
     @property
     def complete(self) -> bool:
-        """Every expected agent reported and none of them failed.
+        """Every expected agent reported, none failed, and every dispatch completed.
 
-        Independent of ``actionable``: an incomplete report can still name a cause, but a
-        reader must know that part of the investigation is missing.
+        An incomplete report can still name a cause, but a reader must know that part of
+        the investigation is missing. ``failed``, ``timed_out`` and ``not_dispatched``
+        outcomes all make the report incomplete, even if stale evidence exists.
         """
-        return not self.missing_agents and not self.failed_agents
+        return (
+            not self.missing_agents
+            and not self.failed_agents
+            and all(outcome == "completed" for outcome in self.agent_outcomes.values())
+        )
 
     def to_markdown(self) -> str:
         """Render the report for a human reviewer."""
@@ -291,6 +304,7 @@ def synthesize(
     *,
     now: datetime | None = None,
     expected_agents: Sequence[str] = AGENT_NAMES,
+    outcomes: Mapping[str, str] | None = None,
 ) -> IncidentReport:
     """Fuse every agent's evidence for one incident into a single report.
 
@@ -333,6 +347,7 @@ def synthesize(
             findings=findings,
             abstaining_agents=abstaining,
             missing_agents=missing,
+            agent_outcomes=dict(outcomes or {}),
             related_incident_ids=related_ids,
             recurrence_count=recurrence_count,
             hypotheses=hypotheses,
@@ -429,6 +444,7 @@ def synthesize(
         agreeing_agents=agreeing,
         abstaining_agents=abstaining,
         missing_agents=missing,
+        agent_outcomes=dict(outcomes or {}),
         related_incident_ids=related_ids,
         recurrence_count=recurrence_count,
         conflicts=conflicts,

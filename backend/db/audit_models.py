@@ -58,7 +58,9 @@ class AuditEventType(str, Enum):
     LLM_CALL = "llm_call"
     EVIDENCE_WRITTEN = "evidence_written"
     HYPOTHESIS_FORMED = "hypothesis_formed"
-    SYNTHESIS_COMPLETED = "synthesis_completed"
+    SYNTHESIS_COMPLETED = "synthesis_completed"  # the initial report for an incident attempt
+    SYNTHESIS_REVISED = "synthesis_revised"  # a later report revision (e.g. a late agent)
+    FUSED_REPORT_COMPLETED = "fused_report_completed"  # the second, P2 fusion path (not authoritative)
     POLICY_EVALUATED = "policy_evaluated"
     REMEDIATION_PROPOSED = "remediation_proposed"
     APPROVAL_REQUESTED = "approval_requested"

@@ -68,6 +68,8 @@ class BlockingCode(str, Enum):
     INCOMPLETE = "incomplete"
     CONFLICTED = "conflicted"
     UNKNOWN_VERDICT = "unknown_verdict"
+    LOW_CONFIDENCE = "low_confidence"
+    GATE_REFUSED = "gate_refused"
 
 
 class _Model(BaseModel):

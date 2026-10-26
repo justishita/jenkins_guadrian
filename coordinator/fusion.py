@@ -32,14 +32,15 @@ from coordinator.report import (
     Completeness,
     ConflictStatus,
     Contribution,
-    FusionMethod,
     FusedReport,
+    FusionMethod,
     NegativeContribution,
     NegativeKind,
     NegativeStatus,
     RelationStatus,
     TypeScore,
 )
+from coordinator.synthesis import MIN_REPORTABLE_CONFIDENCE
 
 T = FailureTaxonomy
 
@@ -355,6 +356,15 @@ def fuse(view: BlackboardView, config: FusionConfig | None = None, *, now: datet
         )
     if verdict == FailureTaxonomy.UNKNOWN:
         blocking.append(BlockingReason(code=BlockingCode.UNKNOWN_VERDICT, detail=reason))
+    elif confidence < MIN_REPORTABLE_CONFIDENCE:
+        # The same floor the agents and the policy gate use: an advisory flag must not be
+        # more permissive than the authoritative one.
+        blocking.append(
+            BlockingReason(
+                code=BlockingCode.LOW_CONFIDENCE,
+                detail=f"fused score {confidence:.2f} is below the {MIN_REPORTABLE_CONFIDENCE:.2f} reportable floor",
+            )
+        )
 
     steps: list[str] = []
     ordered = sorted(
@@ -390,11 +400,32 @@ def fuse(view: BlackboardView, config: FusionConfig | None = None, *, now: datet
     )
 
 
+def apply_gate(report: FusedReport, *, actionable: bool, detail: str = "") -> FusedReport:
+    """Never let the advisory flag be more permissive than the authoritative gate.
+
+    ``actionable`` is P3's ``IncidentReport.actionable``, which the remediation engine and the
+    policy layer read. When it refuses, ``ready_for_policy_review`` is forced off and the refusal
+    is recorded as a blocking reason, so the two verdicts cannot disagree in the permissive direction.
+    """
+    if actionable:
+        return report
+    reasons = list(report.blocking_reasons)
+    if not any(reason.code == BlockingCode.GATE_REFUSED for reason in reasons):
+        reasons.append(
+            BlockingReason(
+                code=BlockingCode.GATE_REFUSED,
+                detail=detail or "the authoritative report (coordinator.synthesis) is not actionable",
+            )
+        )
+    return report.model_copy(update={"ready_for_policy_review": False, "blocking_reasons": reasons})
+
+
 __all__ = [
     "AGENT_RELEVANCE",
     "TYPE_RELATIONS",
     "FusionConfig",
     "TypeRelation",
+    "apply_gate",
     "fuse",
     "noisy_or",
     "weighted_mean",

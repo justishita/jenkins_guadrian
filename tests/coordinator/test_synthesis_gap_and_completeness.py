@@ -96,10 +96,35 @@ class TestCompleteness:
         assert report.failed_agents == ("code_agent",) and not report.complete
         assert report.missing_agents == ()
 
-    def test_incompleteness_does_not_change_actionability(self):
-        # Gating on completeness is a policy decision for the team; synthesis only reports it.
+    def test_an_incomplete_report_is_never_actionable(self):
         report = synthesize([ev("jenkins_agent", DEP, 0.9)], now=NOW)
-        assert not report.complete and report.actionable
+        assert report.status == "resolved_cause" and report.confidence >= 0.5
+        assert not report.complete and not report.actionable
+
+    def test_a_complete_report_is_actionable(self):
+        report = synthesize(
+            [ev("jenkins_agent", DEP, 0.9), ev("code_agent", DEP, 0.7), ev("metrics_agent", UNKNOWN, 0.2)], now=NOW
+        )
+        assert report.complete and report.actionable
+
+    @pytest.mark.parametrize("outcome", ["failed", "timed_out", "not_dispatched"])
+    def test_any_outcome_other_than_completed_makes_a_report_incomplete_and_not_actionable(self, outcome):
+        documents = [ev("jenkins_agent", DEP, 0.9), ev("code_agent", DEP, 0.7), ev("metrics_agent", UNKNOWN, 0.2)]
+        outcomes = {"jenkins_agent": "completed", "code_agent": "completed", "metrics_agent": outcome}
+        report = synthesize(documents, now=NOW, outcomes=outcomes)
+        # Evidence exists (possibly stale or late), but the dispatch did not complete.
+        assert report.missing_agents == () and not report.complete and not report.actionable
+        assert report.agent_outcomes["metrics_agent"] == outcome
+
+    def test_all_outcomes_completed_with_evidence_is_complete(self):
+        documents = [ev("jenkins_agent", DEP, 0.9), ev("code_agent", DEP, 0.7), ev("metrics_agent", UNKNOWN, 0.2)]
+        outcomes = {a.agent: "completed" for a in documents}
+        assert synthesize(documents, now=NOW, outcomes=outcomes).complete
+
+    def test_completed_without_evidence_is_still_incomplete(self):
+        outcomes = {"jenkins_agent": "completed", "code_agent": "completed", "metrics_agent": "completed"}
+        report = synthesize([ev("jenkins_agent", DEP, 0.9), ev("code_agent", DEP, 0.7)], now=NOW, outcomes=outcomes)
+        assert report.missing_agents == ("metrics_agent",) and not report.complete
 
     def test_nothing_named_still_lists_who_is_missing(self):
         report = synthesize([ev("metrics_agent", UNKNOWN, 0.2)], now=NOW)

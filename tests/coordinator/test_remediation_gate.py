@@ -90,7 +90,8 @@ def tc11_plan() -> FixPlan:
 		)
 		for agent, confidence in (("code_agent", 0.9), ("jenkins_agent", 0.85))
 	]
-	report = synthesize(evidence)
+	# These tests are about the gate, not completeness: the two agents here are the whole investigation.
+	report = synthesize(evidence, expected_agents=[item.agent for item in evidence])
 	files = [
 		FileChange(
 			path="target_app/config/deploy.env",

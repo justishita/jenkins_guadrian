@@ -197,13 +197,16 @@ async def test_synthesize_fuses_the_blackboard_into_one_report(
 ) -> None:
 	await store.write(evidence_for("code_agent", failure_type=FailureTaxonomy.DEPENDENCY_REGRESSION, confidence=0.8))
 	await store.write(evidence_for("jenkins_agent", failure_type=FailureTaxonomy.DEPENDENCY_REGRESSION, confidence=0.7))
+	await store.write(
+		evidence_for("metrics_agent", failure_type=FailureTaxonomy.UNKNOWN, confidence=0.2, status="insufficient_evidence")
+	)
 
 	report = await coordinator.synthesize(INCIDENT)
 
 	assert report is not None
 	assert report.failure_type is FailureTaxonomy.DEPENDENCY_REGRESSION
 	assert report.agreeing_agents == ("code_agent", "jenkins_agent")
-	assert report.actionable is True
+	assert report.complete and report.actionable is True
 
 
 @pytest.mark.asyncio

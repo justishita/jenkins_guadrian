@@ -93,7 +93,7 @@ changing one.
 `synthesis.py` (P3) is the report the remediation engine and the policy gate read. P2 added
 a second, more detailed fusion next to it so the two can be compared before either is made
 authoritative: `fusion.py`, `report.py` (`FusedReport`), `report_store.py` and `fused.py`
-(`synthesize_fused`: collect, fuse, store, audit `synthesis_completed`). Neither alters the
+(`synthesize_fused`: collect, fuse, store, audit `fused_report_completed`, kept apart from the authoritative `synthesis_completed` / `synthesis_revised` events the running Coordinator writes). Neither alters the
 agents' evidence.
 
 `fuse(view, config, now=...)` is pure and deterministic, independent of the order the
@@ -141,3 +141,33 @@ evidence travels.
 The three investigation agents run on CrewAI; this Coordinator runs on Google ADK.
 CrewAI orchestrates each investigation, ADK coordinates across them, and A2A is the
 boundary between the two.
+
+## Dispatch, outcomes and report revisions (P2, Week 5)
+
+`CoordinatorRuntime.dispatch_all` (`app.py`) is the single synthesis trigger. For each required agent
+(`COORDINATOR_REQUIRED_AGENTS`, default all three) it records one outcome - `completed`, `failed`,
+`timed_out` or `not_dispatched` - then synthesizes once. Agents in `COORDINATOR_A2A_AGENTS` are sent an
+authenticated `POST /tasks` (3 tries, 504 = `timed_out` at once); any other required agent triggers itself
+from RabbitMQ and is *watched* on the blackboard for at most `COORDINATOR_WATCH_TIMEOUT_SECONDS`. It is
+idempotent per `(incident_id, attempt)`.
+
+`TRIGGER_MODE` says who starts an investigation and is set identically on the Coordinator, the Metrics agent
+and the Code agent: `a2a` (default) - the Coordinator sends each agent a task and the agents serve A2A
+(`a2a_app.py` in each agent), their RabbitMQ consumers are not started; `rabbitmq` - the Metrics and Code
+consumers investigate and the Coordinator only watches for their evidence.
+
+A report is **complete** only if every required agent is `completed` *and* has evidence; `failed`,
+`timed_out`, `not_dispatched`, or `completed` without evidence all make it incomplete, and an incomplete
+report is never `actionable`.
+
+`revisions.py` persists each synthesis as a revision (`data/reports/<incident>/a<attempt>-r<N>.json`) with
+`report_revision_id = <incident>:<attempt>:<evidence fingerprint>`. The initial one is audited as
+`synthesis_completed`, later ones (an agent that reports after the deadline, within
+`COORDINATOR_LATE_WINDOW_SECONDS`) as `synthesis_revised`. The same evidence is never persisted twice, a
+result for an older attempt never replaces the current attempt's report, and on start `recover()` repairs a
+revision whose audit event was lost and synthesizes recently-changed incidents that have no report - safe to
+run any number of times. Check a trail with `python scripts/check_audit.py --all`.
+
+Authority: `IncidentReport.actionable` (and OPA) act; the fused report's `ready_for_policy_review` only
+advises and `apply_gate` forces it off whenever `actionable` is false.
+
