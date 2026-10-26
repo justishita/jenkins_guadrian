@@ -2,7 +2,7 @@
   "uid": "agent-ops",
   "title": "Agent Ops (anomaly + fusion)",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -11,12 +11,31 @@
   "tags": [
     "jenkins-guardian"
   ],
+  "templating": {
+    "list": [
+      {
+        "name": "incident",
+        "label": "Incident",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "postgres"
+        },
+        "query": "SELECT incident_id FROM audit_events GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
+        "definition": "SELECT incident_id FROM audit_events GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "sort": 0
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Reports written",
-      "description": "Unified incident reports produced by the Coordinator in the selected range.",
+      "description": "Initial incident reports produced by the Coordinator in the selected range.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
@@ -50,7 +69,7 @@
       "id": 2,
       "type": "stat",
       "title": "Incomplete reports",
-      "description": "Written on timeout or after an agent failed.",
+      "description": "Written on timeout or after an agent failed, was missing or never dispatched.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
@@ -98,7 +117,7 @@
       "id": 3,
       "type": "stat",
       "title": "Conflicted reports",
-      "description": "Top candidates too close and not known to be compatible.",
+      "description": "Top candidates too close to call.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
@@ -145,8 +164,8 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Agent failures",
-      "description": "",
+      "title": "Agent runs that failed or timed out",
+      "description": "failed, timed_out or not_dispatched runs, from the per-run view.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
@@ -167,7 +186,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS failures FROM audit_events WHERE event_type = 'agent_failed' AND $__timeFilter(created_at)"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT count(*) AS problems FROM agent_runs WHERE status IN ('failed', 'timed_out', 'not_dispatched') AND $__timeFilter(finished_at)"
         }
       ],
       "fieldConfig": {
@@ -192,6 +211,116 @@
     },
     {
       "id": 5,
+      "type": "stat",
+      "title": "Approval rate",
+      "description": "Share of human decisions that approved the proposed fix. Empty until a reviewer decides.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE payload->>'decision' = 'approved') / NULLIF(count(*), 0), 1) AS approval_rate FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Fix success rate (accuracy proxy)",
+      "description": "Fixes whose Jenkins re-validation passed. A live proxy: labelled verdict accuracy comes from the Week 8 evaluation.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ok) / NULLIF(count(*), 0), 1) AS fix_success FROM audit_events WHERE event_type = 'revalidation_completed' AND $__timeFilter(created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
       "type": "barchart",
       "title": "Verdicts",
       "description": "What the Coordinator concluded, by failure type.",
@@ -200,10 +329,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "x": 16,
-        "y": 0,
+        "x": 0,
+        "y": 4,
         "w": 8,
-        "h": 4
+        "h": 7
       },
       "targets": [
         {
@@ -225,17 +354,85 @@
       "options": {}
     },
     {
-      "id": 6,
+      "id": 8,
+      "type": "barchart",
+      "title": "Approval decisions",
+      "description": "approved / rejected / changes_requested.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT payload->>'decision' AS decision, count(*) AS decisions FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Fix pipeline outcomes",
+      "description": "How far proposed fixes got: proposal, policy, pull request, Jenkins re-validation.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT stage, count(*) AS events FROM (SELECT 'proposed' AS stage, created_at FROM audit_events WHERE event_type = 'remediation_proposed' UNION ALL SELECT 'policy denied', created_at FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' UNION ALL SELECT 'draft PR opened', created_at FROM audit_events WHERE event_type = 'pull_request_created' AND ok UNION ALL SELECT 'revalidation passed', created_at FROM audit_events WHERE event_type = 'revalidation_completed' AND ok UNION ALL SELECT 'revalidation failed', created_at FROM audit_events WHERE event_type = 'revalidation_completed' AND NOT ok) s WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 10,
       "type": "heatmap",
       "title": "Agent run duration (heat map)",
-      "description": "How long investigations take, across all agents. Colour is the number of runs in a time/duration bucket.",
+      "description": "How long investigations take, across all three agents (the Jenkins agent via the Coordinator's dispatch record). Colour is the number of runs in a time/duration bucket.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
       },
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 11,
         "w": 24,
         "h": 9
       },
@@ -249,7 +446,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT created_at AS time, duration_ms / 1000.0 AS \"seconds\" FROM audit_events WHERE event_type = 'agent_completed' AND duration_ms IS NOT NULL AND $__timeFilter(created_at) ORDER BY 1"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT finished_at AS time, duration_ms / 1000.0 AS \"seconds\" FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -287,7 +484,75 @@
       }
     },
     {
-      "id": 7,
+      "id": 11,
+      "type": "table",
+      "title": "Investigation time by agent",
+      "description": "Median and 95th-percentile run time per agent, with how many runs failed or timed out.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT agent, count(*) AS runs, count(*) FILTER (WHERE status IN ('failed', 'timed_out', 'not_dispatched')) AS problems, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p95_s FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) GROUP BY agent ORDER BY agent"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Time to report",
+      "description": "Seconds from the incident being created to its initial report.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS reports, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p95_s FROM audit_events a JOIN incidents i ON i.id = a.incident_id WHERE a.event_type = 'synthesis_completed' AND $__timeFilter(a.created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 13,
       "type": "timeseries",
       "title": "Average run duration by agent",
       "description": "",
@@ -297,7 +562,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 28,
         "w": 12,
         "h": 8
       },
@@ -311,7 +576,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), actor AS metric, avg(duration_ms) / 1000.0 AS seconds FROM audit_events WHERE event_type = 'agent_completed' AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT $__timeGroupAlias(finished_at, $__interval), agent AS metric, avg(duration_ms) / 1000.0 AS seconds FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -323,7 +588,7 @@
       "options": {}
     },
     {
-      "id": 8,
+      "id": 14,
       "type": "timeseries",
       "title": "Tool-call latency by agent",
       "description": "",
@@ -333,7 +598,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 28,
         "w": 12,
         "h": 8
       },
@@ -359,7 +624,145 @@
       "options": {}
     },
     {
-      "id": 9,
+      "id": 15,
+      "type": "stat",
+      "title": "Average time to a decision",
+      "description": "Minutes from a fix being put in front of a reviewer to their decision.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT round(avg(extract(epoch FROM (d.created_at - r.created_at)) / 60)::numeric, 1) AS minutes FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND $__timeFilter(d.created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Recent approval decisions",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 36,
+        "w": 18,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'decision' AS decision, payload->>'reviewer' AS reviewer, payload->>'attempt' AS attempt, payload->>'comment' AS comment FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "Policy denials",
+      "description": "Proposals the policy layer refused, and why.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'package' AS package, payload->>'violations' AS violations FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 18,
+      "type": "table",
+      "title": "Recent reports",
+      "description": "Score is the fused, uncalibrated value, not a probability. 'actionable' is what the remediation engine reads.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'verdict' AS verdict, (payload->>'confidence')::float AS score, payload->>'completeness' AS completeness, payload->>'conflict_status' AS conflict, payload->>'ready_for_policy_review' AS actionable FROM audit_events WHERE event_type = 'synthesis_completed' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 19,
       "type": "barchart",
       "title": "Hypotheses formed by agent",
       "description": "Anomaly findings: how many hypotheses each agent produced.",
@@ -368,8 +771,8 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "x": 0,
-        "y": 21,
+        "x": 16,
+        "y": 50,
         "w": 8,
         "h": 8
       },
@@ -393,19 +796,19 @@
       "options": {}
     },
     {
-      "id": 10,
+      "id": 20,
       "type": "table",
-      "title": "Recent reports",
-      "description": "Score is the fused, uncalibrated value, not a probability.",
+      "title": "Incident timeline (pick an incident above)",
+      "description": "Every audited step for the selected incident, in order: agents, dispatch, report, policy, approval, re-validation.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "postgres"
       },
       "gridPos": {
-        "x": 8,
-        "y": 21,
-        "w": 16,
-        "h": 8
+        "x": 0,
+        "y": 58,
+        "w": 24,
+        "h": 11
       },
       "targets": [
         {
@@ -417,7 +820,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'verdict' AS verdict, (payload->>'confidence')::float AS score, payload->>'completeness' AS completeness, payload->>'conflict_status' AS conflict, payload->>'ready_for_policy_review' AS ready FROM audit_events WHERE event_type = 'synthesis_completed' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+          "rawSql": "SELECT created_at AS \"time\", actor, event_type, ok, round(duration_ms::numeric / 1000, 1) AS seconds, summary FROM audit_events WHERE incident_id = '$incident' ORDER BY created_at, id"
         }
       ],
       "fieldConfig": {

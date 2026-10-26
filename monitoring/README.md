@@ -29,3 +29,26 @@ Verified against the running stack.
 | Jenkins builds | after a build runs | `default_jenkins_builds_last_build_result_ordinal`, `default_jenkins_builds_last_build_duration_milliseconds`, `default_jenkins_builds_success_build_count`, `default_jenkins_builds_failed_build_count` | not yet verified (no builds ran) |
 
 Note: `process_cpu_seconds` is exported as a gauge by target_app, so `rate()` works but `increase()`-style counter semantics (resets) do not apply.
+
+## Agent Ops dashboard (P2)
+
+`grafana/dashboards/agent_ops.json` is **generated** by `scripts/generate_agent_ops_dashboard.py` (edit the
+generator, not the JSON; a test fails if they differ). Every panel reads PostgreSQL (`audit_events`, plus
+`incidents` for time-to-report) through the provisioned `Audit (Postgres)` datasource, so the agents and the
+Coordinator must run with `DATABASE_URL` set.
+
+| Area | Panels | Source |
+|---|---|---|
+| Headline | reports written, incomplete, conflicted, failed/timed-out runs, approval rate, fix success rate | `synthesis_completed`, `agent_runs`, `approval_decided`, `revalidation_completed` |
+| Investigation time | duration heat map, p50/p95 per agent, time to report, average duration over time, tool-call latency | `agent_runs` (below), `incidents`, `tool_call` |
+| Approvals and policy | decisions, time to decision, recent decisions, policy denials, fix pipeline outcomes | `approval_decided`, `approval_requested`, `policy_evaluated`, `pull_request_created` |
+| One incident | timeline for the incident picked in the `Incident` variable | all events |
+
+`sql/agent_runs.sql` computes one row per agent run from `audit_events` (nothing writes the `agent_runs`
+table): an `agent_started` paired with the next `agent_completed`/`agent_failed`, plus the Coordinator's
+`agent_dispatch` events for agents that write no audit of their own (the Jenkins agent). It is unit-tested on
+SQLite (`tests/scripts/test_agent_runs_view.py`) and every panel query has been run on PostgreSQL.
+
+**"Accuracy" is a live proxy**, the fix success rate (approved fixes whose Jenkins re-validation passed).
+Live incidents have no ground-truth label, so labelled verdict accuracy comes from the Week 8 evaluation.
+
