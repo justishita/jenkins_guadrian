@@ -14,12 +14,17 @@ What is real and what is simulated - say this when presenting:
   and metrics agents' evidence is recorded - their real versions need a live Jenkins,
   Prometheus and an LLM key - and is labelled as recorded wherever it appears.
 
-Four scenarios, each with stated expectations. The script exits non-zero if any
+Five scenarios, each with stated expectations. The script exits non-zero if any
 expectation fails, so it doubles as a smoke test to run just before presenting.
+
+``--to-ui`` also writes every scenario where the web UI reads it (database, blackboard,
+report revisions; see ``scripts/demo_ui_export.py``), so each one can be opened and
+decided in the UI. ``scripts/run_ui_demo.py`` does that and starts the API.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import base64
 from datetime import datetime, timezone
@@ -31,7 +36,7 @@ import shutil
 import sys
 import tempfile
 import textwrap
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import UUID
 import warnings
 
@@ -69,12 +74,18 @@ from coordinator.policy import OpaCliGate  # noqa: E402
 from coordinator.remediation_gate import Approval, RemediationGate  # noqa: E402
 from coordinator.synthesis import IncidentReport  # noqa: E402
 
+if TYPE_CHECKING:
+    from scripts.demo_ui_export import UiExport
+
 
 REPO = "jenkinsguardians/target-app"
 BREAKING_SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 EMPTY_SHA = "c3d4e5f60718293a4b5c6d7e8f90123456789012"
 REQUIREMENTS = "target_app/requirements.txt"
 WIDTH = 76
+
+# Set by --to-ui: where each scenario's outcome is written for the web UI.
+EXPORT: UiExport | None = None
 
 
 # --- output -------------------------------------------------------------------
@@ -344,6 +355,27 @@ class Pipeline:
         await self.notify(evidence_ready(evidence.incident_id, evidence.agent))
 
 
+async def to_ui(
+    pipeline: Pipeline,
+    event: IncidentCreatedEvent,
+    build_number: int,
+    *,
+    report: bool = True,
+    related_incident_id: str | None = None,
+) -> None:
+    """Write one scenario's incident, report and audit trail for the web UI (--to-ui)."""
+    assert EXPORT is not None
+    await EXPORT.incident(event, build_number=build_number, related_incident_id=related_incident_id)
+    evidence = await pipeline.store.read_all(event.incident_id)
+    await EXPORT.evidence(evidence)
+    if report:
+        fused = await pipeline.coordinator.synthesize(event.incident_id)
+        if fused is not None:
+            await EXPORT.report(fused, evidence)
+    # Up to the moment of export: a decision made later (TC-16, in-process) is not copied.
+    await EXPORT.audit(await pipeline.audit.read(event.incident_id))
+
+
 # --- scenarios ----------------------------------------------------------------
 
 
@@ -458,6 +490,10 @@ async def scenario_tc03(workdir: Path, opa: str) -> Checks:
         if record.actor == "coordinator":
             summary = textwrap.shorten(record.summary, width=42, placeholder="...")
             detail(f"{record.event_type:<22} ok={record.ok!s:<5} {summary}")
+
+    if EXPORT is not None:
+        await to_ui(pipeline, incident(str(plan.incident_id), BREAKING_SHA, "Setup"), 42)
+        await EXPORT.proposal(plan, final, pull_request_policy=True)
     return checks
 
 
@@ -490,6 +526,10 @@ async def scenario_tc15(workdir: Path, opa: str) -> Checks:
     checks.expect("the rejection names the skipped test",
                   any("disables a test" in v for v in record.violations))
     checks.expect("no human was asked and nothing touched GitHub", github.writes == [])
+
+    if EXPORT is not None:
+        await to_ui(pipeline, incident(str(unsafe.incident_id), BREAKING_SHA, "Test"), 43, report=False)
+        await EXPORT.proposal(unsafe, record)
     return checks
 
 
@@ -533,6 +573,12 @@ async def scenario_tc12(workdir: Path, opa: str) -> Checks:
         detail(result.reason, label="no fix    ")
     checks.expect("it declines: a timeout has no automated code fix", isinstance(result, NoFix))
     checks.expect("nothing touched GitHub", github.writes == [])
+
+    if EXPORT is not None:
+        await to_ui(pipeline, event, 44)
+        if isinstance(result, NoFix):
+            await EXPORT.event(event.incident_id, "code_agent", "remediation_proposed",
+                               f"No fix proposed: {result.reason}", ok=False)
     return checks
 
 
@@ -549,6 +595,11 @@ async def scenario_tc16(workdir: Path, opa: str) -> Checks:
     step("6", "Gate 1 passes; a reviewer is asked")
     submitted = await pipeline.gate.submit(plan)
     detail(f"status    {submitted.status}")
+    if EXPORT is not None:
+        # The UI gets this incident as it stands now, awaiting a reviewer, so the decision
+        # can be made live on the review page. The rest of this scenario still runs here.
+        await to_ui(pipeline, incident(str(plan.incident_id), BREAKING_SHA, "Setup"), 45)
+        await EXPORT.proposal(plan, submitted)
 
     step("7", "Gate 2 - the reviewer rejects")
     rejection = Approval(decision="rejected", reviewer="shreya", reason="Pin to 0.28.1 is outdated; I'll pick a version.")
@@ -597,22 +648,67 @@ async def scenario_tc19(workdir: Path, opa: str) -> Checks:
     checks.expect("both earlier incidents are linked", set(report.related_incident_ids) == set(earlier))
     checks.expect("the recurrence count is carried into the report", report.recurrence_count == 2)
     checks.expect("the reviewer's Markdown has a Recurrence section", "## Recurrence" in report.to_markdown())
+
+    if EXPORT is not None:
+        previous = None
+        for number, incident_id in zip((30, 36), earlier):
+            await EXPORT.incident(incident(incident_id, BREAKING_SHA, "Setup"), build_number=number,
+                                  status="RESOLVED", related_incident_id=previous)
+            previous = incident_id
+        await to_ui(pipeline, event, 46, related_incident_id=earlier[-1])
     return checks
 
 
 # --- entry point --------------------------------------------------------------
 
 
+SCENARIOS: list[Callable[[Path, str], Any]] = [scenario_tc03, scenario_tc15, scenario_tc12, scenario_tc16, scenario_tc19]
+
+# Every incident id the scenarios use, so --to-ui can clear exactly these and nothing else.
+DEMO_INCIDENTS = (
+    "11111111-0303-4303-8303-000000000003",
+    "11111111-1515-4515-8515-000000000015",
+    "11111111-1212-4212-8212-000000000012",
+    "11111111-1616-4616-8616-000000000016",
+    "11111111-1919-4919-8919-000000000019",
+    "11111111-0000-4000-8000-0000000000a1",
+    "11111111-0000-4000-8000-0000000000a2",
+)
+
+
 async def run(opa: str) -> list[Checks]:
-    scenarios: list[Callable[[Path, str], Any]] = [scenario_tc03, scenario_tc15, scenario_tc12, scenario_tc16, scenario_tc19]
     results: list[Checks] = []
-    for scenario in scenarios:
+    for scenario in SCENARIOS:
         with tempfile.TemporaryDirectory() as tmp:
             results.append(await scenario(Path(tmp), opa))
     return results
 
 
-def main() -> int:
+async def run_to_ui(opa: str, root: Path, database_url: str) -> list[Checks]:
+    """Run every scenario against one shared, persistent blackboard and export it."""
+    global EXPORT
+    from scripts.demo_ui_export import UiExport
+
+    # data/demo_ui is owned by the demo: start every run from a clean blackboard and reports.
+    for name in ("blackboard", "evidence", "audit", "reports"):
+        shutil.rmtree(root / name, ignore_errors=True)
+    EXPORT = UiExport(database_url, root / "reports", root / "blackboard")
+    try:
+        await EXPORT.prepare(DEMO_INCIDENTS)
+        return [await scenario(root, opa) for scenario in SCENARIOS]
+    finally:
+        await EXPORT.close()
+        EXPORT = None
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="P3 pipeline demo")
+    parser.add_argument("--to-ui", action="store_true",
+                        help="also write every scenario where the web UI reads it")
+    parser.add_argument("--ui-root", type=Path, default=REPO_ROOT / "data" / "demo_ui",
+                        help="blackboard and report directory for --to-ui (default: data/demo_ui)")
+    args = parser.parse_args(argv)
+
     opa = find_opa()
     if opa is None:
         print("opa not found. Run:  python scripts/get_opa.py", file=sys.stderr)
@@ -624,7 +720,13 @@ def main() -> int:
     print(f"  policy engine: {opa}")
     print("  GitHub: in-memory fake | Jenkins & metrics evidence: recorded | everything else: real code")
 
-    results = asyncio.run(run(opa))
+    if args.to_ui:
+        database_url = os.environ.get("DATABASE_URL") or f"sqlite+aiosqlite:///{(args.ui_root / 'demo.db').as_posix()}"
+        args.ui_root.mkdir(parents=True, exist_ok=True)
+        print(f"  web UI export: {args.ui_root} | database: {database_url.split('@')[-1]}")
+        results = asyncio.run(run_to_ui(opa, args.ui_root, database_url))
+    else:
+        results = asyncio.run(run(opa))
 
     banner("Summary")
     for checks in results:

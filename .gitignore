@@ -36,3 +36,4 @@ data/blackboard/
 # test coverage output
 .coverage
 htmlcov/
+data/demo_ui/
