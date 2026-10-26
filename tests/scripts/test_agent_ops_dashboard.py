@@ -75,8 +75,25 @@ def test_the_incident_timeline_uses_the_incident_variable() -> None:
     dashboard = generated()
     timeline = next(p for p in dashboard["panels"] if p["title"].startswith("Incident timeline"))
     assert "'$incident'" in sql(timeline)
-    [variable] = dashboard["templating"]["list"]
-    assert variable["name"] == "incident" and "audit_events" in variable["query"]
+    variables = {v["name"]: v for v in dashboard["templating"]["list"]}
+    assert set(variables) == {"job", "incident"}
+    assert "audit_events" in variables["incident"]["query"]
+    # The incident list follows the chosen project and never offers the non-incident placeholder id.
+    assert "'$job'" in variables["incident"]["query"] and "00000000-0000-0000-0000-000000000000" in variables["incident"]["query"]
+
+
+def test_the_job_variable_lists_registered_projects_and_defaults_to_all() -> None:
+    job = next(v for v in generated()["templating"]["list"] if v["name"] == "job")
+    assert "FROM projects" in job["query"] and "NOT archived" in job["query"]
+    assert job["includeAll"] is True and job["allValue"] == "__all__"
+
+
+def test_every_time_ranged_panel_is_limited_to_the_selected_project() -> None:
+    for title, panel in panels().items():
+        if title.startswith("Incident timeline"):
+            continue
+        assert "'$job' = '__all__'" in sql(panel), title
+        assert "job_name = '$job'" in sql(panel) and "'$job/'" in sql(panel), title
 
 
 def test_panels_are_read_only_selects() -> None:

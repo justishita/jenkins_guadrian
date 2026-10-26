@@ -2,7 +2,7 @@
   "uid": "agent-ops",
   "title": "Agent Ops (anomaly + fusion)",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -14,6 +14,26 @@
   "templating": {
     "list": [
       {
+        "name": "job",
+        "label": "Project (Jenkins job)",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "postgres"
+        },
+        "query": "SELECT jenkins_job FROM projects WHERE NOT archived ORDER BY jenkins_job",
+        "definition": "SELECT jenkins_job FROM projects WHERE NOT archived ORDER BY jenkins_job",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "__all__",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": false,
+        "sort": 1
+      },
+      {
         "name": "incident",
         "label": "Incident",
         "type": "query",
@@ -21,8 +41,8 @@
           "type": "grafana-postgresql-datasource",
           "uid": "postgres"
         },
-        "query": "SELECT incident_id FROM audit_events GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
-        "definition": "SELECT incident_id FROM audit_events GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
+        "query": "SELECT incident_id FROM audit_events WHERE incident_id <> '00000000-0000-0000-0000-000000000000' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
+        "definition": "SELECT incident_id FROM audit_events WHERE incident_id <> '00000000-0000-0000-0000-000000000000' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') GROUP BY incident_id ORDER BY max(created_at) DESC LIMIT 50",
         "refresh": 2,
         "includeAll": false,
         "multi": false,
@@ -56,7 +76,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS reports FROM audit_events WHERE event_type = 'synthesis_completed' AND $__timeFilter(created_at)"
+          "rawSql": "SELECT count(*) AS reports FROM audit_events WHERE event_type = 'synthesis_completed' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -90,7 +110,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS incomplete FROM audit_events WHERE event_type = 'synthesis_completed' AND payload->>'completeness' = 'incomplete' AND $__timeFilter(created_at)"
+          "rawSql": "SELECT count(*) AS incomplete FROM audit_events WHERE event_type = 'synthesis_completed' AND payload->>'completeness' = 'incomplete' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -138,7 +158,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS conflicted FROM audit_events WHERE event_type = 'synthesis_completed' AND payload->>'conflict_status' = 'conflicted' AND $__timeFilter(created_at)"
+          "rawSql": "SELECT count(*) AS conflicted FROM audit_events WHERE event_type = 'synthesis_completed' AND payload->>'conflict_status' = 'conflicted' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -186,7 +206,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT count(*) AS problems FROM agent_runs WHERE status IN ('failed', 'timed_out', 'not_dispatched') AND $__timeFilter(finished_at)"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT count(*) AS problems FROM agent_runs WHERE status IN ('failed', 'timed_out', 'not_dispatched') AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(finished_at)"
         }
       ],
       "fieldConfig": {
@@ -234,7 +254,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE payload->>'decision' = 'approved') / NULLIF(count(*), 0), 1) AS approval_rate FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at)"
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE payload->>'decision' = 'approved') / NULLIF(count(*), 0), 1) AS approval_rate FROM audit_events WHERE event_type = 'approval_decided' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -289,7 +309,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ok) / NULLIF(count(*), 0), 1) AS fix_success FROM audit_events WHERE event_type = 'revalidation_completed' AND $__timeFilter(created_at)"
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ok) / NULLIF(count(*), 0), 1) AS fix_success FROM audit_events WHERE event_type = 'revalidation_completed' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at)"
         }
       ],
       "fieldConfig": {
@@ -344,7 +364,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT payload->>'verdict' AS verdict, count(*) AS reports FROM audit_events WHERE event_type = 'synthesis_completed' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT payload->>'verdict' AS verdict, count(*) AS reports FROM audit_events WHERE event_type = 'synthesis_completed' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -378,7 +398,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT payload->>'decision' AS decision, count(*) AS decisions FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT payload->>'decision' AS decision, count(*) AS decisions FROM audit_events WHERE event_type = 'approval_decided' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -412,7 +432,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT stage, count(*) AS events FROM (SELECT 'proposed' AS stage, created_at FROM audit_events WHERE event_type = 'remediation_proposed' UNION ALL SELECT 'policy denied', created_at FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' UNION ALL SELECT 'draft PR opened', created_at FROM audit_events WHERE event_type = 'pull_request_created' AND ok UNION ALL SELECT 'revalidation passed', created_at FROM audit_events WHERE event_type = 'revalidation_completed' AND ok UNION ALL SELECT 'revalidation failed', created_at FROM audit_events WHERE event_type = 'revalidation_completed' AND NOT ok) s WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT stage, count(*) AS events FROM (SELECT 'proposed' AS stage, created_at, incident_id FROM audit_events WHERE event_type = 'remediation_proposed' UNION ALL SELECT 'policy denied', created_at, incident_id FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' UNION ALL SELECT 'draft PR opened', created_at, incident_id FROM audit_events WHERE event_type = 'pull_request_created' AND ok UNION ALL SELECT 'revalidation passed', created_at, incident_id FROM audit_events WHERE event_type = 'revalidation_completed' AND ok UNION ALL SELECT 'revalidation failed', created_at, incident_id FROM audit_events WHERE event_type = 'revalidation_completed' AND NOT ok) s WHERE incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -446,7 +466,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT finished_at AS time, duration_ms / 1000.0 AS \"seconds\" FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) ORDER BY 1"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT finished_at AS time, duration_ms / 1000.0 AS \"seconds\" FROM agent_runs WHERE duration_ms IS NOT NULL AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(finished_at) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -508,7 +528,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT agent, count(*) AS runs, count(*) FILTER (WHERE status IN ('failed', 'timed_out', 'not_dispatched')) AS problems, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p95_s FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) GROUP BY agent ORDER BY agent"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT agent, count(*) AS runs, count(*) FILTER (WHERE status IN ('failed', 'timed_out', 'not_dispatched')) AS problems, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) / 1000)::numeric, 1) AS p95_s FROM agent_runs WHERE duration_ms IS NOT NULL AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(finished_at) GROUP BY agent ORDER BY agent"
         }
       ],
       "fieldConfig": {
@@ -542,7 +562,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT count(*) AS reports, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p95_s FROM audit_events a JOIN incidents i ON i.id = a.incident_id WHERE a.event_type = 'synthesis_completed' AND $__timeFilter(a.created_at)"
+          "rawSql": "SELECT count(*) AS reports, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p50_s, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (a.created_at - i.created_at))))::numeric, 1) AS p95_s FROM audit_events a JOIN incidents i ON i.id = a.incident_id WHERE a.event_type = 'synthesis_completed' AND a.incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(a.created_at)"
         }
       ],
       "fieldConfig": {
@@ -576,7 +596,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT $__timeGroupAlias(finished_at, $__interval), agent AS metric, avg(duration_ms) / 1000.0 AS seconds FROM agent_runs WHERE duration_ms IS NOT NULL AND $__timeFilter(finished_at) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT $__timeGroupAlias(finished_at, $__interval), agent AS metric, avg(duration_ms) / 1000.0 AS seconds FROM agent_runs WHERE duration_ms IS NOT NULL AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(finished_at) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -612,7 +632,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), actor AS metric, avg(duration_ms) AS ms FROM audit_events WHERE event_type = 'tool_call' AND duration_ms IS NOT NULL AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), actor AS metric, avg(duration_ms) AS ms FROM audit_events WHERE event_type = 'tool_call' AND duration_ms IS NOT NULL AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -648,7 +668,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT round(avg(extract(epoch FROM (d.created_at - r.created_at)) / 60)::numeric, 1) AS minutes FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND $__timeFilter(d.created_at)"
+          "rawSql": "SELECT round(avg(extract(epoch FROM (d.created_at - r.created_at)) / 60)::numeric, 1) AS minutes FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND d.incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(d.created_at)"
         }
       ],
       "fieldConfig": {
@@ -684,7 +704,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'decision' AS decision, payload->>'reviewer' AS reviewer, payload->>'attempt' AS attempt, payload->>'comment' AS comment FROM audit_events WHERE event_type = 'approval_decided' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'decision' AS decision, payload->>'reviewer' AS reviewer, payload->>'attempt' AS attempt, payload->>'comment' AS comment FROM audit_events WHERE event_type = 'approval_decided' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
         }
       ],
       "fieldConfig": {
@@ -718,7 +738,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'package' AS package, payload->>'violations' AS violations FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'package' AS package, payload->>'violations' AS violations FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
         }
       ],
       "fieldConfig": {
@@ -752,7 +772,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'verdict' AS verdict, (payload->>'confidence')::float AS score, payload->>'completeness' AS completeness, payload->>'conflict_status' AS conflict, payload->>'ready_for_policy_review' AS actionable FROM audit_events WHERE event_type = 'synthesis_completed' AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
+          "rawSql": "SELECT created_at AS \"time\", incident_id, payload->>'verdict' AS verdict, (payload->>'confidence')::float AS score, payload->>'completeness' AS completeness, payload->>'conflict_status' AS conflict, payload->>'ready_for_policy_review' AS actionable FROM audit_events WHERE event_type = 'synthesis_completed' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) ORDER BY created_at DESC LIMIT 20"
         }
       ],
       "fieldConfig": {
@@ -786,7 +806,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT actor, count(*) AS hypotheses FROM audit_events WHERE event_type = 'hypothesis_formed' AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT actor, count(*) AS hypotheses FROM audit_events WHERE event_type = 'hypothesis_formed' AND incident_id IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' OR left(job_name, length('$job') + 1) = '$job/') AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
