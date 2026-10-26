@@ -64,11 +64,12 @@ def scope(column: str = "incident_id") -> str:
     """Limit a panel to the project picked in the ``$job`` variable (``__all__`` = no limit).
 
     An incident belongs to a project when its job equals the project's Jenkins job or sits under it, the
-    same rule the UI uses. Job names cannot contain quotes (the UI validates them), so inlining is safe.
+    same rule the UI uses. ``$job`` is deliberately not wrapped in quotes: Grafana's SQL datasources quote the value of a variable
+    that has an "All" option themselves (and escape it), so adding quotes breaks the query.
     """
     return (
-        f"{column} IN (SELECT id FROM incidents WHERE '$job' = '__all__' OR job_name = '$job' "
-        "OR left(job_name, length('$job') + 1) = '$job/')"
+        f"{column} IN (SELECT id FROM incidents WHERE $job = '__all__' OR job_name = $job "
+        "OR left(job_name, length($job) + 1) = $job || '/')"
     )
 
 

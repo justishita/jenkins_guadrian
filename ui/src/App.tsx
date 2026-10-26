@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./auth";
 import { Shell } from "./Shell";
+import { DashboardsPage } from "./pages/DashboardsPage";
 import { IncidentPage } from "./pages/IncidentPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -24,6 +25,7 @@ export function App() {
             <Route path="incidents" element={<IncidentsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="dashboards" element={<DashboardsPage />} />
           </Route>
           <Route path="incidents/:incidentId" element={<IncidentPage />} />
           <Route path="admin/users" element={<UsersPage />} />

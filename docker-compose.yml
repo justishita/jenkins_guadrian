@@ -109,17 +109,30 @@ services:
       - "3001:80"
     depends_on:
       - agent-api
+      - grafana
     networks:
       - devnet
 
   grafana:
     image: grafana/grafana:11.2.0
     ports:
-      - "3000:3000"
+      # Local only: the admin login. Everyone else reaches Grafana through the UI's /grafana/ proxy.
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Embedded in the UI under /grafana/. nginx only forwards signed-in UI users and sets the
+      # X-WEBAUTH-USER header itself (a read-only Viewer), so Grafana trusts it (auth proxy).
+      - GF_SERVER_ROOT_URL=http://localhost:3000/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_LIVE_ALLOWED_ORIGINS=http://localhost:3001
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
       # Used by the provisioned Postgres (audit trail) datasource.
       - POSTGRES_DB=${POSTGRES_DB:?Set POSTGRES_DB in .env}
       - POSTGRES_USER=${POSTGRES_USER:?Set POSTGRES_USER in .env}

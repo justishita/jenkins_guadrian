@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { describeProblem } from "../api";
+import { dashboardUrl } from "../pages/DashboardsPage";
 
 type Reply = { status?: number; body?: unknown };
 
@@ -170,5 +171,56 @@ describe("describeProblem", () => {
     expect(describeProblem({ detail: "Nope" }, "x")).toBe("Nope");
     expect(describeProblem({ detail: [{ msg: "Value error, bad repo" }] }, "x")).toBe("bad repo");
     expect(describeProblem(null, "fallback")).toBe("fallback");
+  });
+});
+
+describe("dashboards", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("embeds the dashboard from the same origin, filtered to the project's job", () => {
+    const url = dashboardUrl("target-app");
+    expect(url.startsWith("/grafana/d/agent-ops/")).toBe(true); // relative: never another origin
+    expect(url).toContain("var-job=target-app");
+    expect(dashboardUrl("a b&c=d")).toContain("var-job=a+b%26c%3Dd"); // a job name cannot add parameters
+    expect(dashboardUrl("x", false)).not.toContain("kiosk");
+  });
+
+  it("shows the Dashboards tab and an iframe for a project", async () => {
+    mockApi({
+      "GET /auth/me": { body: { user: reviewer, csrf_token: "t" } },
+      "GET /projects": { body: [project] },
+      "GET /projects/1": { body: project },
+    });
+    renderApp("/projects/1/dashboards");
+    const frame = await screen.findByTitle("Grafana dashboard for Shop");
+    expect(frame).toHaveAttribute("src", expect.stringContaining("var-job=target-app"));
+    expect(screen.getByRole("link", { name: "Dashboards" })).toBeInTheDocument();
+  });
+});
+
+describe("overview", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("links to this project's own Dashboards tab", async () => {
+    mockApi({
+      "GET /auth/me": { body: { user: reviewer, csrf_token: "t" } },
+      "GET /projects": { body: [project] },
+      "GET /projects/1": { body: project },
+      "GET /projects/1/stats?days=14": {
+        body: {
+          days: 14,
+          incidents_total: 0,
+          incidents_per_day: [],
+          reports: { total: 0, incomplete: 0, conflicted: 0, time_to_report_p50_s: null, time_to_report_p95_s: null },
+          verdicts: [],
+          agent_time: [],
+          approvals: { decided: 0, approval_rate_pct: null, by_decision: [], pending: 0 },
+          fix_outcomes: { pull_requests_opened: 0, policy_denied: 0, revalidation_passed: 0, revalidation_failed: 0, fix_success_pct: null, note: "proxy" },
+        },
+      },
+    });
+    renderApp("/projects/1");
+    const link = await screen.findByRole("link", { name: /View Grafana dashboards/ });
+    expect(link).toHaveAttribute("href", "/projects/1/dashboards");
   });
 });

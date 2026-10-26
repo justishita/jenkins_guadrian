@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     UI_TRUST_PROXY: bool = Field(default=False, description="Read the client address from X-Real-IP (set only behind our nginx)")
     UI_LOGIN_MAX_ATTEMPTS: int = Field(default=5, gt=0)
     UI_LOGIN_WINDOW_SECONDS: int = Field(default=300, gt=0)
-    GRAFANA_PUBLIC_URL: str = Field(default="http://localhost:3000", description="Where a browser can reach Grafana")
+    GRAFANA_PUBLIC_URL: str = Field(default="http://localhost:3001/grafana", description="Where a browser can reach Grafana (through the UI proxy)")
     REPORTS_DIR: str = Field(default="data/reports", description="Coordinator report revisions, read-only here")
 
     @property

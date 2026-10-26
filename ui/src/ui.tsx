@@ -47,10 +47,13 @@ export function StatusBadge({ status }: { status: string }) {
   return <Badge tone={tone}>{status.toLowerCase()}</Badge>;
 }
 
-export function Kpi({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
+export function Kpi({ label, value, hint, icon }: { label: string; value: ReactNode; hint?: string; icon?: ReactNode }) {
   return (
     <div className="kpi" title={hint}>
-      <div className="kpi-value">{value}</div>
+      <div className="kpi-top">
+        <div className="kpi-value">{value}</div>
+        {icon && <span className="kpi-icon">{icon}</span>}
+      </div>
       <div className="kpi-label">{label}</div>
     </div>
   );

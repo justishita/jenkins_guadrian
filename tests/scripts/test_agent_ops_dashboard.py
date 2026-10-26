@@ -79,7 +79,7 @@ def test_the_incident_timeline_uses_the_incident_variable() -> None:
     assert set(variables) == {"job", "incident"}
     assert "audit_events" in variables["incident"]["query"]
     # The incident list follows the chosen project and never offers the non-incident placeholder id.
-    assert "'$job'" in variables["incident"]["query"] and "00000000-0000-0000-0000-000000000000" in variables["incident"]["query"]
+    assert "$job" in variables["incident"]["query"] and "00000000-0000-0000-0000-000000000000" in variables["incident"]["query"]
 
 
 def test_the_job_variable_lists_registered_projects_and_defaults_to_all() -> None:
@@ -92,8 +92,16 @@ def test_every_time_ranged_panel_is_limited_to_the_selected_project() -> None:
     for title, panel in panels().items():
         if title.startswith("Incident timeline"):
             continue
-        assert "'$job' = '__all__'" in sql(panel), title
-        assert "job_name = '$job'" in sql(panel) and "'$job/'" in sql(panel), title
+        assert "$job = '__all__'" in sql(panel), title
+        assert "job_name = $job" in sql(panel) and "= $job || '/'" in sql(panel), title
+
+
+def test_the_job_variable_is_never_wrapped_in_quotes() -> None:
+    """Grafana quotes an include-all variable's value itself, so a quoted '$job' becomes ''value'' and fails."""
+    dashboard = generated()
+    texts = [sql(p) for p in dashboard["panels"]] + [v["query"] for v in dashboard["templating"]["list"]]
+    for text in texts:
+        assert "'$job" not in text and "$job'" not in text
 
 
 def test_panels_are_read_only_selects() -> None:

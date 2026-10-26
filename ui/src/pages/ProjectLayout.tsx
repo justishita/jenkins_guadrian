@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useOutletContext, useParams } from "react-router-dom";
 import { api, ApiError, type ProjectSummary } from "../api";
+import { CubeIcon, FlameIcon, GitHubIcon, WrenchIcon } from "../icons";
 import { Badge, Problem } from "../ui";
 import { NotFound } from "./NotFound";
 
@@ -20,23 +21,37 @@ export function ProjectLayout() {
 
   return (
     <>
-      <div className="row between">
+      <header className="project-head">
+        <span className="project-tile">
+          <CubeIcon size={34} />
+        </span>
         <div>
           <h1>
-            {data.name} {data.archived && <Badge>archived</Badge>}
-          </h1>
-          <p className="muted">
-            Jenkins <code>{data.jenkins_job}</code> · GitHub <code>{data.github_repo}</code>
-            {data.prometheus_job && (
-              <>
-                {" "}
-                · Prometheus <code>{data.prometheus_job}</code>
-              </>
+            {data.name}{" "}
+            {data.archived ? (
+              <span className="pill muted-pill">Archived</span>
+            ) : (
+              <span className="pill active-pill">
+                <span className="dot" /> Active
+              </span>
             )}
-          </p>
-          {data.description && <p>{data.description}</p>}
+          </h1>
+          <div className="chips">
+            <span className="chip">
+              <WrenchIcon size={16} /> Jenkins <code>{data.jenkins_job}</code>
+            </span>
+            <span className="chip">
+              <GitHubIcon size={16} /> GitHub <code>{data.github_repo}</code>
+            </span>
+            {data.prometheus_job && (
+              <span className="chip">
+                <FlameIcon size={16} /> Prometheus <code>{data.prometheus_job}</code>
+              </span>
+            )}
+          </div>
+          {data.description && <p className="muted">{data.description}</p>}
         </div>
-      </div>
+      </header>
       <nav className="tabs" aria-label="Project">
         <NavLink to="." end>
           Overview
@@ -46,6 +61,7 @@ export function ProjectLayout() {
           Reviews {data.pending_reviews > 0 && <Badge tone="info">{data.pending_reviews}</Badge>}
         </NavLink>
         <NavLink to="reports">Reports</NavLink>
+        <NavLink to="dashboards">Dashboards</NavLink>
       </nav>
       <Outlet context={data} />
     </>
