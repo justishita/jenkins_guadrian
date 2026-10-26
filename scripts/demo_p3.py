@@ -689,9 +689,12 @@ async def run_to_ui(opa: str, root: Path, database_url: str) -> list[Checks]:
     global EXPORT
     from scripts.demo_ui_export import UiExport
 
-    # data/demo_ui is owned by the demo: start every run from a clean blackboard and reports.
-    for name in ("blackboard", "evidence", "audit", "reports"):
-        shutil.rmtree(root / name, ignore_errors=True)
+    # Start every run clean, but only for the demo's own incidents: the root may be the
+    # live stack's data/ directory, shared with real incidents.
+    for incident_id in DEMO_INCIDENTS:
+        for name in ("blackboard", "evidence", "reports"):
+            shutil.rmtree(root / name / incident_id, ignore_errors=True)
+        (root / "audit" / f"{incident_id}.jsonl").unlink(missing_ok=True)
     EXPORT = UiExport(database_url, root / "reports", root / "blackboard")
     try:
         await EXPORT.prepare(DEMO_INCIDENTS)

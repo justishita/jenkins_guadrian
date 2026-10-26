@@ -16,6 +16,15 @@ first run with a random password and session secret. Open that file for the logi
 RabbitMQ is not needed: the API retries it in the background and a decision made in
 the UI is still recorded; only the ``approval.decided`` message is not delivered.
 Ctrl+C stops everything.
+
+With the full Docker stack running instead (``docker compose up -d``):
+
+    python scripts/run_ui_demo.py --docker
+
+adds the five demo incidents to the stack's own database, blackboard and reports
+(``data/``), next to any real incidents, and starts nothing. Open the stack's UI on
+http://localhost:3001. It needs Postgres published on 127.0.0.1:55432, which the local,
+git-ignored ``docker-compose.override.yml`` does.
 """
 
 from __future__ import annotations
@@ -72,11 +81,49 @@ def environment() -> dict[str, str]:
     return env
 
 
+def dotenv(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.lstrip().startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip()
+    return values
+
+
+def into_docker_stack() -> int:
+    """Write the demo incidents into the running Docker stack's database and data/."""
+    settings = dotenv(REPO_ROOT / ".env")
+    missing = [key for key in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB") if not settings.get(key)]
+    if missing:
+        print(f".env is missing {', '.join(missing)}", file=sys.stderr)
+        return 2
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["DATABASE_URL"] = (
+        f"postgresql+asyncpg://{settings['POSTGRES_USER']}:{settings['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:55432/{settings['POSTGRES_DB']}"
+    )
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "demo_p3.py"), "--to-ui", "--ui-root", str(REPO_ROOT / "data")],
+        cwd=REPO_ROOT,
+        env=env,
+    )
+    if result.returncode == 0:
+        print("
+  Demo incidents added. Open http://localhost:3001 (login: UI_ADMIN_* in .env).
+")
+    return result.returncode
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the P3 demo and show it in the web UI.")
     parser.add_argument("--no-ui", action="store_true", help="start only the API, not the UI dev server")
     parser.add_argument("--skip-demo", action="store_true", help="keep the existing demo data")
+    parser.add_argument("--docker", action="store_true", help="add the demo to the running Docker stack instead")
     args = parser.parse_args()
+    if args.docker:
+        return into_docker_stack()
     env = environment()
 
     if not args.skip_demo:
