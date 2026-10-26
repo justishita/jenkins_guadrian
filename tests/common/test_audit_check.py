@@ -17,6 +17,17 @@ def rec(seconds: int, actor: str, event: str, **payload) -> AuditRecord:
     )
 
 
+def dispatch(seconds: int, agent: str, outcome: str = "completed", attempt: int = 0, duration_ms: float | None = 1200.0) -> AuditRecord:
+    return AuditRecord(
+        incident_id=INCIDENT,
+        actor="coordinator",
+        event_type="agent_dispatch",
+        payload={"agent": agent, "attempt": attempt, "outcome": outcome, "via": "a2a"},
+        duration_ms=duration_ms,
+        created_at=T0 + timedelta(seconds=seconds),
+    )
+
+
 def kinds(records, **kwargs) -> list[str]:
     return [p.kind for p in check_incident(records, now=LATER, **kwargs)]
 
@@ -25,6 +36,7 @@ def test_a_clean_trail_has_no_problems():
     records = [
         rec(0, "metrics_agent", "agent_started"),
         rec(5, "metrics_agent", "agent_completed"),
+        dispatch(6, "metrics_agent"),
         rec(10, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0,
             agent_outcomes={"metrics_agent": "completed"}),
     ]
@@ -98,7 +110,8 @@ def test_a_new_attempt_may_have_its_own_initial_synthesis():
 
 def test_an_agent_reported_completed_but_never_audited_is_flagged_unless_allowed():
     records = [
-        rec(0, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0,
+        dispatch(0, "metrics_agent", "timed_out"),
+        rec(1, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, reason="recovered",
             agent_outcomes={"jenkins_agent": "completed", "metrics_agent": "timed_out"}),
     ]
     assert kinds(records, required_agents=["jenkins_agent", "metrics_agent"]) == ["unaudited_agent"]
@@ -106,7 +119,10 @@ def test_an_agent_reported_completed_but_never_audited_is_flagged_unless_allowed
 
 
 def test_a_timed_out_agent_needs_no_run_in_the_trail():
-    records = [rec(0, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, agent_outcomes={"code_agent": "timed_out"})]
+    records = [
+        dispatch(0, "code_agent", "timed_out"),
+        rec(1, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, agent_outcomes={"code_agent": "timed_out"}),
+    ]
     assert kinds(records, required_agents=["code_agent"]) == []
 
 
@@ -114,3 +130,44 @@ def test_unredacted_text_in_a_payload_is_flagged():
     records = [rec(0, "metrics_agent", "tool_call")]
     records[0].payload["note"] = "password=hunter2hunter2"  # bypasses the model's own validators on purpose
     assert kinds(records) == ["unredacted"]
+
+
+# ---- agent_dispatch --------------------------------------------------------------------
+
+
+def test_a_dispatch_audits_an_agent_that_writes_no_audit_of_its_own():
+    """The Jenkins agent has no agent_started events; the Coordinator's dispatch record covers it."""
+    records = [
+        dispatch(0, "jenkins_agent"),
+        rec(5, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, agent_outcomes={"jenkins_agent": "completed"}),
+    ]
+    assert kinds(records, required_agents=["jenkins_agent"]) == []
+
+
+def test_a_live_report_that_lists_an_agent_which_was_never_dispatched_is_flagged():
+    records = [
+        dispatch(0, "metrics_agent"),
+        rec(5, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0,
+            agent_outcomes={"metrics_agent": "completed", "code_agent": "not_dispatched"}),
+    ]
+    assert kinds(records, required_agents=["metrics_agent"]) == ["undispatched_outcome"]
+
+
+def test_a_recovered_report_needs_no_dispatch_records():
+    records = [rec(5, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, reason="recovered",
+                   agent_outcomes={"metrics_agent": "timed_out"})]
+    assert kinds(records, required_agents=["metrics_agent"]) == []
+
+
+def test_dispatch_is_matched_per_attempt():
+    records = [
+        dispatch(0, "metrics_agent", attempt=0),
+        rec(5, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0, agent_outcomes={"metrics_agent": "completed"}),
+        rec(50, "coordinator", "synthesis_completed", report_revision_id="r2", attempt=1, agent_outcomes={"metrics_agent": "completed"}),
+    ]
+    assert kinds(records, required_agents=["metrics_agent"]) == ["undispatched_outcome"]  # attempt 1 was never dispatched
+
+
+def test_an_unknown_dispatch_outcome_and_a_missing_duration_are_flagged():
+    records = [dispatch(0, "code_agent", outcome="mostly_done", duration_ms=None)]
+    assert sorted(kinds(records)) == ["bad_dispatch_outcome", "dispatch_without_duration"]

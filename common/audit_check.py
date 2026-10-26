@@ -23,6 +23,8 @@ from common.redaction import redact
 
 TERMINAL = ("agent_completed", "agent_failed")
 SYNTHESIS = ("synthesis_completed", "synthesis_revised")
+DISPATCH = "agent_dispatch"
+OUTCOMES = ("completed", "failed", "timed_out", "not_dispatched")
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,7 @@ def check_incident(
 
     problems += _check_runs(ordered, now, stale_after)
     problems += _check_syntheses(ordered)
+    problems += _check_dispatches(ordered)
     problems += _check_redaction(ordered)
     problems += _check_agent_coverage(ordered, required_agents, set(unaudited_ok))
     return problems
@@ -97,6 +100,30 @@ def _check_syntheses(ordered: Sequence[AuditRecord]) -> list[Problem]:
     return problems
 
 
+def _check_dispatches(ordered: Sequence[AuditRecord]) -> list[Problem]:
+    """Every agent in a live (not recovered) initial report was dispatched, with a valid outcome."""
+    problems: list[Problem] = []
+    dispatched: dict[tuple[object, str], str] = {}
+    for record in ordered:
+        if record.event_type != DISPATCH:
+            continue
+        outcome = record.payload.get("outcome")
+        agent = str(record.payload.get("agent", ""))
+        if outcome not in OUTCOMES:
+            problems.append(Problem("bad_dispatch_outcome", agent or record.actor, f"outcome {outcome!r} is not one of {OUTCOMES}"))
+        if record.duration_ms is None:
+            problems.append(Problem("dispatch_without_duration", agent or record.actor, "agent_dispatch has no duration_ms"))
+        dispatched[(record.payload.get("attempt", 0), agent)] = str(outcome)
+    for record in ordered:
+        if record.event_type != "synthesis_completed" or record.payload.get("reason") == "recovered":
+            continue
+        attempt = record.payload.get("attempt", 0)
+        for agent in record.payload.get("agent_outcomes") or {}:
+            if (attempt, agent) not in dispatched:
+                problems.append(Problem("undispatched_outcome", agent, f"attempt {attempt} report lists {agent} but it was never dispatched"))
+    return problems
+
+
 def _check_redaction(ordered: Sequence[AuditRecord]) -> list[Problem]:
     problems: list[Problem] = []
     for record in ordered:
@@ -112,11 +139,13 @@ def _check_agent_coverage(ordered: Sequence[AuditRecord], required: Iterable[str
     for record in ordered:
         if record.event_type in SYNTHESIS:
             outcomes.update(record.payload.get("agent_outcomes") or {})
+    # An agent is audited if it wrote its own run, or the Coordinator audited its dispatch.
     started = {record.actor for record in ordered if record.event_type == "agent_started"}
+    started |= {str(record.payload.get("agent")) for record in ordered if record.event_type == DISPATCH}
     problems = []
     for agent in required:
         if outcomes.get(agent) == "completed" and agent not in started and agent not in unaudited_ok:
-            problems.append(Problem("unaudited_agent", agent, "reported completed but has no audited run"))
+            problems.append(Problem("unaudited_agent", agent, "reported completed but has no audited run or dispatch"))
     return problems
 
 

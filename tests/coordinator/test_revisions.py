@@ -331,3 +331,48 @@ async def test_recovery_after_a_late_agent_adds_one_revision_not_a_duplicate(wor
         await world.runtime.client.aclose()
     assert [r.revision for r in await world.revisions.revisions(event.incident_id)] == [1, 2]
     assert [r.event_type for r in await world.audit_events(event)] == ["synthesis_completed", "synthesis_revised"]
+
+
+# ---- agent_dispatch audit events -------------------------------------------------------
+
+
+async def test_every_dispatch_is_audited_with_its_outcome_and_a_duration(world):
+    event = world.event = make_event()
+    await world.evidence.write(evidence(event, "jenkins_agent"))
+    await world.evidence.write(evidence(event, "metrics_agent", UNKNOWN, 0.2))
+    try:
+        await world.runtime.dispatch_all(event)  # code_agent never reports: timed_out
+    finally:
+        await world.runtime.stop()
+        await world.runtime.client.aclose()
+
+    dispatches = {r.payload["agent"]: r for r in await world.audit_events(event, types=("agent_dispatch",))}
+    assert set(dispatches) == {"jenkins_agent", "metrics_agent", "code_agent"}
+    assert dispatches["code_agent"].payload["outcome"] == "timed_out" and dispatches["code_agent"].ok is False
+    assert dispatches["jenkins_agent"].payload["via"] == "a2a" and dispatches["jenkins_agent"].ok is True
+    assert all(r.actor == "coordinator" and r.duration_ms is not None and r.duration_ms >= 0 for r in dispatches.values())
+
+
+async def test_a_redelivered_message_adds_no_dispatch_events(world):
+    event = world.event = make_event()
+    for agent in AGENTS:
+        await world.evidence.write(evidence(event, agent))
+    try:
+        await world.runtime.dispatch_all(event)
+        await world.runtime.dispatch_all(event)
+    finally:
+        await world.runtime.client.aclose()
+    assert len(await world.audit_events(event, types=("agent_dispatch",))) == 3
+
+
+async def test_the_trail_a_real_dispatch_leaves_passes_the_audit_check_without_exemptions(world):
+    from common.audit_check import check_incident
+
+    event = world.event = make_event()
+    for agent in AGENTS:
+        await world.evidence.write(evidence(event, agent))
+    try:
+        await world.runtime.dispatch_all(event)
+    finally:
+        await world.runtime.client.aclose()
+    assert check_incident(await world.audit.read(event.incident_id)) == []  # no unaudited_ok needed

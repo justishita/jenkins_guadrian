@@ -24,7 +24,12 @@ from common.blackboard import get_blackboard
 from common.evidence_store import FileEvidenceStore
 from common.models import IncidentCreatedEvent
 from coordinator.agent import CoordinatorAgent
-from coordinator.revisions import PersistResult, Revision, RevisionStore, evidence_fingerprint
+from coordinator.revisions import (
+    PersistResult,
+    Revision,
+    RevisionStore,
+    evidence_fingerprint,
+)
 from coordinator.stores import MergedEvidenceStore
 from coordinator.synthesis import IncidentReport
 
@@ -206,7 +211,7 @@ class CoordinatorRuntime:
 
     async def _dispatch_all(self, event: IncidentCreatedEvent) -> dict[str, str]:
         agents = [agent for agent in AGENT_NAMES if agent in self.required_agents]
-        results = await asyncio.gather(*(self._run_agent(agent, event) for agent in agents))
+        results = await asyncio.gather(*(self._timed_run(agent, event) for agent in agents))
         outcomes = {agent: result.value for agent, result in zip(agents, results, strict=True)}
         self.outcomes[str(event.incident_id)] = outcomes
         logger.info(
@@ -360,6 +365,41 @@ class CoordinatorRuntime:
             return sorted(found)
 
         return await asyncio.to_thread(scan)
+
+    async def _timed_run(self, agent: str, event: IncidentCreatedEvent) -> AgentOutcome:
+        """Run one agent and audit the dispatch: who, how it ended, and how long it took.
+
+        This is the only audit record the Jenkins agent has (it writes none of its own), and it
+        gives every agent - including ones that timed out or were never dispatched - a duration
+        and an outcome for the Agent Ops dashboard and for ``common.audit_check``.
+        """
+        started = time.monotonic()
+        outcome = await self._run_agent(agent, event)
+        await self._audit_dispatch(event, agent, outcome, (time.monotonic() - started) * 1000)
+        return outcome
+
+    async def _audit_dispatch(self, event: IncidentCreatedEvent, agent: str, outcome: AgentOutcome, duration_ms: float) -> None:
+        if self.audit is None:
+            return
+        try:
+            await self.audit.record(
+                AuditRecord(
+                    incident_id=event.incident_id,
+                    actor="coordinator",
+                    event_type="agent_dispatch",
+                    summary=f"{agent} {outcome.value}",
+                    payload={
+                        "agent": agent,
+                        "attempt": event.remediation_attempt,
+                        "outcome": outcome.value,
+                        "via": "a2a" if agent in self.a2a_agents else "blackboard_watch",
+                    },
+                    duration_ms=duration_ms,
+                    ok=outcome is AgentOutcome.COMPLETED,
+                )
+            )
+        except Exception as error:  # noqa: BLE001 - auditing must never fail a dispatch
+            logger.error("Could not audit the dispatch (%s)", type(error).__name__)
 
     async def _run_agent(self, agent: str, event: IncidentCreatedEvent) -> AgentOutcome:
         if agent in self.a2a_agents:
