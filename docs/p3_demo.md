@@ -53,6 +53,32 @@ versions are covered by their own test suites.
 Two of the five end in "no". That is the point: the system's value is as much in what it
 refuses to do as in what it does.
 
+## Showing it in the web UI
+
+The same five scenarios can be opened in the team's web UI, with no Docker:
+
+```bash
+.venv\Scripts\python scripts\run_ui_demo.py
+```
+
+It runs `demo_p3.py --to-ui`, which writes every scenario to a local SQLite database
+and a blackboard and report directory under `data/demo_ui/`, then starts the API on
+:8000 and the UI on http://localhost:5173. The first run creates `.env.demo`
+(git-ignored) with the login; the first run also installs the UI's npm packages.
+
+| Incident | Build | What the page shows |
+| --- | --- | --- |
+| TC-03 | #42 | report, evidence, the one-line diff, both policies allowed, approved by ishita, `pull_request_created` in the timeline |
+| TC-15 | #43 | the skip-the-test diff, **blocked** by the remediation policy, with the violation |
+| TC-12 | #44 | timeout found by two agents; the code agent abstains; "No fix proposed" in the timeline |
+| TC-16 | #45 | left **awaiting a decision**: reject (or approve) it live on the page |
+| TC-19 | #46 | the Recurrence line linking the two earlier incidents (#30, #36) |
+
+Re-running resets the demo incidents, so TC-16 is pending again. GitHub is still
+simulated, so the PR for TC-03 is in the timeline but has no link, and a decision made
+in the UI is recorded and audited but nothing acts on it - the live wiring is not
+built yet.
+
 ## Lines worth saying
 
 * **The fix is the inverse of the breaking diff.** The removed line from the commit
