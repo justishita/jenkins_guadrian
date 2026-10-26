@@ -40,6 +40,10 @@ class InvestigationConfig:
     settle: timedelta = timedelta(seconds=30)
     min_baseline_samples: int = 8
     min_incident_samples: int = 3
+    # Wall-clock budget for the query phase (the settle wait is separate). Once it is spent,
+    # the remaining planned queries are recorded as not run and the evidence reports the
+    # lower coverage, instead of the investigation outliving the Coordinator's patience.
+    deadline: timedelta = timedelta(seconds=90)
 
 
 _STEP_UNITS = {"s": 1, "m": 60, "h": 3600}
@@ -63,6 +67,7 @@ class Investigator:
         config: InvestigationConfig | None = None,
         clock: Callable[[], datetime] = _utcnow,
         sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._tool = tool
         self._planner = planner
@@ -70,6 +75,7 @@ class Investigator:
         self._config = config or InvestigationConfig()
         self._clock = clock
         self._sleep = sleep
+        self._monotonic = monotonic
 
     def investigate(self, event: IncidentCreatedEvent) -> Evidence:
         """Investigate one incident and persist exactly one evidence record."""
@@ -103,7 +109,16 @@ class Investigator:
         step = timedelta(seconds=_step_seconds(cfg.step))
         findings: list[Finding] = []
         tool_calls: list[ToolCallRecord] = []
+        budget_ends = self._monotonic() + cfg.deadline.total_seconds()
+        outage: str | None = None
         for spec in self._planner.plan(event):
+            if outage is not None:
+                # Prometheus went away mid-run: the rest were not attempted, not "normal".
+                findings.append(Finding(spec, error=outage))
+                continue
+            if self._monotonic() >= budget_ends:
+                findings.append(Finding(spec, error="investigation deadline exceeded; query not run"))
+                continue
             started = time.perf_counter()
             args = {
                 "promql": spec.promql,
@@ -117,7 +132,13 @@ class Investigator:
                 result = self._tool.query_range(spec.promql, window.baseline_start, window.end, cfg.step)
             except PrometheusUnavailableError as exc:
                 tool_calls.append(self._call(args, started, ok=False))
-                return self._failed(event, f"Prometheus unavailable: {exc}", tool_calls)
+                if not any(f.detection is not None for f in findings):
+                    # Nothing usable was collected, so there is no evidence to keep.
+                    return self._failed(event, f"Prometheus unavailable: {exc}", tool_calls)
+                # Flapping mid-run: keep what was already measured and report partial coverage.
+                outage = f"Prometheus became unavailable mid-investigation: {exc}"
+                findings.append(Finding(spec, error=outage))
+                continue
             except PrometheusError as exc:
                 tool_calls.append(self._call(args, started, ok=False))
                 findings.append(Finding(spec, error=str(exc)))
@@ -168,7 +189,7 @@ class Investigator:
         notes = []
         for finding in findings:
             if finding.error:
-                notes.append(f"{finding.spec.name}: query error")
+                notes.append(f"{finding.spec.name}: query error ({finding.error})")
             elif finding.issues:
                 notes.append(f"{finding.spec.name}: unusable ({', '.join(str(i) for i in finding.issues)})")
         usable = sum(f.quality for f in findings if f.detection is not None)
