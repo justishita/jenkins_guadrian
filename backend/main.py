@@ -17,6 +17,8 @@ from backend.routes.approvals import router as approvals_router
 from backend.routes.health import router as health_router
 from backend.routes.validation import router as validation_router
 from backend.routes.webhooks import router as webhooks_router
+from backend.ui.api import router as ui_router
+from backend.ui.seed import seed_admin
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 1. Initialize DB tables
     await init_db()
+    await seed_admin()
 
     # 2. Connect to RabbitMQ asynchronously with retry
     asyncio.create_task(publisher.connect(max_retries=5, retry_interval=2.0))
@@ -97,7 +100,7 @@ app.include_router(health_router)
 app.include_router(webhooks_router)
 app.include_router(validation_router)
 app.include_router(approvals_router)
-app.include_router(approvals_router)
+app.include_router(ui_router)
 
 
 @app.get("/")

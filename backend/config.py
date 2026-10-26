@@ -107,6 +107,20 @@ class Settings(BaseSettings):
         description="Base backoff seconds for notification retries"
     )
 
+    # Web UI (accounts, projects, review). ``UI_SESSION_SECRET`` unset => login is disabled (fail closed).
+    UI_SESSION_SECRET: str = Field(default="", description="HMAC key for session cookies; at least 32 characters")
+    UI_SESSION_HOURS: int = Field(default=12, gt=0, le=720)
+    UI_COOKIE_NAME: str = "jg_session"
+    UI_COOKIE_SECURE: bool = Field(default=False, description="Set true behind HTTPS so the cookie is never sent in clear")
+    UI_ADMIN_EMAIL: str = Field(default="", description="Seeds the first admin when no users exist")
+    UI_ADMIN_PASSWORD: str = Field(default="", description="Password for the seeded admin; never logged")
+    UI_BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=15, description="bcrypt cost; tests lower it")
+    UI_TRUST_PROXY: bool = Field(default=False, description="Read the client address from X-Real-IP (set only behind our nginx)")
+    UI_LOGIN_MAX_ATTEMPTS: int = Field(default=5, gt=0)
+    UI_LOGIN_WINDOW_SECONDS: int = Field(default=300, gt=0)
+    GRAFANA_PUBLIC_URL: str = Field(default="http://localhost:3000", description="Where a browser can reach Grafana")
+    REPORTS_DIR: str = Field(default="data/reports", description="Coordinator report revisions, read-only here")
+
     @property
     def async_database_url(self) -> str:
         """Ensure the URL uses the asyncpg driver."""

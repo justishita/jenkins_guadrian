@@ -61,6 +61,12 @@ class AuditEventType(str, Enum):
     AGENT_DISPATCH = "agent_dispatch"  # the Coordinator ran/watched one agent: outcome + duration
     SYNTHESIS_COMPLETED = "synthesis_completed"  # the initial report for an incident attempt
     SYNTHESIS_REVISED = "synthesis_revised"  # a later report revision (e.g. a late agent)
+    USER_LOGIN = "user_login"
+    USER_LOGIN_FAILED = "user_login_failed"
+    USER_LOGOUT = "user_logout"
+    USER_CHANGED = "user_changed"
+    PROJECT_CREATED = "project_created"
+    PROJECT_CHANGED = "project_changed"
     FUSED_REPORT_COMPLETED = "fused_report_completed"  # the second, P2 fusion path (not authoritative)
     POLICY_EVALUATED = "policy_evaluated"
     REMEDIATION_PROPOSED = "remediation_proposed"

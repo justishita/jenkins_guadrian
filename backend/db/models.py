@@ -5,6 +5,7 @@ from backend.db.database import Base
 # P3 owns the audit schema. Importing it here registers the audit tables on the
 # shared metadata so init_db() provisions them alongside `incidents`.
 from backend.db import audit_models as audit_models  # noqa: F401
+from backend.db import ui_models as ui_models  # noqa: F401  (users, projects)
 
 
 def utc_now() -> datetime:

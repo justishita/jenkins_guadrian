@@ -441,86 +441,22 @@ async def get_approval_view(
 # 4. POST DECISION HANDLER (Handles API and Form Submissions with TC-15)
 # ------------------------------------------------------------------------------
 
-@router.post("/{incident_id}", status_code=status.HTTP_201_CREATED)
-async def post_approval_decision(
+async def apply_decision(
+    db: AsyncSession,
     incident_id: UUID,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    """Record one human decision on the latest proposal and announce it.
+    proposal: RemediationProposal,
+    decision: str,
+    reviewer: str,
+    comment: str,
+    human_override: bool,
+) -> tuple[Approval, str, bool]:
+    """Record one human decision on ``proposal``: the single place the rules live.
 
-    Authenticates via:
-    1. Header: ``Authorization: Bearer <APPROVAL_API_TOKEN>``
-    OR
-    2. Body: Signed HMAC token + verified CSRF token
-
-    Enforces TC-15:
-    Approval must be impossible if OPA check failed unless an explicit human_override is passed.
+    Enforces TC-15 (no approval of a policy-blocked proposal without an explicit human override),
+    one decision per (incident, attempt), the audit row in the same transaction, the blackboard entry
+    and the ``approval.decided`` event. Callers authenticate first (bearer token, signed link, or the
+    UI session); this function trusts that and raises ``HTTPException`` for every refusal.
     """
-    await _incident_or_404(db, incident_id)
-    proposal = await _latest_proposal(db, incident_id)
-    if proposal is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="No remediation proposal for this incident")
-
-    content_type = request.headers.get("content-type", "")
-    decision: str = ""
-    reviewer: str = ""
-    comment: str = ""
-    token_str: Optional[str] = None
-    csrf_token_str: Optional[str] = None
-    human_override: bool = False
-    auth_header = request.headers.get("authorization")
-
-    if "application/json" in content_type:
-        raw_body = await request.json()
-        if "auto_merge" in raw_body and raw_body["auto_merge"] is True:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="auto_merge is not permitted")
-        decision = raw_body.get("decision", "")
-        reviewer = raw_body.get("reviewer", "")
-        comment = raw_body.get("comment", "")
-        token_str = raw_body.get("token")
-        csrf_token_str = raw_body.get("csrf_token")
-        human_override = bool(raw_body.get("human_override", False))
-    elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
-        form_data = await request.form()
-        decision = str(form_data.get("decision", ""))
-        reviewer = str(form_data.get("reviewer", ""))
-        comment = str(form_data.get("comment", ""))
-        token_str = form_data.get("token")  # type: ignore[assignment]
-        csrf_token_str = form_data.get("csrf_token")  # type: ignore[assignment]
-        human_override = str(form_data.get("human_override", "")).lower() in ("true", "1", "yes")
-    else:
-        decision = request.query_params.get("decision", "")
-        reviewer = request.query_params.get("reviewer", "")
-        comment = request.query_params.get("comment", "")
-        token_str = request.query_params.get("token")
-        csrf_token_str = request.query_params.get("csrf_token")
-        human_override = request.query_params.get("human_override", "").lower() in ("true", "1", "yes")
-
-    has_bearer = False
-    if auth_header and auth_header.strip().lower().startswith("bearer "):
-        verify_approval_token(auth_header)
-        has_bearer = True
-    elif token_str:
-        if csrf_token_str and not verify_csrf_token(csrf_token_str, str(incident_id)):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token validation failed")
-        try:
-            token_payload = consume_approval_token(token_str)
-            if token_payload.incident_id != str(incident_id):
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Token does not match incident")
-            if token_payload.attempt != proposal.attempt:
-                raise HTTPException(status.HTTP_409_CONFLICT, detail="Token attempt does not match current proposal attempt")
-        except TamperedTokenError as err:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(err))
-        except ExpiredTokenError as err:
-            raise HTTPException(status.HTTP_410_GONE, detail=str(err))
-        except TokenAlreadyUsedError as err:
-            raise HTTPException(status.HTTP_409_CONFLICT, detail=str(err))
-        except InvalidTokenFormatError as err:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(err))
-    else:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Missing or unauthorized approval credentials")
-
     if decision not in ("approved", "rejected"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="decision must be 'approved' or 'rejected'")
 
@@ -645,6 +581,93 @@ async def post_approval_decision(
     if not published:
         logger.error("approval.decided was not published for incident %s", incident_id)
 
+    return approval, branch, published
+
+
+@router.post("/{incident_id}", status_code=status.HTTP_201_CREATED)
+async def post_approval_decision(
+    incident_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Record one human decision on the latest proposal and announce it.
+
+    Authenticates via:
+    1. Header: ``Authorization: Bearer <APPROVAL_API_TOKEN>``
+    OR
+    2. Body: Signed HMAC token + verified CSRF token
+
+    Enforces TC-15:
+    Approval must be impossible if OPA check failed unless an explicit human_override is passed.
+    """
+    await _incident_or_404(db, incident_id)
+    proposal = await _latest_proposal(db, incident_id)
+    if proposal is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="No remediation proposal for this incident")
+
+    content_type = request.headers.get("content-type", "")
+    decision: str = ""
+    reviewer: str = ""
+    comment: str = ""
+    token_str: Optional[str] = None
+    csrf_token_str: Optional[str] = None
+    human_override: bool = False
+    auth_header = request.headers.get("authorization")
+
+    if "application/json" in content_type:
+        raw_body = await request.json()
+        if "auto_merge" in raw_body and raw_body["auto_merge"] is True:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="auto_merge is not permitted")
+        decision = raw_body.get("decision", "")
+        reviewer = raw_body.get("reviewer", "")
+        comment = raw_body.get("comment", "")
+        token_str = raw_body.get("token")
+        csrf_token_str = raw_body.get("csrf_token")
+        human_override = bool(raw_body.get("human_override", False))
+    elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        form_data = await request.form()
+        decision = str(form_data.get("decision", ""))
+        reviewer = str(form_data.get("reviewer", ""))
+        comment = str(form_data.get("comment", ""))
+        token_str = form_data.get("token")  # type: ignore[assignment]
+        csrf_token_str = form_data.get("csrf_token")  # type: ignore[assignment]
+        human_override = str(form_data.get("human_override", "")).lower() in ("true", "1", "yes")
+    else:
+        decision = request.query_params.get("decision", "")
+        reviewer = request.query_params.get("reviewer", "")
+        comment = request.query_params.get("comment", "")
+        token_str = request.query_params.get("token")
+        csrf_token_str = request.query_params.get("csrf_token")
+        human_override = request.query_params.get("human_override", "").lower() in ("true", "1", "yes")
+
+    has_bearer = False
+    if auth_header and auth_header.strip().lower().startswith("bearer "):
+        verify_approval_token(auth_header)
+        has_bearer = True
+    elif token_str:
+        if csrf_token_str and not verify_csrf_token(csrf_token_str, str(incident_id)):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token validation failed")
+        try:
+            token_payload = consume_approval_token(token_str)
+            if token_payload.incident_id != str(incident_id):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Token does not match incident")
+            if token_payload.attempt != proposal.attempt:
+                raise HTTPException(status.HTTP_409_CONFLICT, detail="Token attempt does not match current proposal attempt")
+        except TamperedTokenError as err:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(err))
+        except ExpiredTokenError as err:
+            raise HTTPException(status.HTTP_410_GONE, detail=str(err))
+        except TokenAlreadyUsedError as err:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=str(err))
+        except InvalidTokenFormatError as err:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(err))
+    else:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Missing or unauthorized approval credentials")
+
+    approval, branch, published = await apply_decision(
+        db, incident_id, proposal, decision, reviewer, comment, human_override
+    )
+
     if "text/html" in request.headers.get("accept", "") and not has_bearer:
         theme = "#1a7f37" if decision == "approved" else "#cf222e"
         title = "Remediation Approved" if decision == "approved" else "Remediation Rejected"
@@ -680,4 +703,4 @@ async def post_approval_decision(
     return {"approval": approval.to_dict(), "branch": branch, "event_published": published}
 
 
-__all__ = ["ApprovalRequest", "router", "verify_approval_token"]
+__all__ = ["ApprovalRequest", "apply_decision", "router", "verify_approval_token"]
