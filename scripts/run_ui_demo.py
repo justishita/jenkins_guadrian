@@ -100,19 +100,18 @@ def into_docker_stack() -> int:
         return 2
     env = dict(os.environ)
     env["PYTHONIOENCODING"] = "utf-8"
-    env["DATABASE_URL"] = (
+    database_url = (
         f"postgresql+asyncpg://{settings['POSTGRES_USER']}:{settings['POSTGRES_PASSWORD']}"
         f"@127.0.0.1:55432/{settings['POSTGRES_DB']}"
     )
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "demo_p3.py"), "--to-ui", "--ui-root", str(REPO_ROOT / "data")],
+        [sys.executable, str(REPO_ROOT / "scripts" / "demo_p3.py"), "--to-ui",
+         "--ui-root", str(REPO_ROOT / "data"), "--database-url", database_url],
         cwd=REPO_ROOT,
         env=env,
     )
     if result.returncode == 0:
-        print("
-  Demo incidents added. Open http://localhost:3001 (login: UI_ADMIN_* in .env).
-")
+        print("\n  Demo incidents added. Open http://localhost:3001 (login: UI_ADMIN_* in .env).\n")
     return result.returncode
 
 
@@ -128,7 +127,9 @@ def main() -> int:
 
     if not args.skip_demo:
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "demo_p3.py"), "--to-ui"], cwd=REPO_ROOT, env=env
+            [sys.executable, str(REPO_ROOT / "scripts" / "demo_p3.py"), "--to-ui", "--database-url", env["DATABASE_URL"]],
+            cwd=REPO_ROOT,
+            env=env,
         )
         if result.returncode != 0:
             print("The demo failed; not starting the UI.", file=sys.stderr)
