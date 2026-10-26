@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, type Role } from "../api";
 import { useAuth } from "../auth";
-import { Badge, Problem, when } from "../ui";
+import { Badge, PanelHead, Problem, when } from "../ui";
 import { NotFound } from "./NotFound";
 
 function MemberEditor({ projectId, users }: { projectId: number; users: { id: number; email: string }[] }) {
@@ -64,10 +64,13 @@ export function UsersPage() {
 
   return (
     <>
-      <h1>Users</h1>
+      <div className="page-head">
+        <h1>Users</h1>
+        <p className="muted">Accounts that can sign in. Roles decide who can add projects and decide on fixes.</p>
+      </div>
       {users.isError && <Problem error={users.error} />}
       <div className="panel table-wrap">
-        <table>
+        <table className="data">
           <thead>
             <tr>
               <th>Email</th>
@@ -108,7 +111,7 @@ export function UsersPage() {
       </div>
 
       <form onSubmit={submit} className="panel form" aria-label="Add user">
-        <h2>Add a user</h2>
+        <PanelHead title="Add a user" subtitle="They sign in with this email and the password you set." />
         <label>
           Email
           <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
@@ -136,8 +139,7 @@ export function UsersPage() {
       </form>
 
       <section className="panel">
-        <h2>Project access</h2>
-        <p className="muted">Viewers and reviewers only see projects they are a member of. Admins see all.</p>
+        <PanelHead title="Project access" subtitle="Viewers and reviewers only see projects they are a member of. Admins see all." />
         {(projects.data ?? []).map((project) => (
           <details key={project.id}>
             <summary>{project.name}</summary>

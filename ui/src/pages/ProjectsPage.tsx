@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type ProjectInput } from "../api";
 import { useAuth } from "../auth";
+import { CubeIcon } from "../icons";
 import { Badge, Empty, Problem, when } from "../ui";
 
 const BLANK: ProjectInput = { name: "", description: "", jenkins_job: "", github_repo: "", prometheus_job: null };
@@ -77,8 +78,11 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="row between">
-        <h1>Projects</h1>
+      <div className="row between page-head">
+        <div>
+          <h1>Projects</h1>
+          <p className="muted">Each project is a Jenkins job and its repository. Pick one to see its incidents, reports and reviews.</p>
+        </div>
         {can("reviewer") && !adding && <button onClick={() => setAdding(true)}>Add project</button>}
       </div>
       {adding && <AddProject onClose={() => setAdding(false)} />}
@@ -90,6 +94,9 @@ export function ProjectsPage() {
       <div className="cards">
         {(projects.data ?? []).map((project) => (
           <Link key={project.id} to={`/projects/${project.id}`} className="card">
+            <span className="card-tile">
+              <CubeIcon size={24} />
+            </span>
             <h3>{project.name}</h3>
             <p className="muted">
               {project.jenkins_job} · {project.github_repo}

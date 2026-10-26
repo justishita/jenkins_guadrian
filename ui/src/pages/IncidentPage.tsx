@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, type IncidentDetail } from "../api";
-import { Badge, confidence, Problem, ReportBadges, shortId, StatusBadge, when } from "../ui";
+import { ExternalIcon } from "../icons";
+import { Badge, confidence, PanelHead, Problem, ReportBadges, shortId, StatusBadge, when } from "../ui";
 import { NotFound } from "./NotFound";
 
 function ReviewControls({ detail }: { detail: IncidentDetail }) {
@@ -23,7 +24,7 @@ function ReviewControls({ detail }: { detail: IncidentDetail }) {
   const blocked = detail.policy_decisions.some((p) => !p.allowed);
   return (
     <section className="panel" aria-label="Review">
-      <h2>Your decision</h2>
+      <PanelHead title="Your decision" subtitle="Recorded under your account in the audit trail." />
       {blocked && <p className="error">Policy refused this fix. Approving it will not publish a pull request; an admin can override.</p>}
       <label>
         Comment (required to reject)
@@ -64,7 +65,7 @@ export function IncidentPage() {
           <Link to={`/projects/${d.project.id}/incidents`}>← {d.project.name}</Link>
         </p>
       )}
-      <div className="row between">
+      <div className="row between page-head">
         <div>
           <h1>
             {d.incident.job_name}
@@ -77,22 +78,22 @@ export function IncidentPage() {
         <div className="row">
           {d.links.jenkins_build && (
             <a href={d.links.jenkins_build} target="_blank" rel="noopener noreferrer">
-              Jenkins build ↗
+              Jenkins build <ExternalIcon size={15} />
             </a>
           )}
           {d.links.pull_request && (
             <a href={d.links.pull_request} target="_blank" rel="noopener noreferrer">
-              Pull request ↗
+              Pull request <ExternalIcon size={15} />
             </a>
           )}
           <a href={d.links.grafana} target="_blank" rel="noopener noreferrer">
-            Grafana ↗
+            Grafana <ExternalIcon size={15} />
           </a>
         </div>
       </div>
 
       <section className="panel">
-        <h2>Report</h2>
+        <PanelHead title="Report" subtitle="What the Coordinator concluded from all the agents." />
         {!latest || !report ? (
           <p className="muted">No report has been written yet.</p>
         ) : (
@@ -124,7 +125,7 @@ export function IncidentPage() {
       </section>
 
       <section className="panel">
-        <h2>Evidence by agent</h2>
+        <PanelHead title="Evidence by agent" subtitle="What each agent found, as text." />
         {Object.keys(d.evidence).length === 0 && <p className="muted">No agent evidence recorded.</p>}
         {Object.entries(d.evidence).map(([agent, doc]) => (
           <details key={agent}>
@@ -175,7 +176,7 @@ export function IncidentPage() {
       {d.awaiting_decision && !d.can_decide && <p className="muted">This fix is waiting for a reviewer. Your role can view it but not decide.</p>}
 
       <section className="panel">
-        <h2>Timeline</h2>
+        <PanelHead title="Timeline" subtitle="Every audited step for this incident, in order." />
         <ol className="timeline">
           {d.timeline.map((event) => (
             <li key={event.id}>

@@ -85,3 +85,25 @@ export const FlameIcon = ({ size }: IconProps) => (
     <path d="M12 3c1 3.500 5 5.500 5 10a5 5 0 0 1-10 0c0-2 1-3.200 2-4.200.3 1.300 1 2 2 2.200C11 8.500 11.200 5.500 12 3Z" />
   </Svg>
 );
+export const ChevronLeftIcon = ({ size }: IconProps) => (
+  <Svg size={size}>
+    <path d="m15 6-6 6 6 6" />
+  </Svg>
+);
+export const ChevronRightIcon = ({ size }: IconProps) => (
+  <Svg size={size}>
+    <path d="m9 6 6 6-6 6" />
+  </Svg>
+);
+export const UserIcon = ({ size }: IconProps) => (
+  <Svg size={size}>
+    <circle cx="12" cy="8" r="3.6" />
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+  </Svg>
+);
+export const ShieldIcon = ({ size }: IconProps) => (
+  <Svg size={size}>
+    <path d="M12 3 5 6v5.500c0 4.500 3 7.800 7 9.500 4-1.700 7-5 7-9.500V6l-7-3Z" />
+    <path d="m9 12 2.200 2.200L15.500 10" />
+  </Svg>
+);

@@ -1,5 +1,6 @@
 // Small shared pieces. Everything from the API is rendered as text; nothing here uses innerHTML.
 import type { ReactNode } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import type { ReportSummary } from "./api";
 
 export function Badge({ tone = "neutral", children }: { tone?: "ok" | "warn" | "bad" | "neutral" | "info"; children: ReactNode }) {
@@ -31,7 +32,7 @@ export function ReportBadges({ report }: { report: ReportSummary | null }) {
   return (
     <>
       <Badge tone={report.complete ? "ok" : "warn"}>{report.complete ? "complete" : "incomplete"}</Badge>{" "}
-      <Badge tone={report.actionable ? "ok" : "neutral"}>{report.actionable ? "actionable" : "not actionable"}</Badge>
+      <Badge tone={report.actionable ? "info" : "neutral"}>{report.actionable ? "actionable" : "not actionable"}</Badge>
       {report.conflicted && (
         <>
           {" "}
@@ -81,4 +82,35 @@ export function Empty({ children }: { children: ReactNode }) {
 
 export function shortId(id: string): string {
   return id.slice(0, 8);
+}
+
+/** Title, one line of explanation and optional controls on the right: the head of a content panel. */
+export function PanelHead({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
+  return (
+    <div className="panel-head">
+      <div>
+        <h2>{title}</h2>
+        {subtitle && <p className="muted">{subtitle}</p>}
+      </div>
+      {children && <div className="panel-tools">{children}</div>}
+    </div>
+  );
+}
+
+export function Pager({ offset, page, total, onChange }: { offset: number; page: number; total: number; onChange: (offset: number) => void }) {
+  return (
+    <div className="pager">
+      <span className="muted">
+        {total === 0 ? 0 : offset + 1}–{Math.min(offset + page, total)} of {total}
+      </span>
+      <span className="row">
+        <button className="ghost" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - page))}>
+          <ChevronLeftIcon size={16} /> Previous
+        </button>
+        <button disabled={offset + page >= total} onClick={() => onChange(offset + page)}>
+          Next <ChevronRightIcon size={16} />
+        </button>
+      </span>
+    </div>
+  );
 }

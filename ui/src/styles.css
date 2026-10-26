@@ -661,3 +661,232 @@ label.switcher {
 .kpi-value {
   font-size: 1.8rem;
 }
+
+/* ---- content panels, tables, pills (Incidents / Reports / Reviews / Users) ---- */
+.panel {
+  padding: 1.4rem 1.6rem;
+}
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.panel-head h2 {
+  font-size: 1.45rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.panel-head p {
+  margin: 0.15rem 0 0;
+}
+.panel-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.page-head {
+  margin: 0.4rem 0 1rem;
+}
+.page-head h1 {
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.2rem;
+}
+.page-head p {
+  margin: 0;
+}
+
+.select-pill.plain {
+  padding: 0.4rem 0.8rem;
+  color: var(--muted);
+}
+.select-pill.plain select {
+  min-width: 90px;
+  font-size: 1rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+table.data {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+table.data thead th {
+  background: #f1f5fb;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.85rem 1rem;
+  border-bottom: 0;
+}
+table.data thead th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+table.data thead th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+table.data tbody td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #eaeff6;
+  vertical-align: middle;
+}
+table.data tbody tr:hover td {
+  background: #f7faff;
+}
+table.data tbody tr:last-child td {
+  border-bottom: 0;
+}
+.mono {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  text-decoration: none;
+  color: var(--accent);
+}
+.mono:hover {
+  text-decoration: underline;
+}
+
+.badge {
+  padding: 0.15rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.2rem;
+}
+.pager button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+}
+
+button {
+  border-radius: 10px;
+}
+
+/* ---- cards (projects, reviews) ---- */
+.cards.inner {
+  margin-top: 0.4rem;
+}
+.card {
+  position: relative;
+  padding: 1.2rem 1.3rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.card:hover {
+  box-shadow: 0 2px 4px rgba(15, 36, 71, 0.06), 0 8px 22px rgba(15, 36, 71, 0.09);
+}
+.card-tile {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 0.7rem;
+}
+.card-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+.card h3 {
+  font-size: 1.1rem;
+}
+
+/* ---- forms, login, incident detail ---- */
+.form {
+  max-width: 640px;
+}
+input,
+select,
+textarea {
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  background: #fff;
+}
+.login {
+  background: radial-gradient(circle at 50% 0%, #dfeafb 0%, transparent 60%);
+}
+.login form {
+  padding: 2rem;
+}
+.small-tile {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  margin-bottom: 0.6rem;
+}
+.login h1 {
+  font-size: 1.6rem;
+}
+.login button[type="submit"] {
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.65rem;
+}
+
+.page-head .row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 10px;
+  background: #e9eff8;
+  text-decoration: none;
+  font-weight: 500;
+}
+.page-head .row a:hover {
+  background: var(--accent-soft);
+}
+.evidence {
+  margin: 0.5rem 0;
+}
+details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  margin: 0.5rem 0;
+}
+summary {
+  font-weight: 500;
+}
+pre {
+  border-radius: 10px;
+  background: #f4f7fc;
+}
+.timeline li {
+  margin: 0.45rem 0;
+}
+
+table.data td,
+table.data th {
+  white-space: nowrap;
+}
+table.data td.clamp {
+  white-space: normal;
+  min-width: 240px;
+}
+.badge {
+  white-space: nowrap;
+}
+
+.panel.table-wrap {
+  padding: 1rem 1.2rem;
+}

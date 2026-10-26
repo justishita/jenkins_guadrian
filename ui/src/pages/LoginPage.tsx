@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, setCsrfToken } from "../api";
+import { CubeIcon } from "../icons";
 
 export function LoginPage() {
   const client = useQueryClient();
@@ -24,6 +25,9 @@ export function LoginPage() {
   return (
     <div className="login">
       <form onSubmit={submit} className="panel" aria-label="Sign in">
+        <span className="project-tile small-tile">
+          <CubeIcon size={30} />
+        </span>
         <h1>JenkinsGuardian</h1>
         <p className="muted">Sign in to see your projects, incident reports and fixes awaiting review.</p>
         {unconfigured && (
