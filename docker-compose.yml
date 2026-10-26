@@ -159,6 +159,7 @@ services:
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
       COORDINATOR_URL: http://coordinator:9100
       PORT: "9103"
+      TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
       EVIDENCE_DIR: /app/data/evidence
       BLACKBOARD_DIR: /app/data/blackboard
       AUDIT_DIR: /app/data/audit
@@ -237,6 +238,8 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
       PORT: "9102"
+      TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
+      DATABASE_URL: ${DATABASE_URL:-}
       EVIDENCE_DIR: /app/data/evidence
       PROMETHEUS_URL: http://prometheus:9090
       GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -246,6 +249,7 @@ services:
     volumes:
       - ./data/evidence:/app/data/evidence
       - ./data/blackboard:/app/data/blackboard
+      - ./data/audit:/app/data/audit
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9102/health', timeout=3)"]
       interval: 10s
@@ -269,6 +273,10 @@ services:
       - "9100:9100"
     environment:
       PORT: "9100"
+      TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
+      DATABASE_URL: ${DATABASE_URL:-}
+      AUDIT_DIR: /app/data/audit
+      REPORTS_DIR: /app/data/reports
       RABBITMQ_URL: ${RABBITMQ_URL:?Set RABBITMQ_URL in .env}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN:?Set A2A_SHARED_TOKEN in .env}
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
@@ -278,6 +286,8 @@ services:
     volumes:
       - ./data/blackboard:/app/data/blackboard
       - ./data/evidence:/app/data/evidence
+      - ./data/audit:/app/data/audit
+      - ./data/reports:/app/data/reports
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/health', timeout=3)"]
       interval: 10s
