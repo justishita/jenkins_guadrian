@@ -85,15 +85,16 @@ def test_the_incident_timeline_uses_the_incident_variable() -> None:
 def test_the_job_variable_lists_registered_projects_and_defaults_to_all() -> None:
     job = next(v for v in generated()["templating"]["list"] if v["name"] == "job")
     assert "FROM projects" in job["query"] and "NOT archived" in job["query"]
-    assert job["includeAll"] is True and job["allValue"] == "__all__"
+    # No custom All value: Grafana inserts that one unquoted, which breaks the SQL.
+    assert job["includeAll"] is True and "allValue" not in job
 
 
 def test_every_time_ranged_panel_is_limited_to_the_selected_project() -> None:
     for title, panel in panels().items():
         if title.startswith("Incident timeline"):
             continue
-        assert "$job = '__all__'" in sql(panel), title
-        assert "job_name = $job" in sql(panel) and "= $job || '/'" in sql(panel), title
+        assert "unnest(ARRAY[$job]::text[])" in sql(panel), title
+        assert "i.job_name = p.job" in sql(panel) and "= p.job || '/'" in sql(panel), title
 
 
 def test_the_job_variable_is_never_wrapped_in_quotes() -> None:
