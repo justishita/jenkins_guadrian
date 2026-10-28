@@ -689,9 +689,12 @@ async def run_to_ui(opa: str, root: Path, database_url: str) -> list[Checks]:
     global EXPORT
     from scripts.demo_ui_export import UiExport
 
-    # data/demo_ui is owned by the demo: start every run from a clean blackboard and reports.
-    for name in ("blackboard", "evidence", "audit", "reports"):
-        shutil.rmtree(root / name, ignore_errors=True)
+    # Start every run clean, but only for the demo's own incidents: the root may be the
+    # live stack's data/ directory, shared with real incidents.
+    for incident_id in DEMO_INCIDENTS:
+        for name in ("blackboard", "evidence", "reports"):
+            shutil.rmtree(root / name / incident_id, ignore_errors=True)
+        (root / "audit" / f"{incident_id}.jsonl").unlink(missing_ok=True)
     EXPORT = UiExport(database_url, root / "reports", root / "blackboard")
     try:
         await EXPORT.prepare(DEMO_INCIDENTS)
@@ -707,6 +710,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="also write every scenario where the web UI reads it")
     parser.add_argument("--ui-root", type=Path, default=REPO_ROOT / "data" / "demo_ui",
                         help="blackboard and report directory for --to-ui (default: data/demo_ui)")
+    # Explicit, never read from the environment: a .env meant for Docker sets DATABASE_URL
+    # to a host name that only exists inside the stack.
+    parser.add_argument("--database-url", default=None,
+                        help="database for --to-ui (default: SQLite in the --ui-root directory)")
     args = parser.parse_args(argv)
 
     opa = find_opa()
@@ -721,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
     print("  GitHub: in-memory fake | Jenkins & metrics evidence: recorded | everything else: real code")
 
     if args.to_ui:
-        database_url = os.environ.get("DATABASE_URL") or f"sqlite+aiosqlite:///{(args.ui_root / 'demo.db').as_posix()}"
+        database_url = args.database_url or f"sqlite+aiosqlite:///{(args.ui_root / 'demo.db').as_posix()}"
         args.ui_root.mkdir(parents=True, exist_ok=True)
         print(f"  web UI export: {args.ui_root} | database: {database_url.split('@')[-1]}")
         results = asyncio.run(run_to_ui(opa, args.ui_root, database_url))
