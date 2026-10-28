@@ -1,0 +1,6 @@
+# Offline variant: serves a `dist` folder built on the host (cd ui && npm run build),
+# so no Node image has to be pulled. Used through a local docker-compose.override.yml.
+FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY dist /usr/share/nginx/html
+EXPOSE 80
