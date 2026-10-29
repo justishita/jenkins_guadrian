@@ -1,0 +1,752 @@
+{
+  "uid": "ops",
+  "title": "Approvals & Operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "tags": [
+    "jenkins-guardian"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Project (Jenkins job)",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "postgres"
+        },
+        "query": "SELECT jenkins_job FROM projects WHERE NOT archived ORDER BY jenkins_job",
+        "definition": "SELECT jenkins_job FROM projects WHERE NOT archived ORDER BY jenkins_job",
+        "refresh": 2,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": false,
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Awaiting approval now",
+      "description": "Proposed fixes waiting for a human decision.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT count(*) AS waiting FROM incident_outcomes WHERE outcome = 'awaiting_approval' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/'))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Oldest waiting (minutes)",
+      "description": "Age of the longest-waiting proposal. Empty when nothing is waiting.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT round((extract(epoch FROM (now() - min(p.created_at))) / 60)::numeric, 0) AS minutes FROM remediation_proposals p WHERE p.status = 'awaiting_approval' AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt) AND p.incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/'))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Escalated (in range)",
+      "description": "Re-validation kept failing until the attempts ran out: a human has to take over.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT count(*) AS escalated FROM incident_outcomes WHERE outcome = 'escalated' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Resolved by fix (in range)",
+      "description": "Approved fixes whose Jenkins re-validation passed.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT count(*) AS resolved FROM incident_outcomes WHERE outcome = 'resolved_by_fix' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Fix rejected (in range)",
+      "description": "A human rejected the proposed fix; the incident was closed.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT count(*) AS rejected FROM incident_outcomes WHERE outcome = 'rejected' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Median time to resolve (min)",
+      "description": "From the incident opening to Jenkins confirming the fix.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (closed_at - opened_at))) / 60)::numeric, 1) AS minutes FROM incident_outcomes WHERE outcome = 'resolved_by_fix' AND closed_at IS NOT NULL AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Incident outcomes",
+      "description": "How incidents opened in the range ended, or where they are now.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT outcome, count(*) AS incidents FROM incident_outcomes WHERE incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Approval decisions over time",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), payload->>'decision' AS metric, count(*) AS decisions FROM audit_events WHERE event_type = 'approval_decided' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Decisions by reviewer",
+      "description": "Who decided what.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT coalesce(payload->>'reviewer', 'unknown') || ' - ' || coalesce(payload->>'decision', '?') AS reviewer_decision, count(*) AS decisions FROM audit_events WHERE event_type = 'approval_decided' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Approval latency",
+      "description": "Minutes from a fix being put in front of a reviewer to their decision.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS decisions, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (d.created_at - r.created_at))) / 60)::numeric, 1) AS p50_min, round((percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (d.created_at - r.created_at))) / 60)::numeric, 1) AS p95_min FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND d.incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(d.created_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Agent failures and timeouts over time",
+      "description": "failed, timed_out and not_dispatched agent runs.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH agent_runs AS (\nWITH ev AS (\n    SELECT\n        id, incident_id, actor, event_type, created_at, duration_ms, ok, payload,\n        lag(event_type) OVER w AS prev_type,\n        lag(created_at) OVER w AS prev_at,\n        lead(event_type) OVER w AS next_type\n    FROM audit_events\n    WHERE event_type IN ('agent_started', 'agent_completed', 'agent_failed')\n    WINDOW w AS (PARTITION BY incident_id, actor ORDER BY created_at, id)\n),\nfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        prev_at AS started_at,\n        created_at AS finished_at,\n        COALESCE(payload ->> 'status', CASE WHEN event_type = 'agent_failed' THEN 'failed' ELSE 'completed' END) AS status,\n        payload ->> 'failure_type' AS failure_type,\n        CAST(payload ->> 'confidence' AS DOUBLE PRECISION) AS confidence,\n        duration_ms,\n        ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type IN ('agent_completed', 'agent_failed') AND prev_type = 'agent_started'\n),\nunfinished AS (\n    SELECT\n        incident_id,\n        actor AS agent,\n        created_at AS started_at,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS finished_at,\n        'running' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        CAST(NULL AS DOUBLE PRECISION) AS duration_ms,\n        CAST(NULL AS BOOLEAN) AS ok,\n        'run' AS source\n    FROM ev\n    WHERE event_type = 'agent_started' AND (next_type IS NULL OR next_type = 'agent_started')\n),\ndispatched AS (\n    SELECT\n        d.incident_id,\n        d.payload ->> 'agent' AS agent,\n        CAST(NULL AS TIMESTAMP WITH TIME ZONE) AS started_at,\n        d.created_at AS finished_at,\n        d.payload ->> 'outcome' AS status,\n        CAST(NULL AS TEXT) AS failure_type,\n        CAST(NULL AS DOUBLE PRECISION) AS confidence,\n        d.duration_ms,\n        d.ok,\n        'dispatch' AS source\n    FROM audit_events d\n    WHERE d.event_type = 'agent_dispatch'\n      AND NOT EXISTS (\n          SELECT 1 FROM audit_events r\n          WHERE r.incident_id = d.incident_id\n            AND r.actor = d.payload ->> 'agent'\n            AND r.event_type = 'agent_started'\n      )\n)\nSELECT * FROM finished\nUNION ALL\nSELECT * FROM unfinished\nUNION ALL\nSELECT * FROM dispatched\n)\nSELECT $__timeGroupAlias(finished_at, $__interval), status AS metric, count(*) AS runs FROM agent_runs WHERE status IN ('failed', 'timed_out', 'not_dispatched') AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(finished_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Dispatch outcomes over time",
+      "description": "What the Coordinator saw when it asked each agent to investigate.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), payload->>'outcome' AS metric, count(*) AS dispatches FROM audit_events WHERE event_type = 'agent_dispatch' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Re-validation pass rate",
+      "description": "Share of Jenkins re-validations that passed.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(created_at, $__interval), round(100.0 * avg(CASE WHEN ok THEN 1 ELSE 0 END)::numeric, 1) AS pass_rate FROM audit_events WHERE event_type = 'revalidation_completed' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 14,
+      "type": "barchart",
+      "title": "Re-validations per incident",
+      "description": "How many fix attempts incidents needed before they ended.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT revalidations::text AS revalidations, count(*) AS incidents FROM incident_outcomes WHERE revalidations > 0 AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at) GROUP BY revalidations ORDER BY revalidations"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 15,
+      "type": "barchart",
+      "title": "Policy denial reasons",
+      "description": "Why policy refused proposals, most common first.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT left(coalesce(payload->>'violations', payload->>'package', 'unspecified'), 80) AS reason, count(*) AS denials FROM audit_events WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Time between steps (median, min)",
+      "description": "Median minutes from approval to the pull request, and from the pull request to Jenkins re-validation. Empty until pull requests are audited.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS incidents, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (pr - decided))) / 60)::numeric, 1) AS approval_to_pr, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (revalidated - pr))) / 60)::numeric, 1) AS pr_to_revalidation FROM (SELECT incident_id, min(created_at) FILTER (WHERE event_type = 'approval_decided' AND ok) AS decided, min(created_at) FILTER (WHERE event_type = 'pull_request_created') AS pr, min(created_at) FILTER (WHERE event_type = 'revalidation_completed') AS revalidated FROM audit_events WHERE incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(created_at) GROUP BY incident_id) steps"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "Escalated and rejected incidents",
+      "description": "The incidents a human has to look at again.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 28,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH incident_outcomes AS (\nWITH base AS (\n    SELECT\n        i.id AS incident_id,\n        i.job_name,\n        i.status,\n        i.remediation_attempt AS attempt,\n        i.created_at AS opened_at,\n        (SELECT a.payload ->> 'verdict' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS verdict,\n        (SELECT a.payload ->> 'decision' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS decision,\n        (SELECT a.payload ->> 'reviewer' FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'approval_decided'\n          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS approver,\n        (SELECT count(*) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed') AS revalidations,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'incident_status_changed'\n            AND (a.payload ->> 'to') IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED')) AS status_closed_at,\n        (SELECT max(a.created_at) FROM audit_events a\n          WHERE a.incident_id = i.id AND a.event_type = 'revalidation_completed' AND a.ok) AS last_passed_at,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'awaiting_approval'\n                   AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)) AS awaiting,\n        EXISTS (SELECT 1 FROM remediation_proposals p\n                 WHERE p.incident_id = i.id AND p.status = 'policy_rejected') AS policy_blocked\n    FROM incidents i\n)\nSELECT\n    incident_id,\n    job_name,\n    status,\n    attempt,\n    opened_at,\n    verdict,\n    decision,\n    approver,\n    revalidations,\n    CASE\n        WHEN status = 'RESOLVED' THEN 'resolved_by_fix'\n        WHEN status = 'ESCALATED' THEN 'escalated'\n        WHEN status = 'CLOSED_REJECTED' THEN 'rejected'\n        WHEN decision = 'rejected' THEN 'rejected'\n        WHEN decision = 'approved' THEN 'awaiting_validation'\n        WHEN awaiting THEN 'awaiting_approval'\n        WHEN policy_blocked THEN 'policy_blocked'\n        ELSE 'open'\n    END AS outcome,\n    CASE\n        WHEN status IN ('RESOLVED', 'ESCALATED', 'CLOSED_REJECTED') THEN COALESCE(status_closed_at, last_passed_at)\n        ELSE NULL\n    END AS closed_at\nFROM base\n)\nSELECT opened_at AS \"time\", incident_id, job_name, outcome, verdict, approver, closed_at FROM incident_outcomes WHERE outcome IN ('escalated', 'rejected') AND incident_id IN (SELECT i.id FROM incidents i WHERE EXISTS (SELECT 1 FROM unnest(ARRAY[$job]::text[]) AS p(job) WHERE i.job_name = p.job OR left(i.job_name, length(p.job) + 1) = p.job || '/')) AND $__timeFilter(opened_at) ORDER BY opened_at DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Service health (Prometheus up)",
+      "description": "1 = the scrape target answered. Jenkins, the target app and Prometheus itself.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "up",
+          "instant": true,
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      }
+    }
+  ]
+}

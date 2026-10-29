@@ -1,0 +1,168 @@
+apiVersion: 1
+
+# Alert rules on the audit trail (Postgres). They show in Grafana under Alerting; no contact point is
+# configured, so nothing is sent anywhere yet (see monitoring/README.md). Each query returns one number;
+# the rule fires when that number crosses the threshold. Queries avoid the dashboard time macros, which
+# do not exist in alert queries.
+groups:
+  - orgId: 1
+    name: jenkins-guardian
+    folder: JenkinsGuardian
+    interval: 1m
+    rules:
+      - uid: approval-waiting-over-1h
+        title: Approval waiting over 1 hour
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: A proposed fix has waited more than an hour for a human decision.
+          description: Open the project's Reviews tab and approve or reject it.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: postgres
+            model:
+              refId: A
+              datasource: { type: grafana-postgresql-datasource, uid: postgres }
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: >-
+                SELECT coalesce(round((extract(epoch FROM (now() - min(p.created_at))) / 60)::numeric, 0), 0) AS minutes
+                FROM remediation_proposals p
+                WHERE p.status = 'awaiting_approval'
+                AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt)
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [60] }
+
+      - uid: agent-failures-15m
+        title: Agents failing or timing out
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: Three or more agent runs failed, timed out or were never dispatched in 15 minutes.
+          description: See the Agent failures and timeouts panel on the Approvals & Operations dashboard.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: postgres
+            model:
+              refId: A
+              datasource: { type: grafana-postgresql-datasource, uid: postgres }
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: >-
+                SELECT count(DISTINCT incident_id || ':' || coalesce(payload->>'agent', actor)) AS failures
+                FROM audit_events
+                WHERE created_at > now() - interval '15 minutes'
+                AND (event_type = 'agent_failed'
+                     OR (event_type = 'agent_dispatch' AND payload->>'outcome' IN ('failed', 'timed_out', 'not_dispatched')))
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+
+      - uid: incident-escalated
+        title: Incident escalated to a human
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: An incident was escalated in the last 24 hours (re-validation kept failing until the attempts ran out).
+          description: Filter the project's Incidents tab by Escalated.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: postgres
+            model:
+              refId: A
+              datasource: { type: grafana-postgresql-datasource, uid: postgres }
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: >-
+                SELECT count(*) AS escalated
+                FROM incidents
+                WHERE status = 'ESCALATED' AND created_at > now() - interval '24 hours'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+
+      - uid: incident-without-report-10m
+        title: Incident has no report after 10 minutes
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: An incident opened in the last 6 hours still has no Coordinator report 10 minutes after it was created.
+          description: Check the agents and the Coordinator (docker compose ps, docker compose logs coordinator).
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: postgres
+            model:
+              refId: A
+              datasource: { type: grafana-postgresql-datasource, uid: postgres }
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: >-
+                SELECT count(*) AS unreported
+                FROM incidents i
+                WHERE i.created_at < now() - interval '10 minutes'
+                AND i.created_at > now() - interval '6 hours'
+                AND NOT EXISTS (SELECT 1 FROM audit_events a WHERE a.incident_id = i.id AND a.event_type = 'synthesis_completed')
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [0] }
