@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend import incident_lifecycle as lifecycle
 from backend.config import settings
 from backend.db.audit_models import (
     Approval,
@@ -95,6 +96,15 @@ async def _incident_or_404(db: AsyncSession, incident_id: UUID) -> Incident:
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Incident not found")
     return incident
+
+
+async def _close_if_rejected(db: AsyncSession, incident_id: UUID | str, decision: str, reviewer: str, attempt: int) -> None:
+    """A rejected fix ends the investigation: no retry is scheduled, so the incident is closed (audited)."""
+    if decision != "rejected":
+        return
+    incident = await db.get(Incident, str(incident_id))
+    if incident is not None and incident.status not in lifecycle.TERMINAL:
+        lifecycle.transition(db, incident, lifecycle.CLOSED_REJECTED, reason=f"fix for attempt {attempt} rejected by {reviewer}", actor=ACTOR, attempt=attempt)
 
 
 async def _latest_proposal(db: AsyncSession, incident_id: UUID) -> RemediationProposal | None:
@@ -241,6 +251,9 @@ async def decide_approval_action_link(
             ok=decided_scope == "approved",
         )
     )
+    # After the decision's own audit row: rows are timestamped as they are inserted, and the closing
+    # status change must not be dated before the decision that caused it.
+    await _close_if_rejected(db, token_payload.incident_id, decided_scope, req_reviewer, token_payload.attempt)
     await db.commit()
 
     event = {
@@ -543,6 +556,8 @@ async def apply_decision(
             ok=decision == "approved",
         )
     )
+    # After the decision's own audit row (see the action-link handler above).
+    await _close_if_rejected(db, incident_id, decision, reviewer_clean, proposal.attempt)
 
     try:
         await db.commit()

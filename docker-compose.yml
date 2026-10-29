@@ -70,6 +70,7 @@ services:
       - ./data/evidence:/app/data/evidence
       - ./data/blackboard:/app/data/blackboard
       - ./data/reports:/app/data/reports:ro
+      - ./monitoring/sql:/app/monitoring/sql:ro
     environment:
       # The UI only reads reports; the Coordinator is the one that writes them.
       - REPORTS_DIR=/app/data/reports

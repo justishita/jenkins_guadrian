@@ -366,7 +366,7 @@ async def test_a_redelivered_message_adds_no_dispatch_events(world):
 
 
 async def test_the_trail_a_real_dispatch_leaves_passes_the_audit_check_without_exemptions(world):
-    from common.audit_check import check_incident
+    from common.audit_check import check_incident, errors
 
     event = world.event = make_event()
     for agent in AGENTS:
@@ -375,4 +375,4 @@ async def test_the_trail_a_real_dispatch_leaves_passes_the_audit_check_without_e
         await world.runtime.dispatch_all(event)
     finally:
         await world.runtime.client.aclose()
-    assert check_incident(await world.audit.read(event.incident_id)) == []  # no unaudited_ok needed
+    assert errors(check_incident(await world.audit.read(event.incident_id))) == []  # no unaudited_ok needed

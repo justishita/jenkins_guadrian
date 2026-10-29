@@ -113,3 +113,24 @@ async def test_file_store_reads_evidence_from_multiple_agents(tmp_path):
         metrics_evidence,
     ]
     assert await store.read(jenkins_evidence.incident_id, "metrics_agent") == metrics_evidence
+
+
+@pytest.mark.asyncio
+async def test_file_store_masks_a_credential_that_slipped_past_the_agents_redaction(tmp_path, caplog):
+    store = FileEvidenceStore(tmp_path / "evidence")
+    leaky = make_evidence().model_copy(update={"summary": "login failed with password=hunter2 and Bearer abc.def.ghi"})
+    with caplog.at_level("WARNING"):
+        await store.write(leaky)
+    stored = (tmp_path / "evidence" / str(leaky.incident_id) / f"{leaky.agent}.json").read_text(encoding="utf-8")
+    assert "hunter2" not in stored and "abc.def.ghi" not in stored and "[REDACTED]" in stored
+    assert any("redactable" in message for message in caplog.messages)  # the leak is reported, not silent
+
+
+@pytest.mark.asyncio
+async def test_clean_evidence_is_stored_unchanged_and_without_a_warning(tmp_path, caplog):
+    store = FileEvidenceStore(tmp_path / "evidence")
+    evidence = make_evidence()
+    with caplog.at_level("WARNING"):
+        await store.write(evidence)
+    assert await store.read(evidence.incident_id, evidence.agent) == evidence
+    assert not caplog.messages

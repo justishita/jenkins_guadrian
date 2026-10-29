@@ -80,3 +80,30 @@ def test_percentile_picks_a_value_from_the_data():
     assert percentile([5.0], 0.95) == 5.0
     assert percentile([1.0, 2.0, 3.0, 4.0, 100.0], 0.5) == 3.0
     assert percentile([1.0, 2.0, 3.0, 4.0, 100.0], 0.95) == 100.0
+
+
+def test_outcomes_count_how_each_incident_ended_and_time_the_resolved_ones(sign_in, world):
+    member = world.user("rev@acme.io", "reviewer")
+    project = world.project("Shop", "target-app", [member])
+    fixed = world.incident("target-app/main", status="RESOLVED", age_hours=3)
+    world.audit(fixed, "incident_status_changed", payload={"from": "OPEN", "to": "RESOLVED"}, age_hours=2)  # one hour after it opened
+    rejected = world.incident("target-app/main", status="CLOSED_REJECTED", age_hours=3)
+    world.audit(rejected, "approval_decided", payload={"decision": "rejected", "reviewer": "rev@acme.io"}, ok=False, age_hours=2)
+    world.incident("target-app/main", status="ESCALATED", age_hours=3)
+    waiting = world.incident("target-app/main", age_hours=3)
+    world.proposal(waiting)
+    world.incident("target-app/main", age_hours=3)
+    world.incident("elsewhere/main", status="RESOLVED")  # another project: not counted
+    outcomes = sign_in("rev@acme.io").get(f"/api/v1/projects/{project}/stats?days=7").json()["outcomes"]
+    assert {row["outcome"]: row["count"] for row in outcomes["by_outcome"]} == {
+        "resolved_by_fix": 1, "rejected": 1, "escalated": 1, "awaiting_approval": 1, "open": 1,
+    }
+    assert [row["outcome"] for row in outcomes["by_outcome"]] == ["resolved_by_fix", "awaiting_approval", "open", "rejected", "escalated"]
+    assert 3500 < outcomes["resolved_p50_s"] < 3700  # about one hour from opening to the status change
+
+
+def test_a_project_with_no_incidents_has_empty_outcomes(sign_in, world):
+    member = world.user("rev@acme.io", "reviewer")
+    project = world.project("Empty", "nothing", [member])
+    outcomes = sign_in("rev@acme.io").get(f"/api/v1/projects/{project}/stats").json()["outcomes"]
+    assert outcomes == {"by_outcome": [], "resolved_p50_s": None, "resolved_p95_s": None}

@@ -1,4 +1,4 @@
-"""Generate monitoring/grafana/dashboards/agent_ops.json (the Agent Ops dashboard).
+"""Generate the Grafana dashboards: ``agent_ops.json`` (Agent Ops) and ``ops.json`` (Approvals & Operations).
 
 **Owner:** P2. Every panel reads the ``audit_events`` table (and ``incidents`` for time-to-report), so
 it shows data only when the agents and the Coordinator run with ``DATABASE_URL`` set (the file audit
@@ -23,13 +23,21 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "monitoring" / "grafana" / "dashboards" / "agent_ops.json"
+OPS_OUT = REPO / "monitoring" / "grafana" / "dashboards" / "ops.json"
 AGENT_RUNS_SQL = "\n".join(
     line for line in (REPO / "monitoring" / "sql" / "agent_runs.sql").read_text(encoding="utf-8").splitlines() if not line.startswith("--")
 ).strip()
+OUTCOMES_SQL = "\n".join(
+    line for line in (REPO / "monitoring" / "sql" / "incident_outcomes.sql").read_text(encoding="utf-8").splitlines() if not line.startswith("--")
+).strip()
 DS = {"type": "grafana-postgresql-datasource", "uid": "postgres"}
+PROM_DS = {"type": "prometheus", "uid": "prometheus"}
 
 #: Prefix for panels that read per-run data.
 RUNS = f"WITH agent_runs AS (\n{AGENT_RUNS_SQL}\n)\n"
+
+#: Prefix for panels that read how each incident ended (monitoring/sql/incident_outcomes.sql).
+OUTCOMES = f"WITH incident_outcomes AS (\n{OUTCOMES_SQL}\n)\n"
 
 _next_id = 0
 
@@ -242,6 +250,141 @@ dashboard = {
     "panels": panels,
 }
 
+# =============================================================================================================
+# Approvals & Operations dashboard (Week 7): what is waiting, how incidents end, how healthy the pipeline is.
+# =============================================================================================================
+_next_id = 0  # panel ids restart: they only need to be unique within one dashboard
+
+#: Panels that show the state right now rather than a time range (so no $__timeFilter).
+OPS_CURRENT_STATE = ("Awaiting approval now", "Oldest waiting (minutes)", "Service health (Prometheus up)")
+
+TIME_TO_RESOLVE = (
+    "round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (closed_at - opened_at))) / 60)::numeric, 1)"
+)
+AMBER_AT_30 = thresholds(("green", None), ("orange", 30), ("red", 60))
+
+ops_panels = [
+    # --- row 1: what needs a human, and how things ended ------------------------------------------
+    panel("stat", "Awaiting approval now",
+          OUTCOMES + f"SELECT count(*) AS waiting FROM incident_outcomes WHERE outcome = 'awaiting_approval' AND {scope()}",
+          0, 0, 4, 4, description="Proposed fixes waiting for a human decision.", fieldConfig=thresholds(("green", None), ("orange", 1))),
+    panel("stat", "Oldest waiting (minutes)",
+          "SELECT round((extract(epoch FROM (now() - min(p.created_at))) / 60)::numeric, 0) AS minutes FROM remediation_proposals p "
+          "WHERE p.status = 'awaiting_approval' AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt) "
+          f"AND {scope('p.incident_id')}",
+          4, 0, 4, 4, description="Age of the longest-waiting proposal. Empty when nothing is waiting.", fieldConfig={"defaults": {"unit": "m", **AMBER_AT_30["defaults"]}}),
+    panel("stat", "Escalated (in range)",
+          OUTCOMES + f"SELECT count(*) AS escalated FROM incident_outcomes WHERE outcome = 'escalated' AND {scope()} AND $__timeFilter(opened_at)",
+          8, 0, 4, 4, description="Re-validation kept failing until the attempts ran out: a human has to take over.", fieldConfig=GREEN_BELOW_ONE),
+    panel("stat", "Resolved by fix (in range)",
+          OUTCOMES + f"SELECT count(*) AS resolved FROM incident_outcomes WHERE outcome = 'resolved_by_fix' AND {scope()} AND $__timeFilter(opened_at)",
+          12, 0, 4, 4, description="Approved fixes whose Jenkins re-validation passed."),
+    panel("stat", "Fix rejected (in range)",
+          OUTCOMES + f"SELECT count(*) AS rejected FROM incident_outcomes WHERE outcome = 'rejected' AND {scope()} AND $__timeFilter(opened_at)",
+          16, 0, 4, 4, description="A human rejected the proposed fix; the incident was closed."),
+    panel("stat", "Median time to resolve (min)",
+          OUTCOMES + f"SELECT {TIME_TO_RESOLVE} AS minutes FROM incident_outcomes WHERE outcome = 'resolved_by_fix' AND closed_at IS NOT NULL "
+          f"AND {scope()} AND $__timeFilter(opened_at)",
+          20, 0, 4, 4, description="From the incident opening to Jenkins confirming the fix.", fieldConfig={"defaults": {"unit": "m"}}),
+
+    # --- row 2: outcomes and decisions -----------------------------------------------------------
+    panel("barchart", "Incident outcomes",
+          OUTCOMES + f"SELECT outcome, count(*) AS incidents FROM incident_outcomes WHERE {scope()} AND $__timeFilter(opened_at) GROUP BY 1 ORDER BY 2 DESC",
+          0, 4, 8, 8, description="How incidents opened in the range ended, or where they are now."),
+    panel("timeseries", "Approval decisions over time",
+          "SELECT $__timeGroupAlias(created_at, $__interval), payload->>'decision' AS metric, count(*) AS decisions FROM audit_events "
+          f"WHERE event_type = 'approval_decided' AND {scope()} AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1",
+          8, 4, 8, 8, fmt="time_series"),
+    panel("barchart", "Decisions by reviewer",
+          "SELECT coalesce(payload->>'reviewer', 'unknown') || ' - ' || coalesce(payload->>'decision', '?') AS reviewer_decision, count(*) AS decisions "
+          f"FROM audit_events WHERE event_type = 'approval_decided' AND {scope()} AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC",
+          16, 4, 8, 8, description="Who decided what."),
+
+    # --- row 3: latency and agent health --------------------------------------------------------
+    panel("table", "Approval latency",
+          "SELECT count(*) AS decisions, "
+          "round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (d.created_at - r.created_at))) / 60)::numeric, 1) AS p50_min, "
+          "round((percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (d.created_at - r.created_at))) / 60)::numeric, 1) AS p95_min "
+          "FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' "
+          f"WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND {scope('d.incident_id')} AND $__timeFilter(d.created_at)",
+          0, 12, 8, 8, description="Minutes from a fix being put in front of a reviewer to their decision."),
+    panel("timeseries", "Agent failures and timeouts over time",
+          RUNS + "SELECT $__timeGroupAlias(finished_at, $__interval), status AS metric, count(*) AS runs FROM agent_runs "
+          f"WHERE status IN {BAD} AND {scope()} AND $__timeFilter(finished_at) GROUP BY 1, 2 ORDER BY 1",
+          8, 12, 8, 8, fmt="time_series", description="failed, timed_out and not_dispatched agent runs."),
+    panel("timeseries", "Dispatch outcomes over time",
+          "SELECT $__timeGroupAlias(created_at, $__interval), payload->>'outcome' AS metric, count(*) AS dispatches FROM audit_events "
+          f"WHERE event_type = 'agent_dispatch' AND {scope()} AND $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1",
+          16, 12, 8, 8, fmt="time_series", description="What the Coordinator saw when it asked each agent to investigate."),
+
+    # --- row 4: re-validation and policy ---------------------------------------------------------
+    panel("timeseries", "Re-validation pass rate",
+          "SELECT $__timeGroupAlias(created_at, $__interval), round(100.0 * avg(CASE WHEN ok THEN 1 ELSE 0 END)::numeric, 1) AS pass_rate FROM audit_events "
+          f"WHERE event_type = 'revalidation_completed' AND {scope()} AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 1",
+          0, 20, 8, 8, fmt="time_series", fieldConfig=PERCENT, description="Share of Jenkins re-validations that passed."),
+    panel("barchart", "Re-validations per incident",
+          OUTCOMES + "SELECT revalidations::text AS revalidations, count(*) AS incidents FROM incident_outcomes "
+          f"WHERE revalidations > 0 AND {scope()} AND $__timeFilter(opened_at) GROUP BY revalidations ORDER BY revalidations",
+          8, 20, 8, 8, description="How many fix attempts incidents needed before they ended."),
+    panel("barchart", "Policy denial reasons",
+          "SELECT left(coalesce(payload->>'violations', payload->>'package', 'unspecified'), 80) AS reason, count(*) AS denials FROM audit_events "
+          f"WHERE event_type = 'policy_evaluated' AND (payload->>'allowed') = 'false' AND {scope()} AND $__timeFilter(created_at) GROUP BY 1 ORDER BY 2 DESC LIMIT 10",
+          16, 20, 8, 8, description="Why policy refused proposals, most common first."),
+
+    # --- row 5: where time goes, and what needs attention ----------------------------------------------
+    panel("table", "Time between steps (median, min)",
+          "SELECT count(*) AS incidents, "
+          "round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (pr - decided))) / 60)::numeric, 1) AS approval_to_pr, "
+          "round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (revalidated - pr))) / 60)::numeric, 1) AS pr_to_revalidation "
+          "FROM (SELECT incident_id, "
+          "min(created_at) FILTER (WHERE event_type = 'approval_decided' AND ok) AS decided, "
+          "min(created_at) FILTER (WHERE event_type = 'pull_request_created') AS pr, "
+          "min(created_at) FILTER (WHERE event_type = 'revalidation_completed') AS revalidated "
+          f"FROM audit_events WHERE {scope()} AND $__timeFilter(created_at) GROUP BY incident_id) steps",
+          0, 28, 8, 8, description="Median minutes from approval to the pull request, and from the pull request to Jenkins re-validation. "
+                                   "Empty until pull requests are audited."),
+    panel("table", "Escalated and rejected incidents",
+          OUTCOMES + "SELECT opened_at AS \"time\", incident_id, job_name, outcome, verdict, approver, closed_at FROM incident_outcomes "
+          f"WHERE outcome IN ('escalated', 'rejected') AND {scope()} AND $__timeFilter(opened_at) ORDER BY opened_at DESC LIMIT 20",
+          8, 28, 16, 8, description="The incidents a human has to look at again."),
+]
+
+# Service health reads Prometheus, not the audit trail, so it is built by hand.
+_next_id += 1
+ops_panels.append(
+    {
+        "id": _next_id,
+        "type": "stat",
+        "title": "Service health (Prometheus up)",
+        "description": "1 = the scrape target answered. Jenkins, the target app and Prometheus itself.",
+        "datasource": PROM_DS,
+        "gridPos": {"x": 0, "y": 36, "w": 24, "h": 4},
+        "targets": [{"refId": "A", "datasource": PROM_DS, "expr": "up", "instant": True, "legendFormat": "{{job}}"}],
+        "fieldConfig": {
+            "defaults": {
+                "mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}],
+                "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "green", "value": 1}]},
+            },
+            "overrides": [],
+        },
+        "options": {"colorMode": "background", "textMode": "value_and_name"},
+    }
+)
+
+ops_dashboard = {
+    "uid": "ops",
+    "title": "Approvals & Operations",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "time": {"from": "now-24h", "to": "now"},
+    "tags": ["jenkins-guardian"],
+    "templating": {"list": [dashboard["templating"]["list"][0]]},  # the same $job project filter
+    "panels": ops_panels,
+}
+
 if __name__ == "__main__":
     OUT.write_text(json.dumps(dashboard, indent=2) + "\n", encoding="utf-8")
+    OPS_OUT.write_text(json.dumps(ops_dashboard, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {OUT}")
+    print(f"wrote {OPS_OUT}")

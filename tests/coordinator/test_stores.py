@@ -100,3 +100,31 @@ async def test_with_only_the_evidence_directory_the_blackboard_agent_would_be_mi
     await files.write(evidence(incident, "metrics_agent"))
     await files.write(evidence(incident, "code_agent"))
     assert (await CoordinatorAgent(files).collect(incident)).missing_agents == ("jenkins_agent",)
+
+
+class BrokenStore:
+    async def read_all(self, incident_id):
+        raise OSError("disk gone")
+
+
+async def test_an_unreadable_store_is_reported_not_mistaken_for_an_absent_agent(stores, caplog):
+    blackboard, files, _ = stores
+    merged = MergedEvidenceStore(BrokenStore(), files)
+    incident = uuid4()
+    await files.write(evidence(incident, "metrics_agent"))
+    with caplog.at_level("WARNING"):
+        found = await merged.read_all(incident)
+    assert [e.agent for e in found] == ["metrics_agent"]  # the healthy store still answers
+    assert merged.read_errors[str(incident)] == ["BrokenStore: OSError"]
+    assert any("unreadable" in message for message in caplog.messages)
+
+
+async def test_read_errors_are_cleared_when_the_stores_recover(stores):
+    blackboard, files, _ = stores
+    incident = uuid4()
+    merged = MergedEvidenceStore(BrokenStore(), files)
+    await merged.read_all(incident)
+    assert merged.read_errors[str(incident)]
+    merged._stores = (files,)
+    await merged.read_all(incident)
+    assert merged.read_errors[str(incident)] == []

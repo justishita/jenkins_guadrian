@@ -58,6 +58,12 @@ def _make_proposal(incident_id: str, attempt: int = 0, pr_url: str = "https://gi
     )
 
 
+def _status_events(mock_db) -> list[AuditEvent]:
+    """The incident_status_changed audit rows staged on the (mocked) session."""
+    rows = [call.args[0] for call in mock_db.add.call_args_list]
+    return [r for r in rows if isinstance(r, AuditEvent) and r.event_type == AuditEventType.INCIDENT_STATUS_CHANGED.value]
+
+
 def test_validation_missing_auth(client):
     resp = client.post("/webhooks/jenkins/validation", json={"job_name": "target-app", "result": "SUCCESS"})
     assert resp.status_code == 401
@@ -130,6 +136,9 @@ def test_validation_resolves_explicit_incident_id_success(client, auth_headers):
         assert resp.status_code == 202
         assert incident.status == "RESOLVED"
         assert proposal.status == ProposalStatus.VALIDATION_PASSED.value
+        [event] = _status_events(mock_db)
+        assert (event.payload["from"], event.payload["to"]) == ("OPEN", "RESOLVED")
+        assert "passed" in event.payload["reason"] and event.incident_id == inc_id
         assert mock_val_pub.called
         call_payload = mock_val_pub.call_args[0][0]
         assert call_payload["incident_id"] == inc_id
@@ -278,6 +287,9 @@ def test_validation_failure_triggers_reinvestigation_under_max_attempts(client, 
         assert resp.status_code == 202
         assert incident.remediation_attempt == 1
         assert proposal.status == ProposalStatus.VALIDATION_FAILED.value
+        [event] = _status_events(mock_db)  # OPEN -> OPEN: the re-investigation is on the audit trail
+        assert (event.payload["from"], event.payload["to"], event.payload["attempt"]) == ("OPEN", "OPEN", 1)
+        assert "re-investigating attempt 1" in event.payload["reason"]
 
         assert mock_val_pub.called
         assert mock_reinv_pub.called
@@ -334,6 +346,8 @@ def test_validation_failure_escalates_when_max_attempts_reached(client, auth_hea
         assert resp.status_code == 202
         assert incident.status == "ESCALATED"
         assert mock_val_pub.called
+        [event] = _status_events(mock_db)
+        assert (event.payload["from"], event.payload["to"], event.payload["attempt"]) == ("OPEN", "ESCALATED", 2)
         # Never loop forever: should not reinvestigate
         assert not mock_reinv_pub.called
 

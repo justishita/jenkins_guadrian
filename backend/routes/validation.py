@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.db.audit_models import AuditEvent, AuditEventType, ProposalStatus, RemediationProposal
+from backend import incident_lifecycle as lifecycle
 from backend.db.database import get_db
 from backend.db.models import Incident
 from backend.events.publisher import publisher
@@ -314,7 +315,9 @@ async def handle_jenkins_validation(
 
         # 8. Success vs Failure (reinvestigate or escalate)
         if is_success:
-            incident.status = "RESOLVED"
+            lifecycle.transition(
+                db, incident, lifecycle.RESOLVED, reason=f"re-validation build #{payload.build_number} passed", actor="jenkins", attempt=resolved_attempt
+            )
             await db.commit()
             await db.refresh(incident)
             logger.info("Incident %s validation succeeded; marked RESOLVED", resolved_id)
@@ -322,7 +325,14 @@ async def handle_jenkins_validation(
             if resolved_attempt < max_attempts_env:
                 next_attempt = resolved_attempt + 1
                 incident.remediation_attempt = next_attempt
-                incident.status = "OPEN"
+                lifecycle.transition(
+                    db,
+                    incident,
+                    lifecycle.OPEN,
+                    reason=f"re-validation failed ({payload.result}); re-investigating attempt {next_attempt}",
+                    actor="jenkins",
+                    attempt=next_attempt,
+                )
                 await db.commit()
                 await db.refresh(incident)
 
@@ -359,7 +369,14 @@ async def handle_jenkins_validation(
                 await publisher.publish_incident_reinvestigate(reinvestigate_event)
                 logger.info("Published incident.reinvestigate for %s attempt %d", resolved_id, next_attempt)
             else:
-                incident.status = "ESCALATED"
+                lifecycle.transition(
+                    db,
+                    incident,
+                    lifecycle.ESCALATED,
+                    reason=f"re-validation failed ({payload.result}) and {max_attempts_env} attempts are used up",
+                    actor="jenkins",
+                    attempt=resolved_attempt,
+                )
                 await db.commit()
                 await db.refresh(incident)
                 logger.info(

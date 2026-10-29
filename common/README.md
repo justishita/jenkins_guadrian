@@ -37,6 +37,14 @@ incident and agent. The Jenkins-agent container bind-mounts this directory so
 evidence remains available on the host. `PostgresEvidenceStore` implements
 the same interface for deployments that opt into PostgreSQL storage.
 
+**Two stores, one read view.** Agents do not all write to the same place: the Jenkins agent writes to the
+blackboard (`data/blackboard`, append-only history), the Metrics and Code agents to `data/evidence`. The
+Coordinator reads both through `coordinator.stores.MergedEvidenceStore` (newest document per agent) and reports a
+store it could not read in `read_errors` and the log, so a broken store is not mistaken for an absent agent.
+Both stores mask credentials on write (`common/redaction.py`) whatever `redaction_applied` claims; the evidence
+store logs a warning when it had to. Neither store is retained forever: `scripts/prune_evidence.py` lists (dry
+run) or deletes (`--apply`) incident folders older than N days; the audit trail is never pruned.
+
 ## Evidence schema
 
 `evidence_schema.json` is the canonical contract: one document per agent per

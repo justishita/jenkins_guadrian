@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from common.audit import AuditRecord
-from common.audit_check import check_incident
+from common.audit_check import check_incident, errors
 
 INCIDENT = UUID("11111111-1111-4111-8111-111111111111")
 T0 = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
@@ -29,7 +29,12 @@ def dispatch(seconds: int, agent: str, outcome: str = "completed", attempt: int 
 
 
 def kinds(records, **kwargs) -> list[str]:
-    return [p.kind for p in check_incident(records, now=LATER, **kwargs)]
+    """The kinds of *error* found; warnings are a separate class (see ``warnings``)."""
+    return [p.kind for p in errors(check_incident(records, now=LATER, **kwargs))]
+
+
+def warnings(records, **kwargs) -> list[str]:
+    return [p.kind for p in check_incident(records, now=LATER, **kwargs) if p.severity == "warning"]
 
 
 def test_a_clean_trail_has_no_problems():
@@ -171,3 +176,88 @@ def test_dispatch_is_matched_per_attempt():
 def test_an_unknown_dispatch_outcome_and_a_missing_duration_are_flagged():
     records = [dispatch(0, "code_agent", outcome="mostly_done", duration_ms=None)]
     assert sorted(kinds(records)) == ["bad_dispatch_outcome", "dispatch_without_duration"]
+
+
+# ---- Week 7: the remediation lifecycle -------------------------------------------------------------------------
+
+
+def status(seconds, before, after, attempt=0):
+    return rec(seconds, "jenkins", "incident_status_changed", **{"from": before, "to": after, "attempt": attempt})
+
+
+def decided(seconds, decision="approved", attempt=0, **extra):
+    return rec(seconds, "approval_service", "approval_decided", decision=decision, attempt=attempt, **extra)
+
+
+def full_flow(attempt=0, start=0):
+    """A complete guarded remediation: request, policy, approval, pull request, passing re-validation, resolved."""
+    return [
+        rec(start, "gate", "approval_requested", attempt=attempt),
+        rec(start + 1, "gate", "policy_evaluated", attempt=attempt, allowed=True),
+        decided(start + 2, attempt=attempt),
+        rec(start + 3, "gate", "pull_request_created", attempt=attempt),
+        AuditRecord(incident_id=INCIDENT, actor="jenkins", event_type="revalidation_completed", payload={"attempt": attempt}, ok=True, created_at=T0 + timedelta(seconds=start + 4)),
+        status(start + 5, "OPEN", "RESOLVED", attempt),
+    ]
+
+
+def test_a_complete_guarded_remediation_has_no_errors_and_no_warnings():
+    records = [rec(-1, "backend", "incident_created")] + full_flow()
+    assert kinds(records) == [] and warnings(records) == []
+
+
+def test_a_pull_request_before_any_decision_is_an_error():
+    assert "pr_without_approval" in kinds([rec(0, "gate", "pull_request_created", attempt=0)])
+
+
+def test_a_pull_request_after_a_rejection_is_an_error():
+    records = [decided(0, "rejected"), rec(1, "gate", "pull_request_created", attempt=0)]
+    assert "pr_without_approval" in kinds(records)
+
+
+def test_an_approval_over_a_policy_refusal_is_an_error_unless_a_human_overrode_it():
+    refused = rec(0, "gate", "policy_evaluated", attempt=0, allowed=False)
+    assert "approved_over_policy_denial" in kinds([refused, decided(1)])
+    assert "approved_over_policy_denial" not in kinds([refused, decided(1, human_override=True)])
+
+
+def test_a_trail_without_the_gates_events_is_a_warning_not_an_error():
+    records = [decided(0), AuditRecord(incident_id=INCIDENT, actor="jenkins", event_type="revalidation_completed", payload={"attempt": 0}, ok=True, created_at=T0 + timedelta(seconds=9))]
+    assert kinds(records) == []
+    assert warnings(records).count("gate_not_in_live_path") == 3  # no request, no policy, no pull request
+
+
+def test_a_report_without_an_incident_created_event_is_a_legacy_warning():
+    records = [rec(0, "coordinator", "synthesis_completed", report_revision_id="r1", attempt=0)]
+    assert "legacy_trail" in warnings(records)
+    assert "legacy_trail" not in warnings([rec(-1, "backend", "incident_created")] + records)
+
+
+def test_resolved_needs_a_passing_revalidation_and_escalated_a_failed_one():
+    assert "resolved_without_revalidation" in kinds([status(0, "OPEN", "RESOLVED")])
+    assert "escalated_without_failures" in kinds([status(0, "OPEN", "ESCALATED")])
+    failed = AuditRecord(incident_id=INCIDENT, actor="jenkins", event_type="revalidation_completed", payload={"attempt": 0}, ok=False, created_at=T0)
+    assert "escalated_without_failures" not in kinds([failed, status(5, "OPEN", "ESCALATED")])
+
+
+def test_closed_rejected_needs_a_rejection_decision():
+    assert "closed_without_rejection" in kinds([status(0, "OPEN", "CLOSED_REJECTED")])
+    assert "closed_without_rejection" not in kinds([decided(0, "rejected"), status(1, "OPEN", "CLOSED_REJECTED")])
+
+
+def test_the_status_chain_must_start_at_open_and_each_change_must_continue_the_last():
+    assert "status_chain_broken" in kinds([status(0, "RESOLVED", "OPEN")])
+    assert "status_chain_broken" in kinds([status(0, "OPEN", "OPEN", 1), status(5, "ESCALATED", "OPEN", 1)])
+    assert "status_chain_broken" not in kinds([status(0, "OPEN", "OPEN", 1), status(5, "OPEN", "OPEN", 2)])
+
+
+def test_nothing_changes_after_a_terminal_status():
+    failed = AuditRecord(incident_id=INCIDENT, actor="jenkins", event_type="revalidation_completed", payload={"attempt": 0}, ok=False, created_at=T0)
+    records = [failed, status(5, "OPEN", "ESCALATED"), status(9, "ESCALATED", "OPEN")]
+    assert "reopened_after_terminal" in kinds(records)
+
+
+def test_attempts_never_go_backwards():
+    records = [decided(0, attempt=2), status(1, "OPEN", "OPEN", attempt=1)]
+    assert "attempt_regressed" in kinds(records)
+    assert "attempt_regressed" not in kinds([decided(0, attempt=1), status(1, "OPEN", "OPEN", attempt=1), decided(2, attempt=2)])

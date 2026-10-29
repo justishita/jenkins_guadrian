@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -15,6 +16,9 @@ from uuid import UUID
 import asyncpg
 
 from common.models import Evidence
+from common.redaction import redact_value
+
+LOGGER = logging.getLogger(__name__)
 
 
 _FILE_IO_LOCK = threading.RLock()
@@ -54,6 +58,21 @@ class FileEvidenceStore(EvidenceStore):
         if not evidence.redaction_applied:
             raise ValueError("refusing to persist evidence without redaction")
 
+    @staticmethod
+    def _document(evidence: Evidence) -> dict[str, Any]:
+        """The JSON document to store: the content is redacted here too, whatever the flag says.
+
+        ``redaction_applied`` is the agent's claim; it is not proof. Redacting again on write (as the
+        blackboard does) means a document that slipped a credential through is stored masked, and the
+        result must still be valid evidence, so redaction can never leave a malformed document behind.
+        """
+        document = evidence.model_dump(mode="json", exclude_none=True)
+        cleaned = redact_value(document)
+        if cleaned != document:
+            LOGGER.warning("evidence from %s for incident %s carried redactable text; stored masked", evidence.agent, evidence.incident_id)
+        Evidence.model_validate(cleaned)
+        return cleaned  # type: ignore[return-value]
+
     def _incident_directory(self, incident_id: UUID | str) -> Path:
         return self.root / str(UUID(str(incident_id)))
 
@@ -78,13 +97,13 @@ class FileEvidenceStore(EvidenceStore):
                 current_document = {
                     key: value for key, value in existing.items() if key != "version"
                 }
-                new_document = evidence.model_dump(mode="json", exclude_none=True)
+                new_document = self._document(evidence)
                 if current_document == new_document:
                     return
                 version = int(existing["version"]) + 1
 
             path.parent.mkdir(parents=True, exist_ok=True)
-            document = evidence.model_dump(mode="json", exclude_none=True)
+            document = self._document(evidence)
             document["version"] = version
             serialized = json.dumps(
                 document,

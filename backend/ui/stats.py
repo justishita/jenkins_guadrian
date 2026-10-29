@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.audit_models import Approval, AuditEvent, ProposalStatus, RemediationProposal
@@ -34,9 +35,13 @@ WANTED = (
     "pull_request_created",
 )
 PROBLEM_OUTCOMES = {"failed", "timed_out", "not_dispatched"}
+OUTCOMES_SQL = Path(__file__).resolve().parents[2] / "monitoring" / "sql" / "incident_outcomes.sql"
+OUTCOME_ORDER = ("resolved_by_fix", "awaiting_validation", "awaiting_approval", "policy_blocked", "open", "rejected", "escalated")
 
 
-def aware(moment: datetime) -> datetime:
+def aware(moment: datetime | str) -> datetime:
+    if isinstance(moment, str):  # SQLite hands timestamps back as text
+        moment = datetime.fromisoformat(moment)
     return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
@@ -74,6 +79,24 @@ def _durations(events: list[AuditEvent]) -> dict[str, dict[str, Any]]:
         agent: {"runs": data["runs"], "problems": data["problems"], "p50_s": percentile(data["durations"], 0.5), "p95_s": percentile(data["durations"], 0.95)}
         for agent, data in sorted(per_agent.items())
         if agent
+    }
+
+
+async def outcomes(db: AsyncSession, ids: list[str]) -> dict[str, Any]:
+    """How each incident ended (or where it is), from the same ``incident_outcomes`` view the dashboards use."""
+    if not ids:
+        return {"by_outcome": [], "resolved_p50_s": None, "resolved_p95_s": None}
+    view = "\n".join(line for line in OUTCOMES_SQL.read_text(encoding="utf-8").splitlines() if not line.startswith("--"))
+    query = text(f"WITH incident_outcomes AS ({view}) SELECT outcome, opened_at, closed_at FROM incident_outcomes WHERE incident_id IN :ids").bindparams(
+        bindparam("ids", expanding=True)
+    )
+    rows = (await db.execute(query, {"ids": ids})).all()
+    counts = Counter(row.outcome for row in rows)
+    durations = [(aware(row.closed_at) - aware(row.opened_at)).total_seconds() for row in rows if row.outcome == "resolved_by_fix" and row.closed_at]
+    return {
+        "by_outcome": [{"outcome": name, "count": counts[name]} for name in OUTCOME_ORDER if counts[name]],
+        "resolved_p50_s": percentile(durations, 0.5),
+        "resolved_p95_s": percentile(durations, 0.95),
     }
 
 
@@ -127,6 +150,7 @@ async def project_stats(
         },
         "verdicts": [{"verdict": v, "count": c} for v, c in verdicts.most_common()],
         "agent_time": [{"agent": a, **d} for a, d in _durations(events).items()],
+        "outcomes": await outcomes(db, ids),
         "approvals": {
             "decided": decided,
             "approval_rate_pct": round(100 * decisions.get("approved", 0) / decided, 1) if decided else None,

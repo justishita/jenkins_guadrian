@@ -6,6 +6,13 @@ be followed by exactly one terminal event (``agent_completed`` or ``agent_failed
 actor's next start. Report syntheses are checked the same way: each persisted revision has
 exactly one audit event keyed by ``report_revision_id``.
 
+**Week 7:** the remediation lifecycle is checked too (request -> policy -> decision -> pull request ->
+re-validation -> status). A broken guarantee (a pull request before approval, an approval over a policy
+refusal, a status chain that does not add up) is an ``error``. A trail that merely lacks the events the
+remediation gate writes is a ``warning`` of kind ``gate_not_in_live_path``: the live pull-request path does
+not use the gate yet, so those events are missing there, and failing every live incident for it would hide
+the real errors.
+
 ``check_incident`` is pure (it takes already-read records), so it runs against the file trail,
 the PostgreSQL trail, or a test fixture alike. ``scripts/check_audit.py`` is the CLI.
 """
@@ -25,6 +32,8 @@ TERMINAL = ("agent_completed", "agent_failed")
 SYNTHESIS = ("synthesis_completed", "synthesis_revised")
 DISPATCH = "agent_dispatch"
 OUTCOMES = ("completed", "failed", "timed_out", "not_dispatched")
+TERMINAL_STATUSES = ("RESOLVED", "ESCALATED", "CLOSED_REJECTED")
+GATE_WARNING = "gate_not_in_live_path"
 
 
 @dataclass(frozen=True)
@@ -32,9 +41,15 @@ class Problem:
     kind: str  # unfinished_run | orphan_terminal | duplicate_revision | missing_revision_id | ...
     actor: str
     detail: str
+    severity: str = "error"  # "error" fails the check; "warning" is reported only
 
     def __str__(self) -> str:
-        return f"[{self.kind}] {self.actor}: {self.detail}"
+        tag = "" if self.severity == "error" else f" ({self.severity})"
+        return f"[{self.kind}]{tag} {self.actor}: {self.detail}"
+
+
+def errors(problems: Iterable[Problem]) -> list[Problem]:
+    return [problem for problem in problems if problem.severity == "error"]
 
 
 def check_incident(
@@ -55,6 +70,7 @@ def check_incident(
     problems += _check_dispatches(ordered)
     problems += _check_redaction(ordered)
     problems += _check_agent_coverage(ordered, required_agents, set(unaudited_ok))
+    problems += _check_lifecycle(ordered)
     return problems
 
 
@@ -149,4 +165,85 @@ def _check_agent_coverage(ordered: Sequence[AuditRecord], required: Iterable[str
     return problems
 
 
-__all__ = ["Problem", "check_incident"]
+def _attempt(record: AuditRecord) -> int:
+    value = record.payload.get("attempt", 0)
+    return value if isinstance(value, int) else 0
+
+
+def _check_lifecycle(ordered: Sequence[AuditRecord]) -> list[Problem]:
+    """Request -> policy -> decision -> pull request -> re-validation -> status, in order and consistent."""
+    problems: list[Problem] = []
+
+    def warn(kind: str, actor: str, detail: str) -> None:
+        problems.append(Problem(kind, actor, detail, severity="warning"))
+
+    requested: set[int] = set()
+    policy_denied: set[int] = set()
+    policy_seen: set[int] = set()
+    decisions: dict[int, AuditRecord] = {}
+    pull_requests: set[int] = set()
+    revalidation_ok = False
+    revalidation_failed = False
+    status: str | None = None
+    last_attempt = 0
+
+    for record in ordered:
+        kind = record.event_type
+        attempt = _attempt(record)
+        if kind in ("approval_decided", "revalidation_completed", "incident_status_changed"):
+            if attempt < last_attempt:
+                problems.append(Problem("attempt_regressed", record.actor, f"{kind} for attempt {attempt} after attempt {last_attempt}"))
+            last_attempt = max(last_attempt, attempt)
+
+        if kind == "approval_requested":
+            requested.add(attempt)
+        elif kind == "policy_evaluated":
+            policy_seen.add(attempt)
+            if record.payload.get("allowed") is False:
+                policy_denied.add(attempt)
+        elif kind == "approval_decided":
+            decision = record.payload.get("decision")
+            decisions[attempt] = record
+            if attempt not in requested:
+                warn(GATE_WARNING, record.actor, f"attempt {attempt} was decided but no approval_requested was audited")
+            if attempt not in policy_seen:
+                warn(GATE_WARNING, record.actor, f"attempt {attempt} was decided but no policy_evaluated was audited")
+            if decision == "approved" and attempt in policy_denied and not record.payload.get("human_override"):
+                problems.append(Problem("approved_over_policy_denial", record.actor, f"attempt {attempt} approved although policy refused it (TC-15)"))
+        elif kind == "pull_request_created":
+            decided = decisions.get(attempt)
+            if decided is None or decided.payload.get("decision") != "approved":
+                why = "after a rejection" if decided is not None else "before any decision"
+                problems.append(Problem("pr_without_approval", record.actor, f"pull request for attempt {attempt} created {why}"))
+            pull_requests.add(attempt)
+        elif kind == "revalidation_completed":
+            if record.ok:
+                revalidation_ok = True
+            else:
+                revalidation_failed = True
+            if attempt not in pull_requests:
+                warn(GATE_WARNING, record.actor, f"re-validation for attempt {attempt} has no audited pull_request_created before it")
+        elif kind == "incident_status_changed":
+            before, after = record.payload.get("from"), record.payload.get("to")
+            if status is None and before != "OPEN":
+                problems.append(Problem("status_chain_broken", record.actor, f"first status change starts from {before!r}, not OPEN"))
+            elif status is not None and before != status:
+                problems.append(Problem("status_chain_broken", record.actor, f"change from {before!r} but the previous change ended at {status!r}"))
+            if status in TERMINAL_STATUSES:
+                problems.append(Problem("reopened_after_terminal", record.actor, f"{status} changed again to {after!r}"))
+            if after == "RESOLVED" and not revalidation_ok:
+                problems.append(Problem("resolved_without_revalidation", record.actor, "marked RESOLVED with no passing re-validation before it"))
+            if after == "ESCALATED" and not revalidation_failed:
+                problems.append(Problem("escalated_without_failures", record.actor, "marked ESCALATED with no failed re-validation before it"))
+            if after == "CLOSED_REJECTED" and not any(r.payload.get("decision") == "rejected" for r in decisions.values()):
+                problems.append(Problem("closed_without_rejection", record.actor, "marked CLOSED_REJECTED with no rejection decision before it"))
+            status = str(after)
+
+    created = any(record.event_type == "incident_created" for record in ordered)
+    reported = any(record.event_type in SYNTHESIS for record in ordered)
+    if reported and not created:
+        warn("legacy_trail", "backend", "has a report but no incident_created event (the incident predates the lifecycle audit)")
+    return problems
+
+
+__all__ = ["Problem", "check_incident", "errors"]

@@ -8,7 +8,7 @@
     python scripts/check_audit.py --all --unaudited-ok jenkins_agent
 
 Reads the PostgreSQL trail when ``DATABASE_URL`` is set, otherwise the JSON-lines files under
-``data/audit``. Exit status 1 if any problem is found. The rules are in ``common/audit_check.py``;
+``data/audit``. Exit status 1 if any *error* is found; warnings (a trail that lacks the remediation gate's events) are printed but do not fail the run. The rules are in ``common/audit_check.py``;
 ``--unaudited-ok`` names agents that are known not to write audit records yet, so a known gap is
 reported once instead of failing every run.
 """
@@ -26,7 +26,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from common.audit import AuditLog, build_audit_log
-from common.audit_check import check_incident
+from common.audit_check import check_incident, errors
 
 AUDIT_DIR = REPO / "data" / "audit"
 
@@ -60,11 +60,13 @@ async def run(args: argparse.Namespace) -> int:
     failed = 0
     for incident in ids:
         problems = check_incident(await audit.read(incident), unaudited_ok=args.unaudited_ok)
-        status = "ok" if not problems else f"{len(problems)} problem(s)"
+        hard = errors(problems)
+        status = "ok" if not problems else f"{len(hard)} error(s), {len(problems) - len(hard)} warning(s)"
         print(f"{incident}: {status}")
         for problem in problems:
-            print(f"  {problem}")
-        failed += bool(problems)
+            if problem.severity == "error" or not args.errors_only:
+                print(f"  {problem}")
+        failed += bool(hard)
     return 1 if failed else 0
 
 
@@ -73,6 +75,7 @@ def main() -> None:
     parser.add_argument("incident", nargs="?")
     parser.add_argument("--latest", action="store_true")
     parser.add_argument("--all", action="store_true")
+    parser.add_argument("--errors-only", action="store_true", help="do not print warnings")
     parser.add_argument("--unaudited-ok", nargs="*", default=[], metavar="AGENT")
     args = parser.parse_args()
     if not (args.incident or args.latest or args.all):

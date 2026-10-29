@@ -9,6 +9,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend import incident_lifecycle as lifecycle
 from backend.db.models import Incident
 from common.fingerprint import compute_preliminary_fingerprint
 from backend.events.publisher import publisher
@@ -68,6 +69,7 @@ async def create_incident_if_missing(
                 related_incident_id=related_id,
             )
             db.add(incident)
+            lifecycle.record_created(db, incident)
             await db.commit()
             await db.refresh(incident)
         else:

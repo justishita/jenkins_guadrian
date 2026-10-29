@@ -50,7 +50,8 @@ class AuditEventType(str, Enum):
     Extend deliberately: Grafana panels and evaluation scripts group on these values.
     """
 
-    INCIDENT_CREATED = "incident_created"
+    INCIDENT_CREATED = "incident_created"  # written by the backend when the incident row is created
+    INCIDENT_STATUS_CHANGED = "incident_status_changed"  # OPEN/RESOLVED/ESCALATED/CLOSED_REJECTED; payload from,to,reason,attempt
     AGENT_STARTED = "agent_started"
     AGENT_COMPLETED = "agent_completed"
     AGENT_FAILED = "agent_failed"

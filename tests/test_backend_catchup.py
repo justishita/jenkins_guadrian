@@ -5,6 +5,8 @@ import httpx
 import pytest
 
 from backend.config import settings
+from backend.db.audit_models import AuditEvent
+from backend.db.models import Incident
 from backend.jenkins_catchup import JenkinsCatchup, events_from_jenkins_payload
 
 
@@ -117,8 +119,11 @@ async def test_scan_creates_and_publishes_only_missing_recent_failures(monkeypat
         created = await catchup.scan_once()
 
     assert created == 1
-    assert len(session.added) == 1
-    assert session.added[0].build_number == 12
+    incidents = [row for row in session.added if isinstance(row, Incident)]
+    audits = [row for row in session.added if isinstance(row, AuditEvent)]
+    assert len(incidents) == 1 and incidents[0].build_number == 12  # only the one missing failure
+    assert [a.event_type for a in audits] == ["incident_created"] and audits[0].incident_id == incidents[0].id
+    assert len(session.added) == 2
     assert publish.await_count == 1
     assert publish.await_args.args[0]["job_name"] == "target-app/main"
     assert requested[0].url.path == "/api/json"
