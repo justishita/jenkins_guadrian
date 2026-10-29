@@ -890,3 +890,33 @@ table.data td.clamp {
 .panel.table-wrap {
   padding: 1rem 1.2rem;
 }
+
+.outcomes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.6rem;
+}
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.segmented button {
+  background: transparent;
+  color: var(--muted);
+  border-radius: 0;
+  padding: 0.5rem 1rem;
+}
+.segmented button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}

@@ -183,6 +183,20 @@ describe("dashboards", () => {
     expect(url).toContain("var-job=target-app");
     expect(dashboardUrl("a b&c=d")).toContain("var-job=a+b%26c%3Dd"); // a job name cannot add parameters
     expect(dashboardUrl("x", false)).not.toContain("kiosk");
+    expect(dashboardUrl("target-app", true, "ops")).toContain("/grafana/d/ops/ops?"); // the second dashboard
+  });
+
+  it("switches between the two dashboards", async () => {
+    mockApi({
+      "GET /auth/me": { body: { user: reviewer, csrf_token: "t" } },
+      "GET /projects": { body: [project] },
+      "GET /projects/1": { body: project },
+    });
+    renderApp("/projects/1/dashboards");
+    const frame = await screen.findByTitle("Grafana dashboard for Shop");
+    expect(frame).toHaveAttribute("src", expect.stringContaining("/d/agent-ops/"));
+    await userEvent.click(screen.getByRole("tab", { name: "Approvals & Operations" }));
+    expect(screen.getByTitle("Grafana dashboard for Shop")).toHaveAttribute("src", expect.stringContaining("/d/ops/"));
   });
 
   it("shows the Dashboards tab and an iframe for a project", async () => {
@@ -213,6 +227,7 @@ describe("overview", () => {
           incidents_per_day: [],
           reports: { total: 0, incomplete: 0, conflicted: 0, time_to_report_p50_s: null, time_to_report_p95_s: null },
           verdicts: [],
+          outcomes: { by_outcome: [{ outcome: "escalated", count: 2 }], resolved_p50_s: null, resolved_p95_s: null },
           agent_time: [],
           approvals: { decided: 0, approval_rate_pct: null, by_decision: [], pending: 0 },
           fix_outcomes: { pull_requests_opened: 0, policy_denied: 0, revalidation_passed: 0, revalidation_failed: 0, fix_success_pct: null, note: "proxy" },
@@ -222,5 +237,6 @@ describe("overview", () => {
     renderApp("/projects/1");
     const link = await screen.findByRole("link", { name: /View Grafana dashboards/ });
     expect(link).toHaveAttribute("href", "/projects/1/dashboards");
+    expect(screen.getByText("Escalated")).toBeInTheDocument(); // the outcome panel
   });
 });

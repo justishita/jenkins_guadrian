@@ -4,12 +4,22 @@ import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../api";
 import { ArrowRightIcon, CalendarIcon, ChevronIcon, ClockIcon, DocIcon, EyeIcon, PercentIcon, TrendIcon } from "../icons";
-import { Kpi, Problem, percent, seconds } from "../ui";
+import { Badge, Kpi, Problem, percent, seconds } from "../ui";
 import { useProject } from "./ProjectLayout";
 
 const BLUE = "#3b7ddd";
 const PIE = ["#3b8fe8", "#6b6fa8", "#35b3a3", "#f0a04b", "#e0607e", "#8b6fe0"];
 const AXIS = { fontSize: 12, fill: "#5b6b86" };
+
+const OUTCOME_LABEL: Record<string, { text: string; tone: "ok" | "warn" | "bad" | "neutral" | "info" }> = {
+  resolved_by_fix: { text: "Resolved by fix", tone: "ok" },
+  awaiting_validation: { text: "Awaiting re-validation", tone: "info" },
+  awaiting_approval: { text: "Awaiting approval", tone: "info" },
+  policy_blocked: { text: "Blocked by policy", tone: "warn" },
+  open: { text: "Open", tone: "warn" },
+  rejected: { text: "Fix rejected", tone: "neutral" },
+  escalated: { text: "Escalated", tone: "bad" },
+};
 
 export function OverviewPage() {
   const project = useProject();
@@ -129,6 +139,25 @@ export function OverviewPage() {
           )}
         </section>
       </div>
+
+      <section className="panel strip-panel">
+        <h2>How incidents ended</h2>
+        {data.outcomes.by_outcome.length === 0 ? (
+          <p className="muted">No incidents in this range.</p>
+        ) : (
+          <div className="outcomes">
+            {data.outcomes.by_outcome.map((row) => (
+              <span key={row.outcome} className="outcome">
+                <span className="strip-number">{row.count}</span>
+                <Badge tone={(OUTCOME_LABEL[row.outcome] ?? { tone: "neutral" }).tone}>{OUTCOME_LABEL[row.outcome]?.text ?? row.outcome}</Badge>
+              </span>
+            ))}
+          </div>
+        )}
+        {data.outcomes.resolved_p50_s !== null && (
+          <p className="muted small">Median time from incident to resolution: {seconds(data.outcomes.resolved_p50_s)} (95th percentile {seconds(data.outcomes.resolved_p95_s)}).</p>
+        )}
+      </section>
 
       <section className="panel strip-panel">
         <h2>Approvals and fixes</h2>

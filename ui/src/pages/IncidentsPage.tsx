@@ -31,6 +31,8 @@ export function IncidentsPage() {
               <option value="">All</option>
               <option value="OPEN">Open</option>
               <option value="RESOLVED">Resolved</option>
+              <option value="ESCALATED">Escalated</option>
+              <option value="CLOSED_REJECTED">Closed (fix rejected)</option>
             </select>
             <ChevronIcon size={16} />
           </span>

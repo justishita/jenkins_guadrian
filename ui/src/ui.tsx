@@ -44,8 +44,8 @@ export function ReportBadges({ report }: { report: ReportSummary | null }) {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const tone = status === "OPEN" ? "warn" : status === "RESOLVED" ? "ok" : "neutral";
-  return <Badge tone={tone}>{status.toLowerCase()}</Badge>;
+  const tone = status === "OPEN" ? "warn" : status === "RESOLVED" ? "ok" : status === "ESCALATED" ? "bad" : "neutral";
+  return <Badge tone={tone}>{status.replace(/_/g, " ").toLowerCase()}</Badge>;
 }
 
 export function Kpi({ label, value, hint, icon }: { label: string; value: ReactNode; hint?: string; icon?: ReactNode }) {

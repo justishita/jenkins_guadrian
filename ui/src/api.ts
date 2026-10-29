@@ -161,6 +161,7 @@ export interface Stats {
   incidents_per_day: { date: string; incidents: number }[];
   reports: { total: number; incomplete: number; conflicted: number; time_to_report_p50_s: number | null; time_to_report_p95_s: number | null };
   verdicts: { verdict: string; count: number }[];
+  outcomes: { by_outcome: { outcome: string; count: number }[]; resolved_p50_s: number | null; resolved_p95_s: number | null };
   agent_time: { agent: string; runs: number; problems: number; p50_s: number | null; p95_s: number | null }[];
   approvals: { decided: number; approval_rate_pct: number | null; by_decision: { decision: string; count: number }[]; pending: number };
   fix_outcomes: {
