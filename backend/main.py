@@ -19,6 +19,7 @@ from backend.routes.validation import router as validation_router
 from backend.routes.webhooks import router as webhooks_router
 from backend.ui.api import router as ui_router
 from backend.ui.seed import seed_admin
+from common.tracing import setup_tracing
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +60,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup and shutdown lifecycle manager."""
     logger.info("Starting up DevOps AI Agent API...")
+    setup_tracing("jenkins-guardian-backend")
 
     # 1. Initialize DB tables
     await init_db()

@@ -13,6 +13,7 @@ from backend.db.database import get_db
 from backend.incidents import create_incident_if_missing
 from backend.models.events import JenkinsFailureEvent
 from common.redaction import redact_value
+from common.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,14 @@ async def handle_jenkins_failure(
         ) from error
 
     try:
-        incident, created = await create_incident_if_missing(payload, db)
+        # Root span of the incident's trace: the persisted incident, its blackboard context entry
+        # and the incident.created message (which carries the trace as a header) all hang off it.
+        with get_tracer("jenkins-guardian-backend").start_as_current_span("webhook.create_incident") as span:
+            span.set_attribute("jenkins.job_name", payload.job_name)
+            span.set_attribute("jenkins.build_number", payload.build_number)
+            incident, created = await create_incident_if_missing(payload, db)
+            span.set_attribute("incident.id", str(incident.id))
+            span.set_attribute("incident.created", created)
         if not created:
             logger.info(
                 "Duplicate Jenkins failure event received for incident %s.",

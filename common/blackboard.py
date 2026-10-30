@@ -134,6 +134,20 @@ class BlackboardEntry(BaseModel):
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _current_trace_ids() -> tuple[str | None, str | None]:
+    """Active (trace_id, span_id), or (None, None) when there is no span or no tracing library.
+
+    Imported lazily: the analytics MCP image reads the blackboard but does not ship
+    OpenTelemetry, and a missing tracing library must never stop a post.
+    """
+    try:
+        from common.tracing import get_current_trace_and_span_ids
+
+        return get_current_trace_and_span_ids()
+    except Exception:  # noqa: BLE001 - tracing is optional here
+        return None, None
+
+
 def _redact_payload(data: Any) -> Any:
     """Recursively redact text in dictionary, list, or string."""
     return redact_value(data)
@@ -205,6 +219,9 @@ class FileBlackboard:
         """
         _check_permissions(entry.section, entry.key, entry.author)
 
+        # Tie the entry to the trace it was written under, unless the caller already did.
+        if entry.trace_id is None:
+            entry.trace_id, entry.span_id = _current_trace_ids()
         # Redact payload before storing
         entry.payload = _redact_payload(entry.payload)
 

@@ -72,6 +72,9 @@ services:
       - ./data/reports:/app/data/reports:ro
       - ./monitoring/sql:/app/monitoring/sql:ro
     environment:
+      # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_TRACES_CONSOLE=${OTEL_TRACES_CONSOLE:-0}
       # The UI only reads reports; the Coordinator is the one that writes them.
       - REPORTS_DIR=/app/data/reports
       - UI_TRUST_PROXY=true
@@ -184,6 +187,9 @@ services:
     ports:
       - "9103:9103"
     environment:
+      # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_CONSOLE: ${OTEL_TRACES_CONSOLE:-0}
       RABBITMQ_URL: ${RABBITMQ_URL}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
       COORDINATOR_URL: http://coordinator:9100
@@ -228,6 +234,9 @@ services:
     ports:
       - "9101:9101"
     environment:
+      # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_CONSOLE: ${OTEL_TRACES_CONSOLE:-0}
       RABBITMQ_URL: ${RABBITMQ_URL}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
       PORT: "9101"
@@ -264,6 +273,9 @@ services:
     ports:
       - "9102:9102"
     environment:
+      # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_CONSOLE: ${OTEL_TRACES_CONSOLE:-0}
       RABBITMQ_URL: ${RABBITMQ_URL}
       A2A_SHARED_TOKEN: ${A2A_SHARED_TOKEN}
       PORT: "9102"
@@ -301,6 +313,9 @@ services:
     ports:
       - "9100:9100"
     environment:
+      # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_CONSOLE: ${OTEL_TRACES_CONSOLE:-0}
       PORT: "9100"
       TRIGGER_MODE: ${TRIGGER_MODE:-a2a}
       DATABASE_URL: ${DATABASE_URL:-}
@@ -364,6 +379,14 @@ services:
       - "8082:8082"
     environment:
       PORT: "8082"
+      # find_related_incidents reads earlier incidents' evidence from the Blackboard.
+      BLACKBOARD_DIR: /app/data/blackboard
+      # check_flakiness reads recent builds from Jenkins; without these it reports "unavailable".
+      JENKINS_URL: http://jenkins:8080
+      JENKINS_USER: ${JENKINS_USER:-}
+      JENKINS_API_TOKEN: ${JENKINS_API_TOKEN:-}
+    volumes:
+      - ./data/blackboard:/app/data/blackboard:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8082), timeout=2).close()"]
       interval: 10s

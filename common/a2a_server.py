@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from common.blackboard import get_blackboard
 from common.models import Evidence
-from common.tracing import extract_traceparent, get_tracer
+from common.tracing import extract_traceparent, get_tracer, setup_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ def create_a2a_app(
     timeout_seconds: float = 60.0,
 ) -> FastAPI:
     """Serve authenticated, idempotent A2A tasks; return only a Blackboard reference."""
+    # Install the tracer provider for this agent's process, so the spans below are recorded
+    # (and exported when OTEL_EXPORTER_OTLP_ENDPOINT is set) instead of being no-ops.
+    setup_tracing(agent_card_data.get("name", "a2a-agent"))
     app = FastAPI(title=agent_card_data.get("name", "A2A Agent"))
 
     @app.get("/.well-known/agent-card.json")

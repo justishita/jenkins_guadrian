@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from common.audit import AuditLog, build_audit_log
 from common.evidence_store import FileEvidenceStore
 from common.models import Evidence
+from common.tracing import setup_tracing, span_from_headers
 from common.a2a_contract import evidence_ready
 
 from .audit import completion_details, record_findings
@@ -165,7 +166,29 @@ def parse_event(body: bytes) -> IncidentCreatedEvent:
     return IncidentCreatedEvent.model_validate(json.loads(body))
 
 
+async def process_message(message: aio_pika.abc.AbstractIncomingMessage, agent: MetricsAgent) -> None:
+    # requeue=False: a malformed message must not loop forever.
+    async with message.process(requeue=False):
+        try:
+            event = parse_event(message.body)
+        except (ValueError, ValidationError):
+            logger.exception("dropping malformed incident message")
+            return
+        # Continue the trace the webhook started, carried in the message headers.
+        with span_from_headers(
+            "jenkins-guardian-metrics-agent",
+            "metrics_agent.handle_message",
+            message.headers,
+            {"incident.id": str(event.incident_id), "messaging.routing_key": message.routing_key or ""},
+        ):
+            try:
+                await agent.run_event(event)
+            except Exception:  # the consumer must outlive any single bad incident
+                logger.exception("investigation failed", extra={"incident_id": str(event.incident_id)})
+
+
 async def run(settings: MetricsAgentSettings) -> None:
+    setup_tracing("jenkins-guardian-metrics-agent")
     tool = PrometheusTool(
         settings.PROMETHEUS_URL,
         timeout_seconds=settings.PROMETHEUS_TIMEOUT_SECONDS,
@@ -190,19 +213,7 @@ async def run(settings: MetricsAgentSettings) -> None:
             logger.info("metrics agent consuming", extra={"queue": settings.QUEUE_NAME})
             async with queue.iterator() as messages:
                 async for message in messages:
-                    # requeue=False: a malformed message must not loop forever.
-                    async with message.process(requeue=False):
-                        try:
-                            event = parse_event(message.body)
-                        except (ValueError, ValidationError):
-                            logger.exception("dropping malformed incident message")
-                            continue
-                        try:
-                            await agent.run_event(event)
-                        except Exception:  # the consumer must outlive any single bad incident
-                            logger.exception(
-                                "investigation failed", extra={"incident_id": str(event.incident_id)}
-                            )
+                    await process_message(message, agent)
     finally:
         tool.close()
 

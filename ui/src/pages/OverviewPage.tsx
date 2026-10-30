@@ -88,8 +88,8 @@ export function OverviewPage() {
                   data={data.verdicts}
                   dataKey="count"
                   nameKey="verdict"
-                  cx="38%"
-                  outerRadius={88}
+                  cx="50%"
+                  outerRadius={80}
                   stroke="#fff"
                   strokeWidth={2}
                   labelLine={false}
@@ -108,7 +108,7 @@ export function OverviewPage() {
                     <Cell key={entry.verdict} fill={PIE[index % PIE.length]} />
                   ))}
                 </Pie>
-                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
+                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ paddingLeft: 8 }} />
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>

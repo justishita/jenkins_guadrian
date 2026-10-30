@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Mapping
+from contextlib import contextmanager
+from typing import Any, Iterator, Mapping
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -20,8 +21,15 @@ _TRACER_INITIALIZED = False
 
 
 def setup_tracing(service_name: str = "jenkins-guardian") -> trace.Tracer:
-    """Initialize OpenTelemetry tracer provider with OTLP exporter if configured."""
+    """Install the process-wide tracer provider once; later calls just return a tracer.
+
+    Spans are exported over OTLP when ``OTEL_EXPORTER_OTLP_ENDPOINT`` is set and printed to
+    the console when ``OTEL_TRACES_CONSOLE=1``. With neither, spans still exist (so trace
+    ids propagate and appear on blackboard entries) but are not exported anywhere.
+    """
     global _TRACER_INITIALIZED
+    if _TRACER_INITIALIZED:
+        return trace.get_tracer(service_name)
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     resource = Resource.create({"service.name": service_name})
@@ -38,6 +46,8 @@ def setup_tracing(service_name: str = "jenkins-guardian") -> trace.Tracer:
                 "Failed to configure OTLP exporter (%s)",
                 type(error).__name__,
             )
+    if os.getenv("OTEL_TRACES_CONSOLE", "0") == "1":
+        provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
     trace.set_tracer_provider(provider)
     _TRACER_INITIALIZED = True
@@ -58,6 +68,36 @@ def inject_traceparent(carrier: dict[str, str]) -> dict[str, str]:
 def extract_traceparent(carrier: Mapping[str, str]) -> trace.Context:
     """Extract W3C traceparent header from carrier dict and return span context."""
     return TraceContextTextMapPropagator().extract(carrier)
+
+
+def current_traceparent_headers() -> dict[str, str]:
+    """Headers that carry the active span to the next service; empty when there is none."""
+    return inject_traceparent({})
+
+
+def context_from_headers(headers: Mapping[str, Any] | None) -> trace.Context:
+    """Trace context from HTTP or AMQP headers (names are case-insensitive, values may be bytes)."""
+    carrier: dict[str, str] = {}
+    for name, value in (headers or {}).items():
+        if isinstance(value, (bytes, bytearray)):
+            value = bytes(value).decode("utf-8", "ignore")
+        carrier[str(name).lower()] = str(value)
+    return extract_traceparent(carrier)
+
+
+@contextmanager
+def span_from_headers(
+    tracer_name: str,
+    span_name: str,
+    headers: Mapping[str, Any] | None,
+    attributes: Mapping[str, Any] | None = None,
+) -> Iterator[trace.Span]:
+    """Run a block inside a span that continues the trace carried by a message's headers."""
+    tracer = get_tracer(tracer_name)
+    with tracer.start_as_current_span(
+        span_name, context=context_from_headers(headers), attributes=dict(attributes or {})
+    ) as span:
+        yield span
 
 
 def get_current_trace_and_span_ids() -> tuple[str | None, str | None]:

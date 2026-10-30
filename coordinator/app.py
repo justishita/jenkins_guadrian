@@ -23,6 +23,7 @@ from common.blackboard import EvidenceStore as BlackboardEvidenceStore
 from common.blackboard import get_blackboard
 from common.evidence_store import FileEvidenceStore
 from common.models import IncidentCreatedEvent
+from common.tracing import context_from_headers, current_traceparent_headers, get_tracer, setup_tracing
 from coordinator.agent import CoordinatorAgent
 from coordinator.revisions import (
     PersistResult,
@@ -34,6 +35,8 @@ from coordinator.stores import MergedEvidenceStore
 from coordinator.synthesis import IncidentReport
 
 logger = logging.getLogger(__name__)
+
+TRACER_NAME = "jenkins-guardian-coordinator"
 
 
 class AgentOutcome(str, Enum):
@@ -116,6 +119,7 @@ class CoordinatorRuntime:
             raise RuntimeError("RABBITMQ_URL must be configured")
         if not self.a2a_token:
             raise RuntimeError("A2A_SHARED_TOKEN must be configured")
+        setup_tracing(TRACER_NAME)
 
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(self.timeout_seconds),
@@ -175,19 +179,28 @@ class CoordinatorRuntime:
                 body = json.loads(message.body)
                 routing_key = message.routing_key or ""
 
-                if routing_key == "incident.reinvestigate" or body.get("previous_failure_summary"):
-                    await self._dispatch_reinvestigation(body)
-                    return
+                # Continue the trace the backend started when it published this message.
+                parent = context_from_headers(getattr(message, "headers", None))
+                with get_tracer(TRACER_NAME).start_as_current_span(
+                    "coordinator.handle_message", context=parent
+                ) as span:
+                    span.set_attribute("messaging.rabbitmq.routing_key", routing_key)
+                    if body.get("incident_id"):
+                        span.set_attribute("incident.id", str(body["incident_id"]))
 
-                try:
-                    event = IncidentCreatedEvent.model_validate(body)
-                except (ValueError, ValidationError) as error:
-                    logger.error(
-                        "Discarding invalid incident.created message (%s)",
-                        type(error).__name__,
-                    )
-                    return
-                await self.dispatch_all(event)
+                    if routing_key == "incident.reinvestigate" or body.get("previous_failure_summary"):
+                        await self._dispatch_reinvestigation(body)
+                        return
+
+                    try:
+                        event = IncidentCreatedEvent.model_validate(body)
+                    except (ValueError, ValidationError) as error:
+                        logger.error(
+                            "Discarding invalid incident.created message (%s)",
+                            type(error).__name__,
+                        )
+                        return
+                    await self.dispatch_all(event)
         except Exception as error:
             logger.error(
                 "Coordinator dispatch failed for incident message (%s)",
@@ -218,7 +231,9 @@ class CoordinatorRuntime:
             "Coordinator collected agent outcomes",
             extra={"incident_id": str(event.incident_id), "outcomes": outcomes},
         )
-        await self._synthesize(event, outcomes)
+        with get_tracer(TRACER_NAME).start_as_current_span("coordinator.synthesize") as span:
+            span.set_attribute("incident.id", str(event.incident_id))
+            await self._synthesize(event, outcomes)
         if self.revisions is not None and any(o != AgentOutcome.COMPLETED.value for o in outcomes.values()):
             task = asyncio.ensure_future(self._late_watch(event, dict(outcomes)))
             self._late_tasks.add(task)
@@ -402,9 +417,15 @@ class CoordinatorRuntime:
             logger.error("Could not audit the dispatch (%s)", type(error).__name__)
 
     async def _run_agent(self, agent: str, event: IncidentCreatedEvent) -> AgentOutcome:
-        if agent in self.a2a_agents:
-            return await self._dispatch_agent_task(agent, event)
-        return await self._watch_blackboard(agent, event)
+        with get_tracer(TRACER_NAME).start_as_current_span("coordinator.run_agent") as span:
+            span.set_attribute("agent", agent)
+            span.set_attribute("incident.id", str(event.incident_id))
+            if agent in self.a2a_agents:
+                outcome = await self._dispatch_agent_task(agent, event)
+            else:
+                outcome = await self._watch_blackboard(agent, event)
+            span.set_attribute("outcome", outcome.value)
+            return outcome
 
     async def _dispatch_agent_task(self, agent: str, event: IncidentCreatedEvent) -> AgentOutcome:
         """POST one A2A task with the same retry policy as the Jenkins dispatch."""
@@ -415,7 +436,7 @@ class CoordinatorRuntime:
         outcome = AgentOutcome.FAILED
         for attempt in range(3):
             try:
-                response = await self.client.post(url, json=payload)
+                response = await self.client.post(url, json=payload, headers=current_traceparent_headers())
                 if response.status_code == 504:
                     return AgentOutcome.TIMED_OUT
                 if response.status_code >= 500:
@@ -472,7 +493,7 @@ class CoordinatorRuntime:
         }
         for attempt in range(3):
             try:
-                response = await self.client.post(url, json=payload)
+                response = await self.client.post(url, json=payload, headers=current_traceparent_headers())
                 if response.status_code >= 500:
                     if attempt < 2:
                         await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
@@ -528,7 +549,7 @@ class CoordinatorRuntime:
         }
         for retry in range(3):
             try:
-                response = await self.client.post(url, json=payload)
+                response = await self.client.post(url, json=payload, headers=current_traceparent_headers())
                 if response.status_code >= 500:
                     if retry < 2:
                         await asyncio.sleep(min(0.25 * (2**retry), 1.0))

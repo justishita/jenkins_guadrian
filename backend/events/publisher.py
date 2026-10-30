@@ -6,6 +6,7 @@ import aio_pika
 
 from backend.config import settings
 from common.redaction import redact_value
+from common.tracing import current_traceparent_headers
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +65,12 @@ class RabbitMQPublisher:
 
             safe_payload = redact_value(payload)
             message_body = json.dumps(safe_payload).encode("utf-8")
+            # Carry the active trace to the consumer as a message header (empty without a span).
             message = aio_pika.Message(
                 body=message_body,
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 content_type="application/json",
+                headers=current_traceparent_headers() or None,
             )
             confirmed = await self.exchange.publish(message, routing_key=routing_key)
             if confirmed is False:

@@ -48,6 +48,7 @@ from common.models import (
     ToolCallRecord,
 )
 from common.redaction import redact
+from common.tracing import setup_tracing, span_from_headers
 from common.a2a_contract import evidence_ready
 
 
@@ -487,12 +488,19 @@ async def _process_message(message: AbstractIncomingMessage, agent: CodeInvestig
         except (ValueError, ValidationError):
             logger.exception("dropping malformed incident message")
             return
-        try:
-            await agent.run_event(event)
-        except Exception:  # the consumer must outlive any single bad incident
-            logger.exception(
-                "code investigation failed", extra={"incident_id": str(event.incident_id)}
-            )
+        # Continue the trace the webhook started, carried in the message headers.
+        with span_from_headers(
+            "jenkins-guardian-code-agent",
+            "code_agent.handle_message",
+            message.headers,
+            {"incident.id": str(event.incident_id), "messaging.routing_key": message.routing_key or ""},
+        ):
+            try:
+                await agent.run_event(event)
+            except Exception:  # the consumer must outlive any single bad incident
+                logger.exception(
+                    "code investigation failed", extra={"incident_id": str(event.incident_id)}
+                )
 
 
 async def _connect_with_retry(
@@ -517,6 +525,7 @@ async def _connect_with_retry(
 
 async def run(settings: CodeAgentSettings) -> None:
     """Consume incident events and investigate each one."""
+    setup_tracing("jenkins-guardian-code-agent")
     agent, github = build_agent(settings)
     try:
         connection = await _connect_with_retry(
