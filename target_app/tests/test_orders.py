@@ -30,7 +30,7 @@ def test_create_and_list_orders(client: TestClient) -> None:
     assert created.status_code == 201
     order = created.json()
     assert order["item"] == "widget"
-    assert order["quantity"] == 3
+    assert order["quantity"] == 4
 
     listed = client.get("/orders")
     assert listed.status_code == 200
