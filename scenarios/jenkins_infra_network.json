@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_infra_network",
+  "file": null,
+  "line": null,
+  "expected_failure_type": "infra_network_failure",
+  "description": "Network connectivity failure scenario – DNS resolution failure or connection refused to downstream service",
+  "inject": null
+}

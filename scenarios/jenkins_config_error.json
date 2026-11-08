@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_config_error",
+  "file": "target_app/config/settings.yaml",
+  "line": 2,
+  "expected_failure_type": "config_error",
+  "description": "Invalid configuration value in settings.yaml causes deploy stage failure",
+  "inject": "python scripts/inject_fault.py tc08_configuration_error"
+}

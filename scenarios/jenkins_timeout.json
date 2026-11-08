@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_timeout",
+  "file": null,
+  "line": null,
+  "expected_failure_type": "timeout",
+  "description": "Test stage exceeds the configured timeout and is killed",
+  "inject": null
+}

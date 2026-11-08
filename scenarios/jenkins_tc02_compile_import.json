@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_tc02_compile_import",
+  "file": "target_app/app/main.py",
+  "line": 1,
+  "expected_failure_type": "dependency_regression",
+  "description": "Missing-module import injected into main.py – expected ModuleNotFoundError in build stage",
+  "inject": "python scripts/inject_fault.py tc02_compile_import"
+}

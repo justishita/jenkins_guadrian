@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_deployment_failure",
+  "file": null,
+  "line": null,
+  "expected_failure_type": "deployment_failure",
+  "description": "Kubernetes ImagePullBackOff or pod crash causes deploy stage to fail without a config signal",
+  "inject": null
+}
