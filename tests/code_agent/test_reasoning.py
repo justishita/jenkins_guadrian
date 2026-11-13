@@ -122,6 +122,9 @@ def test_a_plausible_configuration_change_scores_lower_than_a_broken_one() -> No
 		("database_timeout_seconds", "3", "-5", "not a positive value"),
 		("database_timeout_seconds", "3", "0", "not a positive value"),
 		("ORDERS_PORT", "8010", "0", "not a positive value"),
+		# Found by the Week 8 evaluation (case E09): a deployment scaled to zero.
+		("replicas", "2", "0", "not a positive value"),
+		("worker_threads", "4", "0", "not a positive value"),
 		("database_timeout_seconds", "3", "soon", "changed type"),
 		("enable_slow", "false", "maybe", "changed type"),
 		("DATABASE_URL", "postgresql://db/app", "", "emptied"),

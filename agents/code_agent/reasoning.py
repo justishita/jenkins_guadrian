@@ -48,7 +48,7 @@ MAX_HYPOTHESES = 4
 
 #: Keys whose value is a positive quantity: zero or negative is almost always a fault.
 POSITIVE_QUANTITY_KEY_RE = re.compile(
-    r"(?i)(timeout|seconds|_ms$|port|size|bytes|limit|max|count|retries|interval|workers|depth)"
+    r"(?i)(timeout|seconds|_ms$|port|size|bytes|limit|max|count|retries|interval|workers|depth|replicas|instances|threads|pool)"
 )
 
 URL_KEY_RE = re.compile(r"(?i)(_url|_uri|_endpoint|_host)$")
