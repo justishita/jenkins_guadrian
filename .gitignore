@@ -37,3 +37,4 @@ data/blackboard/
 .coverage
 htmlcov/
 data/demo_ui/
+data/remediations/

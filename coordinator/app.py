@@ -10,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aio_pika
 import httpx
@@ -33,6 +33,9 @@ from coordinator.revisions import (
 )
 from coordinator.stores import MergedEvidenceStore
 from coordinator.synthesis import IncidentReport
+
+if TYPE_CHECKING:
+    from coordinator.remediation_service import RemediationService
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +116,9 @@ class CoordinatorRuntime:
         # Latest fused report per incident, so the running service's verdict can be
         # inspected without re-reading the blackboard.
         self.reports: dict[str, IncidentReport] = {}
+        # Proposes fixes for actionable reports and applies human decisions (P3). ``None``
+        # when not configured, so investigation still runs without GitHub write access.
+        self.remediation: RemediationService | None = None
 
     async def start(self) -> None:
         if not self.rabbitmq_url:
@@ -139,6 +145,7 @@ class CoordinatorRuntime:
             root=Path(os.getenv("AUDIT_DIR", "data/audit")),
         )
         self.revisions = RevisionStore(Path(os.getenv("REPORTS_DIR", "data/reports")))
+        self.remediation = self._build_remediation()
         try:
             await self.recover()
         except Exception as error:  # noqa: BLE001 - recovery must never stop the service starting
@@ -154,8 +161,46 @@ class CoordinatorRuntime:
         self.queue = await channel.declare_queue(self.queue_name, durable=True)
         await self.queue.bind(exchange, routing_key="incident.created")
         await self.queue.bind(exchange, routing_key="incident.reinvestigate")
+        if self.remediation is not None:
+            await self.queue.bind(exchange, routing_key="approval.decided")
         self.consumer_tag = await self.queue.consume(self._handle_message)
         logger.info("Coordinator consuming incident.created events")
+
+    def _build_remediation(self) -> RemediationService | None:
+        """The live remediation loop, if GitHub, OPA and the backend are all configured."""
+        settings = {
+            "GITHUB_TOKEN": os.getenv("GITHUB_TOKEN", ""),
+            "GITHUB_REPO": os.getenv("GITHUB_REPO", ""),
+            "OPA_URL": os.getenv("OPA_URL", ""),
+            "BACKEND_URL": os.getenv("BACKEND_URL", ""),
+            "APPROVAL_API_TOKEN": os.getenv("APPROVAL_API_TOKEN", ""),
+        }
+        missing = [name for name, value in settings.items() if not value]
+        if os.getenv("REMEDIATION_ENABLED", "1") == "0" or missing or self.audit is None:
+            logger.info("Remediation is disabled", extra={"missing_settings": missing})
+            return None
+        # Imported here: the remediation engine ships in the image only alongside it.
+        from agents.code_agent.tools.github_client import GitHubClient
+        from agents.code_agent.tools.github_writer import GitHubWriter
+        from coordinator.policy import PolicyGate
+        from coordinator.remediation_gate import RemediationGate
+        from coordinator.remediation_service import HttpApprovalBackend, PlanStore, RemediationService
+
+        api_url = os.getenv("GITHUB_API_URL", "https://api.github.com")
+        repo, token = settings["GITHUB_REPO"], settings["GITHUB_TOKEN"]
+        gate = RemediationGate(
+            PolicyGate(settings["OPA_URL"], timeout_seconds=float(os.getenv("POLICY_TIMEOUT_SECONDS", "5"))),
+            GitHubWriter(repo, token, api_url=api_url),
+            self.audit,
+            base_branch=os.getenv("REMEDIATION_BASE_BRANCH", "main"),
+        )
+        return RemediationService(
+            gate,
+            lambda: GitHubClient(repo, token, api_url=api_url),
+            HttpApprovalBackend(settings["BACKEND_URL"], settings["APPROVAL_API_TOKEN"]),
+            PlanStore(Path(os.getenv("REMEDIATION_DIR", "data/remediations"))),
+            self.audit,
+        )
 
     async def _connect_with_retry(self) -> aio_pika.abc.AbstractRobustConnection:
         retries = 4
@@ -187,6 +232,11 @@ class CoordinatorRuntime:
                     span.set_attribute("messaging.rabbitmq.routing_key", routing_key)
                     if body.get("incident_id"):
                         span.set_attribute("incident.id", str(body["incident_id"]))
+
+                    if routing_key == "approval.decided":
+                        if self.remediation is not None:
+                            await self.remediation.on_decision(body)
+                        return
 
                     if routing_key == "incident.reinvestigate" or body.get("previous_failure_summary"):
                         await self._dispatch_reinvestigation(body)
@@ -616,6 +666,15 @@ class CoordinatorRuntime:
                 "reporting_agents": list(report.reporting_agents),
             },
         )
+        if self.remediation is not None:
+            try:
+                await self.remediation.on_report(event, report)
+            except Exception as error:  # noqa: BLE001 - a fix proposal must never fail the report
+                logger.error(
+                    "Coordinator could not propose a remediation (%s)",
+                    type(error).__name__,
+                    extra={"incident_id": str(event.incident_id)},
+                )
         return report
 
     async def stop(self) -> None:

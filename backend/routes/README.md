@@ -16,3 +16,11 @@ Both endpoints need `Authorization: Bearer $APPROVAL_API_TOKEN`; with it unset t
 refuse everything. Responses: `201` recorded, `404` unknown incident, `409` nothing
 awaiting a decision (no proposal, blocked by policy, or already decided), `422`
 malformed body.
+
+`remediations.py` is also **owner P3**: the live half of the same contract, called by
+the Coordinator (same bearer token).
+
+| | |
+| --- | --- |
+| `POST /remediations` | the Coordinator registers a proposed fix and its policy verdict; if allowed, `approval.requested` is published so the notifier asks a reviewer. Idempotent per `(incident_id, attempt)` |
+| `PATCH /remediations/{incident_id}/{attempt}` | after a decision, the Coordinator reports the draft PR it opened (`pr_created` + URL) or why none was (`pr_blocked`, `failed`) |
