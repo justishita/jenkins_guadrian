@@ -6,7 +6,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import re
 import shutil
 from typing import Any, Optional, Union
 from uuid import UUID
@@ -25,6 +24,7 @@ from backend.db.models import Incident
 from backend.events.publisher import publisher
 from backend.routes.webhooks import _read_limited_body, verify_webhook_token
 from common.blackboard import BlackboardEntry, get_blackboard
+from common.fix_branch import parse_fix_branch
 from common.redaction import redact_value
 
 logger = logging.getLogger(__name__)
@@ -100,19 +100,15 @@ async def _resolve_incident_id(
     if payload.incident_id and str(payload.incident_id).strip():
         resolved_id = str(payload.incident_id).strip()
 
-    # 2. Parse branch name 'ai-fix/<incident_id>-<attempt>'
+    # 2. Parse branch name 'ai-fix/<incident_id>-<attempt>' with the shared, strict parser
+    #    (common/fix_branch.py), so the producer and this consumer cannot disagree and an
+    #    unrecognised name is left unlinked rather than linked to the wrong incident.
     if not resolved_id and payload.branch:
-        clean_branch = payload.branch.replace("refs/heads/", "").replace("origin/", "").strip()
-        if "ai-fix/" in clean_branch:
-            sub = clean_branch.split("ai-fix/", 1)[1]
-            match = re.match(r"^(.*?)(?:-(\d+))?$", sub)
-            if match:
-                resolved_id = match.group(1).strip()
-                if match.group(2) and resolved_attempt is None:
-                    try:
-                        resolved_attempt = int(match.group(2))
-                    except ValueError:
-                        pass
+        parsed = parse_fix_branch(payload.branch.strip())
+        if parsed is not None:
+            resolved_id = str(parsed[0])
+            if resolved_attempt is None:
+                resolved_attempt = parsed[1]
 
     # 3. Look up by PR change_id in the remediation table
     if not resolved_id and payload.change_id is not None:
