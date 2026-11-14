@@ -180,3 +180,49 @@ def test_a_recovered_second_burst_reports_the_gap_from_the_latest_stretch() -> N
     detection = run(LATENCY_P95, twice)
     assert detection.run_end_at is not None and offset(detection.run_end_at) == -105
     assert detection.gap_to_failure_seconds == pytest.approx(105)
+
+
+# --- a leak that starts late, with the jitter of a running process ------------------------
+
+
+def jittery_ramp(start: float, growth_mib: float, wobble_mib: float = 1.0) -> Fn:
+    """Flat 80 MiB with +/- jitter, then a steady climb from `start` seconds before the failure."""
+    wobble = wobble_mib * MIB
+
+    def value(ts: datetime) -> float:
+        base = 80 * MIB + (wobble if int(offset(ts) // 15) % 2 else -wobble)
+        if offset(ts) < start:
+            return base
+        return base + growth_mib * MIB * (offset(ts) - start) / (0 - start)
+
+    return value
+
+
+def test_a_leak_that_starts_late_is_still_a_sustained_increase_despite_flat_time_jitter() -> None:
+    """Regression (Week 8 held-out evaluation): the jitter before the leak used to dilute the 'keeps rising' score."""
+    detection = run(MEMORY_RSS, jittery_ramp(start=-190, growth_mib=40, wobble_mib=0.5))
+    assert detection.anomalous and detection.direction == "up" and detection.still_elevated
+
+
+def test_jitter_alone_is_not_a_leak() -> None:
+    assert not run(MEMORY_RSS, jittery_ramp(start=-190, growth_mib=0, wobble_mib=1.0)).anomalous
+
+
+def test_memory_that_rose_and_then_came_back_down_is_not_a_leak() -> None:
+    fn = lambda ts: 110 * MIB if -200 <= offset(ts) < -60 else 80 * MIB
+    assert not run(MEMORY_RSS, fn).anomalous
+
+
+def test_an_early_blip_then_a_late_leak_is_judged_on_the_leak() -> None:
+    def fn(ts: datetime) -> float:
+        if -290 <= offset(ts) < -270:
+            return 100 * MIB  # a blip that fell back
+        return 80 * MIB + max(0.0, offset(ts) + 180) * 0.2 * MIB
+
+    assert run(MEMORY_RSS, fn).anomalous
+
+
+def test_a_rise_that_keeps_dipping_is_not_sustained() -> None:
+    # Sawtooth on top of a rise: it ends high but half the steps in the elevated stretch go down.
+    fn = lambda ts: (110 if int(offset(ts) // 15) % 2 == 0 else 90) * MIB if offset(ts) >= -150 else 80 * MIB
+    assert not run(MEMORY_RSS, fn).anomalous

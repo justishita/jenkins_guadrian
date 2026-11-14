@@ -173,7 +173,13 @@ def _sustained_increase(
     ]
     last = values[-1]
     delta = last - center
-    steps = list(pairwise(values))
+    # Judge "keeps rising" on the stretch that is elevated now (plus the step into it), not on the flat time before a
+    # late-starting leak: RSS jitters while flat, and that jitter used to dilute the score until a real leak that began
+    # in the last few minutes of the window was dismissed (found by the held-out evaluation, Week 8).
+    trailing = len(flags)
+    while trailing > 0 and flags[trailing - 1]:
+        trailing -= 1
+    steps = list(pairwise(values[max(trailing - 1, 0):]))
     tolerance = _JITTER_FRACTION * abs(center)
     non_decreasing = sum(b - a >= -tolerance for a, b in steps) / len(steps) if steps else 1.0
     anomalous = _longest_run(flags) >= MIN_CONSECUTIVE and non_decreasing >= _MIN_NON_DECREASING and flags[-1]
@@ -190,7 +196,7 @@ def _sustained_increase(
         ratio=delta / spec.min_effect,
         detail=(
             f"rose {delta:.4g} {spec.unit} over baseline median {center:.4g} "
-            f"({non_decreasing:.0%} of steps non-decreasing)"
+            f"({non_decreasing:.0%} of steps in the rising stretch non-decreasing)"
         ),
     )
 
