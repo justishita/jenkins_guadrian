@@ -1,13 +1,14 @@
 services:
 
   rabbitmq:
+    restart: unless-stopped
     image: rabbitmq:3.13.7-management
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbit_password}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -18,6 +19,7 @@ services:
       - devnet
 
   postgres:
+    restart: unless-stopped
     image: postgres:16.4
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
@@ -35,6 +37,7 @@ services:
       - devnet
 
   jenkins:
+    restart: unless-stopped
     build: ./jenkins
     env_file:
       - .env
@@ -56,6 +59,7 @@ services:
       - devnet
 
   agent-api:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -93,9 +97,16 @@ services:
       - devnet
 
   prometheus:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     image: prom/prometheus:v2.54.1
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -107,6 +118,13 @@ services:
       - devnet
 
   ui:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     build:
       context: ./ui
     ports:
@@ -118,6 +136,13 @@ services:
       - devnet
 
   grafana:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/grafana/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     image: grafana/grafana:11.2.0
     ports:
       # Local only: the admin login. Everyone else reaches Grafana through the UI's /grafana/ proxy.
@@ -151,19 +176,21 @@ services:
       - devnet
 
   target-app:
+    restart: unless-stopped
     build:
       context: ./target_app
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       - PORT=5000
     networks:
       - devnet
 
   opa:
+    restart: unless-stopped
     image: openpolicyagent/opa:0.68.0
     ports:
-      - "8181:8181"
+      - "127.0.0.1:8181:8181"
     volumes:
       - ./policies:/policies:ro
     command:
@@ -185,7 +212,7 @@ services:
       dockerfile: agents/code_agent/Dockerfile
     restart: unless-stopped
     ports:
-      - "9103:9103"
+      - "127.0.0.1:9103:9103"
     environment:
       # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -232,7 +259,7 @@ services:
       dockerfile: agents/jenkins_agent/Dockerfile
     restart: unless-stopped
     ports:
-      - "9101:9101"
+      - "127.0.0.1:9101:9101"
     environment:
       # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -271,7 +298,7 @@ services:
       dockerfile: agents/metrics_agent/Dockerfile
     restart: unless-stopped
     ports:
-      - "9102:9102"
+      - "127.0.0.1:9102:9102"
     environment:
       # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -311,7 +338,7 @@ services:
       dockerfile: coordinator/Dockerfile
     restart: unless-stopped
     ports:
-      - "9100:9100"
+      - "127.0.0.1:9100:9100"
     environment:
       # Tracing: set an OTLP endpoint (e.g. a Jaeger collector) to export spans, or OTEL_TRACES_CONSOLE=1 to print them.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -363,7 +390,7 @@ services:
       dockerfile: mcp_servers/jenkins_mcp/Dockerfile
     restart: unless-stopped
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       JENKINS_URL: http://jenkins:8080
       JENKINS_USER: ${JENKINS_USER:?Set JENKINS_USER in .env}
@@ -387,7 +414,7 @@ services:
       dockerfile: mcp_servers/analytics_mcp/Dockerfile
     restart: unless-stopped
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     environment:
       PORT: "8082"
       # find_related_incidents reads earlier incidents' evidence from the Blackboard.
@@ -411,8 +438,8 @@ services:
     image: mailhog/mailhog:v1.0.1
     restart: unless-stopped
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     networks:
       - devnet
 

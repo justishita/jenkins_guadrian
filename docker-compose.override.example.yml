@@ -1,0 +1,36 @@
+# Local overrides for docker-compose.yml. Copy to `docker-compose.override.yml` (git-ignored: it is yours alone)
+# and keep only what you need; Docker Compose merges that file over docker-compose.yml automatically.
+#
+#   copy docker-compose.override.example.yml docker-compose.override.yml      (Windows)
+#   cp docker-compose.override.example.yml docker-compose.override.yml        (macOS / Linux)
+#
+# Two common reasons: a host port is already taken by something else on your machine, and Docker Hub is not
+# reachable so the UI image cannot be built the normal way.
+
+services:
+  # 1. A host port is taken. The container side stays the same; only the left (host) number changes. `!override`
+  #    replaces the base list instead of adding to it, so repeat every port you still want. Dev tools are bound to
+  #    127.0.0.1 in the base file; keep the prefix so they stay reachable from this machine only.
+  jenkins:
+    ports: !override
+      - "8082:8080"      # Jenkins at http://localhost:8082 instead of 8080
+      - "50000:50000"
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9091:9090"
+  mcp-jenkins:
+    ports: !override
+      - "127.0.0.1:8084:8081"
+  mcp-analytics:
+    ports: !override
+      - "127.0.0.1:8083:8082"
+
+  # 2. No access to Docker Hub for the `node` image (a "TLS handshake timeout" while building `ui`): build the UI
+  #    on your machine and serve the result with the nginx image Docker already has.
+  #      cd ui && npm install && npm run build && cd ..
+  #      docker compose up -d --build ui
+  #    Rebuild `ui/dist` (npm run build) after every UI change, or Docker serves the old bundle.
+  # ui:
+  #   build:
+  #     context: ./ui
+  #     dockerfile: Dockerfile.prebuilt
