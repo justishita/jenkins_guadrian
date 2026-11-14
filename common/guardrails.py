@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, get_type_hints
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -131,6 +131,12 @@ def evidence_guardrail(task_output: Any) -> tuple[bool, Any]:
                 return False, f"Confidence {conf} is outside allowed [0.0, 1.0] range."
 
     return True, task_output
+
+
+# CrewAI runtime validator inspects annotations with get_origin().
+# Under 'from __future__ import annotations', annotations are stored as strings.
+# Resolving them explicitly ensures CrewAI detects Tuple[bool, Any] correctly.
+evidence_guardrail.__annotations__ = get_type_hints(evidence_guardrail)
 
 
 T = TypeVar("T")

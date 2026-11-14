@@ -41,6 +41,14 @@ COMPILATION_RE = re.compile(
     r"\b(?:SyntaxError|ImportError|ModuleNotFoundError)\b|\b(?:fatal\s+)?error:",
     re.IGNORECASE,
 )
+# BUILD_COMPILATION_FAILURE only fires when a compiler_error has a Python exception
+# keyword OR a file+line reference.  Bare 'ERROR: …' lines from pip/tools are
+# excluded so they don't shadow DEPENDENCY_REGRESSION.
+PYTHON_COMPILE_SPECIFIC_RE = re.compile(
+    r"\b(?:SyntaxError|ImportError|ModuleNotFoundError|SyntaxWarning)\b|"
+    r"File \"[^\"]+\", line \d+",
+    re.IGNORECASE,
+)
 DEPENDENCY_RE = re.compile(
     r"\bModuleNotFoundError\b|(?:pip|python\s+-m\s+pip).*"
     r"(?:resolution|resolve|conflict|incompatible|version)|"
@@ -86,10 +94,13 @@ def _failed_stage_ids(parsed: ParsedBuild, category: str) -> list[str]:
 
 
 def _compiler_errors(parsed: ParsedBuild) -> list[str]:
+    # Only count errors that have Python exception keywords or file+line info.
+    # This prevents bare 'ERROR: pip ...' lines from triggering BUILD_COMPILATION_FAILURE.
     return [
         f"compiler_errors[{index}]"
         for index, error in enumerate(parsed.compiler_errors)
-        if COMPILATION_RE.search(error.message)
+        if PYTHON_COMPILE_SPECIFIC_RE.search(error.message)
+        or (error.file is not None and error.line is not None)
     ]
 
 

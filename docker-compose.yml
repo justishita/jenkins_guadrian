@@ -327,11 +327,22 @@ services:
       JENKINS_AGENT_URL: http://jenkins-agent:9101
       METRICS_AGENT_URL: http://metrics-agent:9102
       CODE_AGENT_URL: http://code-agent:9103
+      # Remediation (P3): propose a fix for an actionable report, register it for review,
+      # and open the draft PR once a human approves. Disabled if any of these is unset.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_REPO: ${GITHUB_REPO:-}
+      GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
+      OPA_URL: http://opa:8181
+      POLICY_TIMEOUT_SECONDS: ${POLICY_TIMEOUT_SECONDS:-5}
+      BACKEND_URL: http://agent-api:8000
+      APPROVAL_API_TOKEN: ${APPROVAL_API_TOKEN:-}
+      REMEDIATION_DIR: /app/data/remediations
     volumes:
       - ./data/blackboard:/app/data/blackboard
       - ./data/evidence:/app/data/evidence
       - ./data/audit:/app/data/audit
       - ./data/reports:/app/data/reports
+      - ./data/remediations:/app/data/remediations
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/health', timeout=3)"]
       interval: 10s

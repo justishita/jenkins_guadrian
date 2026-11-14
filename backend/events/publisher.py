@@ -98,6 +98,10 @@ class RabbitMQPublisher:
         """Publish an incident.reinvestigate message to the incidents topic exchange."""
         return await self.publish_event("incident.reinvestigate", payload)
 
+    async def publish_approval_requested(self, payload: Dict[str, Any]) -> bool:
+        """Publish an approval.requested message: a fix passed policy and needs a reviewer."""
+        return await self.publish_event("approval.requested", payload)
+
     async def publish_approval_decided(self, payload: Dict[str, Any]) -> bool:
         """Publish an approval.decided message to the incidents topic exchange."""
         return await self.publish_event("approval.decided", payload)

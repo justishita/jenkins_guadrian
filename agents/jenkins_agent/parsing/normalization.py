@@ -204,7 +204,13 @@ def parse_pytest_failures(text: str) -> list[FailingTest]:
         match = PYTEST_SUMMARY_RE.match(line)
         if match:
             name = match.group("name")
-            summary[name] = (match.group("file"), None, match.group("message") or "")
+            new_msg = match.group("message") or ""
+            existing = summary.get(name)
+            # Only overwrite if no entry yet, or if new message is non-empty.
+            # This prevents a bare 'FAILED …::test_name' summary line from
+            # erasing the message on the first 'FAILED … - AssertionError: …' line.
+            if existing is None or (not existing[2] and new_msg):
+                summary[name] = (match.group("file"), None, new_msg)
 
     headers = [
         (index, match.group(1).strip())

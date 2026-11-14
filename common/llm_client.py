@@ -191,7 +191,11 @@ class LLMClient:
         offline: bool | None = None,
         max_retries: int = DEFAULT_RETRIES,
         sleep: Callable[[float], Any] = asyncio.sleep,
+        llm_cache_enabled: bool | None = None,
     ) -> None:
+        # llm_cache_enabled kwarg overrides the LLM_CACHE env var when specified.
+        # This allows callers (e.g. the evaluation harness) to control caching
+        # programmatically without touching the process environment.
         timeout_seconds = (
             timeout_seconds
             if timeout_seconds is not None
@@ -217,7 +221,11 @@ class LLMClient:
         )
         self.provider = (provider or os.getenv("LLM_PROVIDER", "gemini")).strip().lower()
         self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-        self.use_cache = os.getenv("LLM_CACHE", "0") == "1"
+        # llm_cache_enabled kwarg takes precedence over the LLM_CACHE env var.
+        if llm_cache_enabled is not None:
+            self.use_cache = llm_cache_enabled
+        else:
+            self.use_cache = os.getenv("LLM_CACHE", "0") == "1"
 
         self._genai_client: Any = None
         if self.offline or model is not None:

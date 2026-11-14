@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_tc10_flaky",
+  "file": "target_app/tests/test_orders.py",
+  "line": null,
+  "expected_failure_type": "flaky_test",
+  "description": "Non-deterministic assertion (random < 0.5) injected into test_orders.py – expected flaky_test classification",
+  "inject": "python scripts/inject_fault.py tc10_flaky"
+}

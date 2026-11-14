@@ -1,0 +1,8 @@
+{
+  "scenario": "jenkins_tc02_compile_syntax",
+  "file": "target_app/app/main.py",
+  "line": 10,
+  "expected_failure_type": "build_compilation_failure",
+  "description": "Syntax error (unclosed parenthesis) injected into main.py – expected SyntaxError in build stage",
+  "inject": "python scripts/inject_fault.py tc02_compile_syntax"
+}

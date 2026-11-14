@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable
 from datetime import datetime, timezone
 import json
+import re
 import logging
 import os
 from pathlib import Path
@@ -367,6 +368,50 @@ def _fallback_evidence(
     )
 
 
+def _extract_evidence_draft(result: Any) -> EvidenceDraft | None:
+    """Extract and validate EvidenceDraft from CrewOutput, json_dict, or raw text."""
+    if hasattr(result, "pydantic") and isinstance(result.pydantic, EvidenceDraft):
+        return result.pydantic
+    if hasattr(result, "json_dict") and isinstance(result.json_dict, dict):
+        try:
+            return EvidenceDraft.model_validate(result.json_dict)
+        except Exception:
+            pass
+
+    raw_text = getattr(result, "raw", "") or ""
+    text = str(raw_text).strip()
+    if not text:
+        return None
+
+    if text.startswith("role=") or "content=" in text:
+        m = re.search(r"content=['\"](.*?)['\"](?:\s+\w+=|\s*$)", text, re.DOTALL)
+        if m:
+            try:
+                text = m.group(1).encode('utf-8').decode('unicode_escape')
+            except Exception:
+                text = m.group(1)
+
+    clean = text.strip()
+    if clean.startswith("```json"):
+        clean = clean[7:]
+    elif clean.startswith("```"):
+        clean = clean[3:]
+    if clean.endswith("```"):
+        clean = clean[:-3]
+    clean = clean.strip()
+
+    try:
+        return EvidenceDraft.model_validate_json(clean)
+    except Exception:
+        m = re.search(r"\{.*\}", clean, re.DOTALL)
+        if m:
+            try:
+                return EvidenceDraft.model_validate_json(m.group(0))
+            except Exception:
+                pass
+    return None
+
+
 class JenkinsInvestigationAgent:
     """CrewAI Jenkins build investigator and evidence generator."""
 
@@ -681,8 +726,7 @@ class JenkinsInvestigationAgent:
                     timeout=min(self.llm_timeout, 60.0),
                 )
 
-                if hasattr(result, "pydantic") and isinstance(result.pydantic, EvidenceDraft):
-                    draft = result.pydantic
+                draft = _extract_evidence_draft(result)
 
             except Exception as exc:
                 logger.warning("CrewAI execution fallback triggered (%s)", type(exc).__name__)

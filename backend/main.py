@@ -15,6 +15,7 @@ from backend.jenkins_catchup import JenkinsCatchup
 from backend.notifications import approval_consumer
 from backend.routes.approvals import router as approvals_router
 from backend.routes.health import router as health_router
+from backend.routes.remediations import router as remediations_router
 from backend.routes.validation import router as validation_router
 from backend.routes.webhooks import router as webhooks_router
 from backend.ui.api import router as ui_router
@@ -102,6 +103,7 @@ app.include_router(health_router)
 app.include_router(webhooks_router)
 app.include_router(validation_router)
 app.include_router(approvals_router)
+app.include_router(remediations_router)
 app.include_router(ui_router)
 
 
