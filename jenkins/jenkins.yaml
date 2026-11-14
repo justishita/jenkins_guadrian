@@ -23,11 +23,15 @@ credentials:
   system:
     domainCredentials:
       - credentials:
-          - string:
+          # Username + token (not Secret text): the GitHub branch scanner can only use this kind for API
+          # access. As Secret text it silently scanned anonymously (60 requests/hour), so new branches
+          # were found minutes late or not at all.
+          - usernamePassword:
               scope: GLOBAL
               id: "github-ssh"
-              secret: "${GITHUB_TOKEN}"
-              description: "GitHub access token"
+              username: "${GITHUB_USERNAME}"
+              password: "${GITHUB_TOKEN}"
+              description: "GitHub token for branch scanning"
           - string:
               scope: GLOBAL
               id: "agent-webhook-secret"
