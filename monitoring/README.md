@@ -74,3 +74,10 @@ same view. Panels that need pull-request events stay empty until the live pull-r
 in 15 minutes, any incident escalated in 24 hours, an incident with no report 10 minutes after it opened. They show
 under Grafana > Alerting. **No contact point is configured**, so nothing is sent anywhere yet; adding one (email,
 Slack, webhook) is a Grafana setting, not a code change.
+
+## Checking the dashboards against the real stack
+
+`python scripts/check_dashboards.py` sends every panel of both dashboards through Grafana's query API for each project filter
+(every project, and "All") and reports panels that **error** (always a bug) and panels that are **empty under every filter**
+(expected only when the event has not happened yet: no approval, no re-validation). Stat panels that can be empty say why
+("No decisions yet") instead of Grafana's "No data". Run it after changing `scripts/generate_agent_ops_dashboard.py`.

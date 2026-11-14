@@ -122,3 +122,14 @@ def test_panels_fit_the_24_column_grid(panel: dict) -> None:
 def test_datasource_uid_matches_the_provisioning_file() -> None:
     text = (REPO / "monitoring" / "grafana" / "provisioning" / "datasources" / "postgres.yml").read_text(encoding="utf-8")
     assert "uid: postgres" in text and "${POSTGRES_PASSWORD}" in text
+
+
+def test_ratio_stats_say_why_they_are_empty_instead_of_no_data() -> None:
+    expected = {
+        "Approval rate": "No decisions yet",
+        "Fix success rate (accuracy proxy)": "No re-validations yet",
+        "Average time to a decision": "No decisions yet",
+    }
+    for title, text in expected.items():
+        assert panels()[title]["fieldConfig"]["defaults"]["noValue"] == text
+    assert panels()["Approval rate"]["fieldConfig"]["defaults"]["unit"] == "percent"  # the polish keeps the unit and limits

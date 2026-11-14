@@ -132,3 +132,9 @@ def test_panels_do_not_overlap(dashboard) -> None:
             for y in range(grid["y"], grid["y"] + grid["h"]):
                 assert (x, y) not in cells, f"{panel['title']} overlaps {cells[(x, y)]}"
                 cells[(x, y)] = panel["title"]
+
+
+def test_stat_panels_that_can_be_empty_say_why_instead_of_no_data(dashboard) -> None:
+    expected = {"Oldest waiting (minutes)": "Nothing waiting", "Median time to resolve (min)": "None resolved yet"}
+    for title, text in expected.items():
+        assert panels(dashboard)[title]["fieldConfig"]["defaults"]["noValue"] == text

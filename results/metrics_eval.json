@@ -1,0 +1,2318 @@
+{
+  "thresholds": {
+    "latency_p95_s": 1.0,
+    "cpu_cores": 0.8,
+    "memory_bytes": 536870912.0
+  },
+  "benchmark": {
+    "rows": [
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-cpu-burn",
+        "file": "metrics_cpu_burn.yaml",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8383,
+        "agent_status": "completed",
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-healthy",
+        "file": "metrics_healthy.yaml",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "agent_status": "insufficient_evidence",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-late-memory-leak",
+        "file": "metrics_late_memory_leak.yaml",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8062,
+        "agent_status": "completed",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-latency-cpu-correlated",
+        "file": "metrics_latency_cpu_correlated.yaml",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9383,
+        "agent_status": "completed",
+        "baseline": "timeout"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-latency-spike",
+        "file": "metrics_latency_spike.yaml",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8561,
+        "agent_status": "completed",
+        "baseline": "timeout"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-memory-leak",
+        "file": "metrics_memory_leak.yaml",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7917,
+        "agent_status": "completed",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-no-data",
+        "file": "metrics_no_data.yaml",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.0,
+        "agent_status": "insufficient_evidence",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-noisy-normal",
+        "file": "metrics_noisy_normal.yaml",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "agent_status": "insufficient_evidence",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-partial-data",
+        "file": "metrics_partial_data.yaml",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7917,
+        "agent_status": "completed",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-prometheus-unavailable",
+        "file": "metrics_prometheus_unavailable.yaml",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.0,
+        "agent_status": "failed",
+        "baseline": "unknown"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-recovered-spike",
+        "file": "metrics_recovered_spike.yaml",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.4932,
+        "agent_status": "completed",
+        "baseline": "timeout"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-single-sample-glitch",
+        "file": "metrics_single_sample_glitch.yaml",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "agent_status": "insufficient_evidence",
+        "baseline": "timeout"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-target-down",
+        "file": "metrics_target_down.yaml",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8462,
+        "agent_status": "completed",
+        "baseline": "infra_network_failure"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "metrics-unrelated-earlier-cpu-spike",
+        "file": "metrics_unrelated_earlier_cpu_spike.yaml",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8561,
+        "agent_status": "completed",
+        "baseline": "timeout"
+      },
+      {
+        "llm": null,
+        "llm_confidence": null,
+        "id": "TC-12",
+        "file": "tc12_metrics_anomaly_metrics_side.yaml",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8414,
+        "agent_status": "completed",
+        "baseline": "timeout"
+      }
+    ],
+    "agent": {
+      "n": 15,
+      "accuracy": 1.0,
+      "false_positive_rate": 0.0,
+      "n_negatives": 5,
+      "fault_recall": 1.0,
+      "n_faults": 10,
+      "per_class": {
+        "infra_network_failure": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "resource_exhaustion": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        },
+        "timeout": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 4
+        },
+        "unknown": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 5
+        }
+      },
+      "confusion": {
+        "resource_exhaustion": {
+          "resource_exhaustion": 5
+        },
+        "unknown": {
+          "unknown": 5
+        },
+        "timeout": {
+          "timeout": 4
+        },
+        "infra_network_failure": {
+          "infra_network_failure": 1
+        }
+      }
+    },
+    "baseline": {
+      "n": 15,
+      "accuracy": 0.6666666666666666,
+      "false_positive_rate": 0.2,
+      "n_negatives": 5,
+      "fault_recall": 0.6,
+      "n_faults": 10,
+      "per_class": {
+        "infra_network_failure": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "resource_exhaustion": {
+          "precision": 1.0,
+          "recall": 0.2,
+          "f1": 0.33333333333333337,
+          "support": 5
+        },
+        "timeout": {
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "f1": 0.8,
+          "support": 4
+        },
+        "unknown": {
+          "precision": 0.5714285714285714,
+          "recall": 0.8,
+          "f1": 0.6666666666666666,
+          "support": 5
+        }
+      },
+      "confusion": {
+        "resource_exhaustion": {
+          "resource_exhaustion": 1,
+          "unknown": 3,
+          "timeout": 1
+        },
+        "unknown": {
+          "unknown": 4,
+          "timeout": 1
+        },
+        "timeout": {
+          "timeout": 4
+        },
+        "infra_network_failure": {
+          "infra_network_failure": 1
+        }
+      }
+    },
+    "llm": null,
+    "llm_errors": 0,
+    "confidence_correct": 0.57728,
+    "confidence_wrong": NaN
+  },
+  "sweep": [
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 0.05s",
+      "magnitude": 0.05,
+      "truth": "timeout",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 0.1s",
+      "magnitude": 0.1,
+      "truth": "timeout",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 0.25s",
+      "magnitude": 0.25,
+      "truth": "timeout",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 0.5s",
+      "magnitude": 0.5,
+      "truth": "timeout",
+      "agent": "timeout",
+      "agent_confidence": 0.7225,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 1s",
+      "magnitude": 1.0,
+      "truth": "timeout",
+      "agent": "timeout",
+      "agent_confidence": 0.8119,
+      "baseline": "timeout"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 2s",
+      "magnitude": 2.0,
+      "truth": "timeout",
+      "agent": "timeout",
+      "agent_confidence": 0.8561,
+      "baseline": "timeout"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "slow",
+      "label": "latency step to 4s",
+      "magnitude": 4.0,
+      "truth": "timeout",
+      "agent": "timeout",
+      "agent_confidence": 0.8781,
+      "baseline": "timeout"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.01 cores",
+      "magnitude": 0.01,
+      "truth": "resource_exhaustion",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.03 cores",
+      "magnitude": 0.03,
+      "truth": "resource_exhaustion",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.06 cores",
+      "magnitude": 0.06,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.669,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.1 cores",
+      "magnitude": 0.1,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.7429,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.2 cores",
+      "magnitude": 0.2,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.797,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.5 cores",
+      "magnitude": 0.5,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.8289,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "cpu",
+      "label": "cpu step to 0.9 cores",
+      "magnitude": 0.9,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.8383,
+      "baseline": "resource_exhaustion"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +1 MiB",
+      "magnitude": 1,
+      "truth": "resource_exhaustion",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +3 MiB",
+      "magnitude": 3,
+      "truth": "resource_exhaustion",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +5 MiB",
+      "magnitude": 5,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.5,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +10 MiB",
+      "magnitude": 10,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.675,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +20 MiB",
+      "magnitude": 20,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.7625,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +40 MiB",
+      "magnitude": 40,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.8062,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "leak",
+      "label": "memory +80 MiB",
+      "magnitude": 80,
+      "truth": "resource_exhaustion",
+      "agent": "resource_exhaustion",
+      "agent_confidence": 0.8281,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "healthy",
+      "label": "healthy, noise x0",
+      "magnitude": 0.0,
+      "truth": "unknown",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "healthy",
+      "label": "healthy, noise x0.25",
+      "magnitude": 0.25,
+      "truth": "unknown",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "healthy",
+      "label": "healthy, noise x0.5",
+      "magnitude": 0.5,
+      "truth": "unknown",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "healthy",
+      "label": "healthy, noise x1",
+      "magnitude": 1.0,
+      "truth": "unknown",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    },
+    {
+      "llm": null,
+      "llm_confidence": null,
+      "kind": "healthy",
+      "label": "healthy, noise x2",
+      "magnitude": 2.0,
+      "truth": "unknown",
+      "agent": "unknown",
+      "agent_confidence": 0.2,
+      "baseline": "unknown"
+    }
+  ],
+  "live": null,
+  "heldout": {
+    "n": 200,
+    "seed": 2026,
+    "rows": [
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.8",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -42s, noise x1.1",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.82s + cpu 0.61 at -166s, noise x1.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9327,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.91 cores at -105s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8384,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.32 cores at -240s, noise x1.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8168,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.4",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -142s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.85,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -213s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8632,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.25 cores at -136s, noise x0.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8069,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -216s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8632,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +52 MiB ramp -239..-55s, noise x1.0",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8164,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 3.81s at -162s, noise x1.7",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.877,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.80s + cpu 0.35 at -65s, noise x1.0",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9197,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.4",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.0",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.3",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 3.83s + cpu 0.40 at -233s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9237,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +66 MiB ramp -240..-29s, noise x1.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8235,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +29 MiB ramp -184..-39s, noise x0.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7893,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -57s, noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.30 cores at -107s, noise x1.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8146,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.23s + cpu 0.64 at -149s, noise x1.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9337,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.73s + cpu 0.49 at -226s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9285,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 3.27s + cpu 0.46 at -177s, noise x1.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9271,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.87s at -134s, noise x1.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7985,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.2",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -75s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8222,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.01s at -172s, noise x0.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8563,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.38s at -174s, noise x1.3",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.6679,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.80 cores at -163s, noise x1.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8369,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.56s + cpu 0.52 at -229s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9296,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.70s + cpu 0.35 at -135s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9199,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -134s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8462,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.0",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.1",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.11 cores at -230s, noise x1.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.749,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.98s + cpu 0.35 at -115s, noise x0.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9194,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +21 MiB ramp -242..-26s, noise x1.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7658,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.50 cores at -102s, noise x0.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8287,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -95s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8364,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.56s at -158s, noise x0.1",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8657,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +44 MiB ramp -261..-1s, noise x1.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8101,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 3.21s + cpu 0.35 at -219s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.92,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.79s at -137s, noise x0.8",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.788,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.8",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.17s at -150s, noise x0.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8596,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +46 MiB ramp -233..-32s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8122,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 2.92s + cpu 0.39 at -207s, noise x1.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9231,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.8",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +69 MiB ramp -202..-2s, noise x1.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8247,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.25s at -184s, noise x0.7",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8609,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.17s at -189s, noise x0.2",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8246,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -163s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8533,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -160s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8533,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +63 MiB ramp -267..-11s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8223,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.0",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.76s at -62s, noise x0.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8682,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.33s at -63s, noise x0.8",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.6263,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -228s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.865,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.41 cores at -142s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8242,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -44s, noise x0.1",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -55s, noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.80 cores at -183s, noise x1.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8368,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +14 MiB ramp -266..-53s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7253,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 3.56s at -112s, noise x1.4",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8754,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -158s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8533,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.94 cores at -70s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8389,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.35s at -81s, noise x1.2",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.648,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.20 cores at -235s, noise x1.2",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7963,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +37 MiB ramp -209..-25s, noise x1.2",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8026,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.27s at -93s, noise x1.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.5679,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -131s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8462,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.26s at -101s, noise x1.6",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.5566,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -107s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8417,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.12 cores at -173s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7627,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 3.59s at -177s, noise x1.1",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8756,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.48s + cpu 0.71 at -121s, noise x1.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9351,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.3",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.64s at -235s, noise x0.9",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8465,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +65 MiB ramp -247..-17s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8232,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.89s at -143s, noise x0.7",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8008,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.96s + cpu 0.36 at -181s, noise x1.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9207,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +77 MiB ramp -278..-50s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8271,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +16 MiB ramp -225..-44s, noise x1.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7399,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.4",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.1",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -68s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8222,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +46 MiB ramp -257..-9s, noise x0.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8121,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.12s + cpu 0.56 at -86s, noise x0.2",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9313,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.22s at -167s, noise x0.1",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8604,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.55s at -113s, noise x1.8",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7394,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +64 MiB ramp -285..-32s, noise x0.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8228,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.68s + cpu 0.31 at -117s, noise x0.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9159,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.0",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.36s at -88s, noise x0.4",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8352,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.2",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +18 MiB ramp -237..-30s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.754,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -209s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8611,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +15 MiB ramp -297..-49s, noise x1.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.732,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.40s at -179s, noise x0.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.6766,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +73 MiB ramp -267..-51s, noise x1.0",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8262,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +42 MiB ramp -284..-55s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8087,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.24 cores at -205s, noise x0.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8052,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +29 MiB ramp -220..-9s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7892,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.5",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +33 MiB ramp -229..-6s, noise x0.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.797,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 3.63s + cpu 0.65 at -213s, noise x1.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9337,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -136s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.85,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.15 cores at -132s, noise x0.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7779,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.63s at -105s, noise x1.1",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7598,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -39s, noise x0.8",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.79s + cpu 0.34 at -67s, noise x0.7",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9194,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.24s at -200s, noise x0.7",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8608,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.59s + cpu 0.67 at -173s, noise x0.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9342,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -237s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.865,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +59 MiB ramp -190..-25s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8205,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.63s + cpu 0.41 at -161s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9243,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +46 MiB ramp -208..-57s, noise x0.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8119,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.03s + cpu 0.60 at -121s, noise x1.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9325,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.50s at -119s, noise x1.0",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7226,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.07s + cpu 0.79 at -147s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9366,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +69 MiB ramp -228..-13s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8246,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.93s + cpu 0.52 at -198s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9299,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -34s, noise x0.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 2.28s at -161s, noise x0.2",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8616,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.08s at -233s, noise x1.9",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8185,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +79 MiB ramp -183..-14s, noise x1.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8277,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +46 MiB ramp -275..-16s, noise x1.0",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8119,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 2.97s + cpu 0.46 at -182s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9269,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +23 MiB ramp -253..-42s, noise x1.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7747,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.5",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -180s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8562,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.71s at -233s, noise x0.3",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8485,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.5",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +48 MiB ramp -183..-13s, noise x1.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8137,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.46 cores at -77s, noise x1.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8272,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +60 MiB ramp -185..-0s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8209,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 1.01s at -65s, noise x0.7",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8127,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.8",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.99s at -179s, noise x0.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8105,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.26 cores at -239s, noise x0.3",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8091,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +25 MiB ramp -217..-44s, noise x0.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.779,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -77s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.83,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.31s at -81s, noise x1.5",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.6122,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "glitch",
+        "label": "single-sample latency glitch at -28s, noise x1.4",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +79 MiB ramp -184..-58s, noise x0.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8278,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.26s at -126s, noise x0.6",
+        "truth": "timeout",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 1.04s + cpu 0.93 at -109s, noise x0.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9387,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.38 cores at -170s, noise x0.9",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8222,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -106s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.8417,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.9",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 2.71s + cpu 0.42 at -230s, noise x1.6",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.925,
+        "baseline": "timeout"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.2",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +55 MiB ramp -249..-27s, noise x1.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8183,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.97s + cpu 0.31 at -88s, noise x1.1",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9158,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +28 MiB ramp -297..-45s, noise x0.2",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7872,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.5",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.29 cores at -115s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8134,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.17 cores at -144s, noise x1.4",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7885,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.80s at -213s, noise x1.0",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7895,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.74s + cpu 0.34 at -93s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9191,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.52s + cpu 0.89 at -147s, noise x1.2",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9382,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +65 MiB ramp -215..-52s, noise x1.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.823,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "cpu",
+        "label": "cpu step to 0.52 cores at -138s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.8299,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.69s at -82s, noise x1.9",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.7727,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "slow",
+        "label": "latency step to 0.89s at -160s, noise x1.2",
+        "truth": "timeout",
+        "agent": "timeout",
+        "agent_confidence": 0.8007,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x1.6",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "leak",
+        "label": "memory +24 MiB ramp -212..-48s, noise x0.8",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.7764,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "mixed",
+        "label": "latency 0.85s + cpu 0.88 at -127s, noise x0.5",
+        "truth": "resource_exhaustion",
+        "agent": "resource_exhaustion",
+        "agent_confidence": 0.9381,
+        "baseline": "resource_exhaustion"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.4",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      },
+      {
+        "kind": "down",
+        "label": "target down at -141s",
+        "truth": "infra_network_failure",
+        "agent": "infra_network_failure",
+        "agent_confidence": 0.85,
+        "baseline": "infra_network_failure"
+      },
+      {
+        "kind": "healthy",
+        "label": "healthy noise x0.7",
+        "truth": "unknown",
+        "agent": "unknown",
+        "agent_confidence": 0.2,
+        "baseline": "unknown"
+      }
+    ],
+    "per_kind": {
+      "healthy": {
+        "n": 54,
+        "agent_correct": 54,
+        "baseline_correct": 54
+      },
+      "glitch": {
+        "n": 7,
+        "agent_correct": 7,
+        "baseline_correct": 0
+      },
+      "mixed": {
+        "n": 29,
+        "agent_correct": 29,
+        "baseline_correct": 3
+      },
+      "cpu": {
+        "n": 20,
+        "agent_correct": 20,
+        "baseline_correct": 4
+      },
+      "down": {
+        "n": 20,
+        "agent_correct": 20,
+        "baseline_correct": 20
+      },
+      "leak": {
+        "n": 35,
+        "agent_correct": 35,
+        "baseline_correct": 0
+      },
+      "slow": {
+        "n": 35,
+        "agent_correct": 34,
+        "baseline_correct": 17
+      }
+    },
+    "agent": {
+      "n": 200,
+      "accuracy": 0.995,
+      "false_positive_rate": 0.0,
+      "n_negatives": 61,
+      "fault_recall": 0.9928057553956835,
+      "n_faults": 139,
+      "per_class": {
+        "infra_network_failure": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 20
+        },
+        "resource_exhaustion": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 84
+        },
+        "timeout": {
+          "precision": 1.0,
+          "recall": 0.9714285714285714,
+          "f1": 0.9855072463768115,
+          "support": 35
+        },
+        "unknown": {
+          "precision": 0.9838709677419355,
+          "recall": 1.0,
+          "f1": 0.991869918699187,
+          "support": 61
+        }
+      },
+      "confusion": {
+        "unknown": {
+          "unknown": 61
+        },
+        "resource_exhaustion": {
+          "resource_exhaustion": 84
+        },
+        "infra_network_failure": {
+          "infra_network_failure": 20
+        },
+        "timeout": {
+          "timeout": 34,
+          "unknown": 1
+        }
+      }
+    },
+    "baseline": {
+      "n": 200,
+      "accuracy": 0.49,
+      "false_positive_rate": 0.11475409836065574,
+      "n_negatives": 61,
+      "fault_recall": 0.31654676258992803,
+      "n_faults": 139,
+      "per_class": {
+        "infra_network_failure": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 20
+        },
+        "resource_exhaustion": {
+          "precision": 1.0,
+          "recall": 0.08333333333333333,
+          "f1": 0.15384615384615385,
+          "support": 84
+        },
+        "timeout": {
+          "precision": 0.4594594594594595,
+          "recall": 0.4857142857142857,
+          "f1": 0.47222222222222227,
+          "support": 35
+        },
+        "unknown": {
+          "precision": 0.39705882352941174,
+          "recall": 0.8852459016393442,
+          "f1": 0.5482233502538071,
+          "support": 61
+        }
+      },
+      "confusion": {
+        "unknown": {
+          "unknown": 54,
+          "timeout": 7
+        },
+        "resource_exhaustion": {
+          "unknown": 64,
+          "resource_exhaustion": 7,
+          "timeout": 13
+        },
+        "infra_network_failure": {
+          "infra_network_failure": 20
+        },
+        "timeout": {
+          "timeout": 17,
+          "unknown": 18
+        }
+      }
+    },
+    "agent_ci95": [
+      0.9722256001302286,
+      0.999116854010634
+    ],
+    "confidence_correct": 0.6380608040201006,
+    "confidence_wrong": 0.2
+  }
+}

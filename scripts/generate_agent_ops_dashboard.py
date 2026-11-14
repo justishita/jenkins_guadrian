@@ -64,6 +64,11 @@ def panel(kind: str, title: str, sql: str, x: int, y: int, w: int, h: int, *, fm
     return body
 
 
+def say_when_empty(field_config: dict, text: str) -> dict:
+    """The same field config, plus what a stat panel shows when its query returns nothing (instead of "No data")."""
+    return {"defaults": {**field_config["defaults"], "noValue": text}}
+
+
 def thresholds(*steps: tuple[str, float | None]) -> dict:
     return {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": c, "value": v} for c, v in steps]}}}
 
@@ -106,13 +111,14 @@ panels = [
     panel("stat", "Approval rate",
           "SELECT round(100.0 * count(*) FILTER (WHERE payload->>'decision' = 'approved') / NULLIF(count(*), 0), 1) AS approval_rate "
           f"FROM audit_events WHERE event_type = 'approval_decided' AND {scope()} AND $__timeFilter(created_at)",
-          16, 0, 4, 4, description="Share of human decisions that approved the proposed fix. Empty until a reviewer decides.", fieldConfig=PERCENT),
+          16, 0, 4, 4, description="Share of human decisions that approved the proposed fix. Empty until a reviewer decides.",
+          fieldConfig=say_when_empty(PERCENT, "No decisions yet")),
     panel("stat", "Fix success rate (accuracy proxy)",
           "SELECT round(100.0 * count(*) FILTER (WHERE ok) / NULLIF(count(*), 0), 1) AS fix_success FROM audit_events "
           f"WHERE event_type = 'revalidation_completed' AND {scope()} AND $__timeFilter(created_at)",
           20, 0, 4, 4,
           description="Fixes whose Jenkins re-validation passed. A live proxy: labelled verdict accuracy comes from the Week 8 evaluation.",
-          fieldConfig=PERCENT),
+          fieldConfig=say_when_empty(PERCENT, "No re-validations yet")),
 
     # --- row 2: what was concluded and decided ------------------------------------------------
     panel("barchart", "Verdicts",
@@ -174,7 +180,8 @@ panels = [
           "SELECT round(avg(extract(epoch FROM (d.created_at - r.created_at)) / 60)::numeric, 1) AS minutes "
           "FROM audit_events d JOIN audit_events r ON r.incident_id = d.incident_id AND r.event_type = 'approval_requested' "
           f"WHERE d.event_type = 'approval_decided' AND d.created_at >= r.created_at AND {scope('d.incident_id')} AND $__timeFilter(d.created_at)",
-          0, 36, 6, 7, description="Minutes from a fix being put in front of a reviewer to their decision.", fieldConfig={"defaults": {"unit": "m"}}),
+          0, 36, 6, 7, description="Minutes from a fix being put in front of a reviewer to their decision.",
+          fieldConfig={"defaults": {"unit": "m", "noValue": "No decisions yet"}}),
     panel("table", "Recent approval decisions",
           "SELECT created_at AS \"time\", incident_id, payload->>'decision' AS decision, payload->>'reviewer' AS reviewer, "
           "payload->>'attempt' AS attempt, payload->>'comment' AS comment FROM audit_events "
@@ -272,7 +279,7 @@ ops_panels = [
           "SELECT round((extract(epoch FROM (now() - min(p.created_at))) / 60)::numeric, 0) AS minutes FROM remediation_proposals p "
           "WHERE p.status = 'awaiting_approval' AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.incident_id = p.incident_id AND ap.attempt = p.attempt) "
           f"AND {scope('p.incident_id')}",
-          4, 0, 4, 4, description="Age of the longest-waiting proposal. Empty when nothing is waiting.", fieldConfig={"defaults": {"unit": "m", **AMBER_AT_30["defaults"]}}),
+          4, 0, 4, 4, description="Age of the longest-waiting proposal. Empty when nothing is waiting.", fieldConfig={"defaults": {"unit": "m", "noValue": "Nothing waiting", **AMBER_AT_30["defaults"]}}),
     panel("stat", "Escalated (in range)",
           OUTCOMES + f"SELECT count(*) AS escalated FROM incident_outcomes WHERE outcome = 'escalated' AND {scope()} AND $__timeFilter(opened_at)",
           8, 0, 4, 4, description="Re-validation kept failing until the attempts ran out: a human has to take over.", fieldConfig=GREEN_BELOW_ONE),
@@ -285,7 +292,8 @@ ops_panels = [
     panel("stat", "Median time to resolve (min)",
           OUTCOMES + f"SELECT {TIME_TO_RESOLVE} AS minutes FROM incident_outcomes WHERE outcome = 'resolved_by_fix' AND closed_at IS NOT NULL "
           f"AND {scope()} AND $__timeFilter(opened_at)",
-          20, 0, 4, 4, description="From the incident opening to Jenkins confirming the fix.", fieldConfig={"defaults": {"unit": "m"}}),
+          20, 0, 4, 4, description="From the incident opening to Jenkins confirming the fix.",
+          fieldConfig={"defaults": {"unit": "m", "noValue": "None resolved yet"}}),
 
     # --- row 2: outcomes and decisions -----------------------------------------------------------
     panel("barchart", "Incident outcomes",

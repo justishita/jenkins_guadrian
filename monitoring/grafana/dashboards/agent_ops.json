@@ -277,7 +277,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "noValue": "No decisions yet"
         },
         "overrides": []
       },
@@ -332,7 +333,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "noValue": "No re-validations yet"
         },
         "overrides": []
       },
@@ -672,7 +674,8 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "m"
+          "unit": "m",
+          "noValue": "No decisions yet"
         },
         "overrides": []
       },

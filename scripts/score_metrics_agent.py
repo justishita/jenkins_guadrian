@@ -21,6 +21,11 @@ Two comparison systems (neither is part of the product):
     so a re-run costs nothing and gives the same numbers. Calls that fail are excluded from the
     LLM's scores and counted, never silently treated as "unknown".
 
+  4. Held-out random cases (`--heldout N`, default 200) - fault kind, onset, magnitude and noise are drawn at
+     random (seeded, so a run is repeatable) from the same fault shapes. The 14 scenarios were written alongside the
+     agent, so they cannot show it generalises; these cases were never looked at while it was built. Reports accuracy
+     with a 95% Wilson interval, false alarms, accuracy per fault kind, and every miss with its parameters.
+
 Usage (from the repo root):
   python -m scripts.score_metrics_agent                 # print the report
   python -m scripts.score_metrics_agent --json out.json # also write machine-readable results
@@ -40,6 +45,7 @@ import json
 import logging
 import math
 import os
+import random
 import sys
 import tempfile
 from collections import Counter, defaultdict
@@ -355,6 +361,104 @@ def run_sweep(thresholds: Thresholds, llm: LLMRunner | None = None) -> list[dict
     return rows
 
 
+# --- 4. held-out random cases -----------------------------------------------------------
+
+#: Out of 20 draws: how many of each kind. Healthy and slow dominate, as they would in real incidents.
+HELDOUT_MIX = ["healthy"] * 5 + ["slow"] * 5 + ["cpu"] * 2 + ["leak"] * 3 + ["mixed"] * 2 + ["down"] * 2 + ["glitch"]
+INFRA = FailureTaxonomy.INFRA_NETWORK_FAILURE.value
+
+
+def _log_uniform(rng: random.Random, low: float, high: float) -> float:
+    return math.exp(rng.uniform(math.log(low), math.log(high)))
+
+
+def heldout_cases(n: int, seed: int) -> list[tuple[str, str, dict[str, Any], str]]:
+    """(kind, label with its parameters, scenario, expected failure type). Same fault shapes as the scenarios, random draws."""
+    rng = random.Random(seed)
+    cases: list[tuple[str, str, dict[str, Any], str]] = []
+    for _ in range(n):
+        kind = rng.choice(HELDOUT_MIX)
+        noise = rng.uniform(0.0, 2.0)
+        quiet = {
+            "latency_p95": {"noise": 0.002 * noise},
+            "cpu_rate": {"noise": 0.001 * noise},
+            "memory_rss": {"noise": 524288 * noise},
+        }
+        onset = -rng.uniform(60, 240)
+        if kind == "healthy":
+            metrics = {"latency_p95": {"noise": 0.002 * noise}, "cpu_rate": {"baseline": 0.3, "noise": 0.05 * noise}, "memory_rss": {"noise": 524288 * noise}}
+            truth, label = UNKNOWN, f"healthy noise x{noise:.1f}"
+        elif kind == "slow":
+            level = _log_uniform(rng, 0.25, 4.0)
+            metrics = {**quiet, "latency_p95": {**quiet["latency_p95"], "fault": {"shape": "step", "at": onset, "level": level}}}
+            truth, label = TIMEOUT, f"latency step to {level:.2f}s at {onset:.0f}s, noise x{noise:.1f}"
+        elif kind == "cpu":
+            level = _log_uniform(rng, 0.1, 0.95)
+            metrics = {**quiet, "cpu_rate": {**quiet["cpu_rate"], "fault": {"shape": "step", "at": onset, "level": level}}}
+            truth, label = RESOURCE, f"cpu step to {level:.2f} cores at {onset:.0f}s, noise x{noise:.1f}"
+        elif kind == "leak":
+            growth = rng.uniform(10, 80)
+            start, end = -rng.uniform(180, 300), -rng.uniform(0, 60)
+            metrics = {**quiet, "memory_rss": {**quiet["memory_rss"], "fault": {"shape": "ramp", "at": start, "until": end, "level": (80 + growth) * MIB}}}
+            truth, label = RESOURCE, f"memory +{growth:.0f} MiB ramp {start:.0f}..{end:.0f}s, noise x{noise:.1f}"
+        elif kind == "mixed":
+            latency, cpu = _log_uniform(rng, 0.5, 4.0), _log_uniform(rng, 0.3, 0.95)
+            metrics = {
+                **quiet,
+                "latency_p95": {**quiet["latency_p95"], "fault": {"shape": "step", "at": onset, "level": latency}},
+                "cpu_rate": {**quiet["cpu_rate"], "fault": {"shape": "step", "at": onset, "level": cpu}},
+            }
+            truth, label = RESOURCE, f"latency {latency:.2f}s + cpu {cpu:.2f} at {onset:.0f}s, noise x{noise:.1f}"
+        elif kind == "down":
+            metrics = {
+                "target_availability": {"fault": {"shape": "step", "at": onset, "level": 0.0}},
+                "latency_p95": {"fault": {"shape": "stops", "at": onset}},
+                "cpu_rate": {"fault": {"shape": "stops", "at": onset}},
+                "memory_rss": {"fault": {"shape": "stops", "at": onset}},
+            }
+            truth, label = INFRA, f"target down at {onset:.0f}s"
+        else:  # glitch: one bad sample is not a cause
+            at = -rng.uniform(20, 60)
+            metrics = {**quiet, "latency_p95": {**quiet["latency_p95"], "fault": {"shape": "spike", "at": at, "duration": 15, "level": 2.0}}}
+            truth, label = UNKNOWN, f"single-sample latency glitch at {at:.0f}s, noise x{noise:.1f}"
+        cases.append((kind, label, _scenario(metrics), truth))
+    return cases
+
+
+def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for a rate: honest about what a finite sample shows."""
+    if total == 0:
+        return (float("nan"), float("nan"))
+    p = successes / total
+    denominator = 1 + z * z / total
+    centre = (p + z * z / (2 * total)) / denominator
+    half = z * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total)) / denominator
+    return (max(0.0, centre - half), min(1.0, centre + half))
+
+
+def run_heldout(thresholds: Thresholds, n: int, seed: int) -> dict[str, Any]:
+    rows = []
+    for kind, label, scenario, truth in heldout_cases(n, seed):
+        predicted, confidence, _ = agent_predict(scenario)
+        rows.append({"kind": kind, "label": label, "truth": truth, "agent": predicted, "agent_confidence": confidence,
+                     "baseline": baseline_predict(scenario, thresholds)})
+    per_kind = {}
+    for kind in dict.fromkeys(r["kind"] for r in rows):
+        group = [r for r in rows if r["kind"] == kind]
+        per_kind[kind] = {"n": len(group), "agent_correct": sum(r["agent"] == r["truth"] for r in group),
+                          "baseline_correct": sum(r["baseline"] == r["truth"] for r in group)}
+    agent_correct = sum(r["agent"] == r["truth"] for r in rows)
+    low, high = wilson_interval(agent_correct, len(rows))
+    return {
+        "n": n, "seed": seed, "rows": rows, "per_kind": per_kind,
+        "agent": summarize([(r["truth"], r["agent"]) for r in rows]),
+        "baseline": summarize([(r["truth"], r["baseline"]) for r in rows]),
+        "agent_ci95": [low, high],
+        "confidence_correct": _mean([r["agent_confidence"] for r in rows if r["truth"] == r["agent"]]),
+        "confidence_wrong": _mean([r["agent_confidence"] for r in rows if r["truth"] != r["agent"]]),
+    }
+
+
 # --- 3. live evidence -------------------------------------------------------------------
 
 
@@ -418,7 +522,29 @@ def _mark(row: dict[str, Any], name: str) -> str:
     return "MISS" if row["truth"] != UNKNOWN else "FALSE+"
 
 
-def print_report(bench: dict[str, Any], sweep: list[dict[str, Any]], live: dict[str, Any] | None, t: Thresholds) -> None:
+def print_heldout(heldout: dict[str, Any]) -> None:
+    low, high = heldout["agent_ci95"]
+    print(f"\n--- 4. Held-out random cases (n={heldout['n']}, seed={heldout['seed']}) ---")
+    print(f"  agent accuracy {100 * heldout['agent']['accuracy']:.1f}% (95% CI {_pct(low)}-{_pct(high)})   "
+          f"threshold baseline {_pct(heldout['baseline']['accuracy'])}")
+    print(f"  {'kind':<10}{'n':>5}{'agent':>9}{'baseline':>10}")
+    for kind, g in heldout["per_kind"].items():
+        print(f"  {kind:<10}{g['n']:>5}{_pct(g['agent_correct'] / g['n']):>9}{_pct(g['baseline_correct'] / g['n']):>10}")
+    _print_summary("Agent (held-out)", heldout["agent"])
+    _print_summary("Threshold baseline (held-out)", heldout["baseline"])
+    misses = [r for r in heldout["rows"] if r["agent"] != r["truth"]]
+    print(f"\n  Agent misses: {len(misses)} of {heldout['n']}")
+    for r in misses[:20]:
+        print(f"    {r['label']:<66} truth {r['truth']:<22} agent {r['agent']:<22}{r['agent_confidence']:>5.2f}")
+    if len(misses) > 20:
+        print(f"    ... and {len(misses) - 20} more (see --json)")
+    wrong = heldout["confidence_wrong"]
+    print(f"  Mean agent confidence when correct {heldout['confidence_correct']:.2f}, "
+          f"when wrong {'n/a' if wrong != wrong else format(wrong, '.2f')}")
+
+
+def print_report(bench: dict[str, Any], sweep: list[dict[str, Any]], live: dict[str, Any] | None, t: Thresholds,
+                 heldout: dict[str, Any] | None = None) -> None:
     print("=" * 78)
     print("Metrics agent - quantitative evaluation")
     print("=" * 78)
@@ -465,6 +591,9 @@ def print_report(bench: dict[str, Any], sweep: list[dict[str, Any]], live: dict[
         print(f"  {name:<9} fault detection {_pct(hits / len(f_ok)) if f_ok else 'n/a'} ({hits}/{len(f_ok)}), "
               f"false alarms on healthy {sum(r[name] != UNKNOWN for r in h_ok)}/{len(h_ok)}")
 
+    if heldout:
+        print_heldout(heldout)
+
     if live:
         print("\n--- 3. Live runs ---")
         for r in live["rows"]:
@@ -473,7 +602,8 @@ def print_report(bench: dict[str, Any], sweep: list[dict[str, Any]], live: dict[
         _print_summary("Agent (live)", live["agent"])
         _print_confusion("Agent confusion matrix (live)", live["agent"])
 
-    print("\nCaveats: scenarios and sweep are synthetic with deterministic noise; the baseline thresholds are "
+    print("\nCaveats: scenarios and sweep are synthetic with deterministic noise; the held-out cases are random draws "
+          "from the same simulated fault shapes, so they test generalisation across parameters, not realism; the baseline thresholds are "
           "illustrative; the LLM is one run at temperature 0 on a text rendering of the same series; "
           "live runs are as labelled by you.")
 
@@ -487,6 +617,8 @@ def main() -> None:
     parser.add_argument("--llm-cache", type=Path, default=Path("data/llm_baseline_cache.json"))
     parser.add_argument("--llm-scope", choices=["scenarios", "all"], default="all",
                         help="'scenarios' sends only the 14 scenarios to Gemini (fits a 20-requests/day free tier)")
+    parser.add_argument("--heldout", type=int, default=200, help="random held-out cases (0 to skip; default 200)")
+    parser.add_argument("--seed", type=int, default=2026, help="seed for the held-out cases")
     parser.add_argument("--latency-threshold", type=float, default=Thresholds.latency_p95_s)
     parser.add_argument("--cpu-threshold", type=float, default=Thresholds.cpu_cores)
     parser.add_argument("--memory-threshold-mib", type=float, default=Thresholds.memory_bytes / MIB)
@@ -507,11 +639,12 @@ def main() -> None:
     bench = run_scenarios(thresholds, llm)
     sweep = run_sweep(thresholds, llm if args.llm_scope == "all" else None)
     live = run_live(args.live, args.evidence_dir) if args.live else None
-    print_report(bench, sweep, live, thresholds)
+    heldout = run_heldout(thresholds, args.heldout, args.seed) if args.heldout > 0 else None
+    print_report(bench, sweep, live, thresholds, heldout)
 
     if args.json:
         args.json.write_text(
-            json.dumps({"thresholds": thresholds.__dict__, "benchmark": bench, "sweep": sweep, "live": live}, indent=2),
+            json.dumps({"thresholds": thresholds.__dict__, "benchmark": bench, "sweep": sweep, "live": live, "heldout": heldout}, indent=2),
             encoding="utf-8",
         )
         print(f"\nWrote {args.json}")
