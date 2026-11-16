@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.config import settings
 from backend.db.database import init_db
 from backend.events.publisher import publisher
+from backend.events.supervisor import keep_connected
 from backend.jenkins_catchup import JenkinsCatchup
 from backend.notifications import approval_consumer
 from backend.routes.approvals import router as approvals_router
@@ -67,9 +68,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     await seed_admin()
 
-    # 2. Connect to RabbitMQ asynchronously with retry
-    asyncio.create_task(publisher.connect(max_retries=5, retry_interval=2.0))
-    asyncio.create_task(approval_consumer.connect(max_retries=5, retry_interval=2.0))
+    # 2. Connect to RabbitMQ in the background and keep it connected: RabbitMQ is often slower than the API after a
+    #    Docker restart, and a one-shot attempt used to leave the consumer dead until the API was restarted.
+    rabbitmq_supervisors = [
+        asyncio.create_task(
+            keep_connected("event publisher", lambda: publisher.connect(max_retries=1, retry_interval=0.0), publisher.is_healthy),
+            name="rabbitmq-publisher",
+        ),
+        asyncio.create_task(
+            keep_connected("approval notification consumer", lambda: approval_consumer.connect(max_retries=1, retry_interval=0.0), approval_consumer.is_connected),
+            name="rabbitmq-notification-consumer",
+        ),
+    ]
 
     catchup_task: asyncio.Task[None] | None = None
     if settings.CATCHUP_ENABLED:
@@ -82,6 +92,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown
     logger.info("Shutting down DevOps AI Agent API...")
+    for supervisor in rabbitmq_supervisors:
+        supervisor.cancel()
+    await asyncio.gather(*rabbitmq_supervisors, return_exceptions=True)
     if catchup_task is not None:
         catchup_task.cancel()
         await asyncio.gather(catchup_task, return_exceptions=True)

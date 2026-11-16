@@ -46,6 +46,7 @@ class RabbitMQPublisher:
                         attempt,
                         type(error).__name__,
                     )
+                    await self._discard_partial_connection()
                     if attempt < max_retries:
                         await asyncio.sleep(
                             min(retry_interval * (2 ** (attempt - 1)), 8.0)
@@ -53,6 +54,16 @@ class RabbitMQPublisher:
                     else:
                         logger.error("Failed to connect to RabbitMQ after %d attempts.", max_retries)
             return False
+
+    async def _discard_partial_connection(self) -> None:
+        """A failure after the connection opened (channel, exchange) must not leave a half-built connection that the next
+        call would mistake for a working one: it would answer "already connected" while nothing can be published."""
+        connection, self.connection, self.channel, self.exchange = self.connection, None, None, None
+        if connection is not None:
+            try:
+                await connection.close()
+            except Exception:  # noqa: BLE001 - already broken; nothing more to do
+                pass
 
     async def publish_event(self, routing_key: str, payload: Dict[str, Any]) -> bool:
         """Publish a message to the incidents topic exchange with persistent delivery."""

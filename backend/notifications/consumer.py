@@ -100,9 +100,24 @@ class ApprovalRequestedConsumer:
                     return True
                 except Exception as exc:
                     logger.warning("RabbitMQ notification consumer connection failed: %s", exc)
+                    await self._discard_partial_connection()
                     if attempt < max_retries:
                         await asyncio.sleep(min(retry_interval * (2 ** (attempt - 1)), 8.0))
             return False
+
+    async def _discard_partial_connection(self) -> None:
+        """Connected but failed while declaring or binding the queue: do not keep a connection that never consumes."""
+        connection = self.connection
+        self.connection, self.channel, self.queue, self.consumer_tag = None, None, None, None
+        if connection is not None:
+            try:
+                await connection.close()
+            except Exception:  # noqa: BLE001 - already broken; nothing more to do
+                pass
+
+    async def is_connected(self) -> bool:
+        """True only when the connection is open and the queue is actually being consumed."""
+        return bool(self.connection and not self.connection.is_closed and self.consumer_tag)
 
     async def close(self) -> None:
         """Gracefully close the consumer."""
