@@ -12,9 +12,11 @@
   The fault branches are NOT deleted here: Jenkins must still be able to build them. Their names go to
   results/fault_branches.txt; delete them with `inject_fault.py revert <branch>` once the evaluation is done.
 
-  tc10_flaky only fails some of the time. inject_fault.py triggers 8 builds for it through the Jenkins API when
-  JENKINS_USER and JENKINS_API_TOKEN are set in this shell (JENKINS_URL defaults to http://localhost:8082 here);
-  without them it builds once and may pass, which simply gives no incident.
+  tc10_flaky only fails some of the time. inject_fault.py triggers 8 builds for it through the Jenkins API. It reads
+  JENKINS_USER, JENKINS_API_TOKEN and JENKINS_URL from the shell environment, not from .env, so this script borrows
+  JENKINS_USER and JENKINS_API_TOKEN from .env when the shell has none, and finds the Jenkins port from Docker (your
+  .env JENKINS_URL is the address the containers use, which can differ from the one on this machine). Without
+  credentials it builds once and may pass, which simply gives no incident.
 
 .EXAMPLE
   powershell -File scripts\inject_all_faults.ps1 -Rounds 2
@@ -31,14 +33,34 @@ $ErrorActionPreference = "Continue"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $repo ".venv\Scripts\python.exe"
 $work = Join-Path (Split-Path $repo -Parent) "jenkins_guadrian_fault"
-$throwaway = "demo/fault-run"
+# A new name every run: a leftover branch (or worktree) from an earlier attempt must not stop this one.
+$throwaway = "demo/fault-run-" + (Get-Date -Format "yyyyMMddHHmmss")
 $scenarios = "tc01_unit_test", "tc02_compile_syntax", "tc02_compile_import", "tc10_flaky"
 
 if (-not (Test-Path $python)) { Write-Error "Cannot find $python"; exit 2 }
 if (Test-Path $work) { Write-Error "$work already exists: remove it first (git worktree remove --force `"$work`")"; exit 2 }
-if (-not $env:JENKINS_URL) { $env:JENKINS_URL = "http://localhost:8082" }
-if (-not ($env:JENKINS_USER -and $env:JENKINS_API_TOKEN)) {
-    Write-Warning "JENKINS_USER / JENKINS_API_TOKEN are not set: tc10_flaky will build only once and may pass (no incident)."
+function Read-DotEnv([string]$Name) {
+    $file = Join-Path $repo ".env"
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in Get-Content $file) {
+        if ($line -match "^\s*$Name\s*=\s*(.*?)\s*$") { return $Matches[1].Trim('"').Trim("'") }
+    }
+    return $null
+}
+
+if (-not $env:JENKINS_USER) { $env:JENKINS_USER = Read-DotEnv "JENKINS_USER" }
+if (-not $env:JENKINS_API_TOKEN) { $env:JENKINS_API_TOKEN = Read-DotEnv "JENKINS_API_TOKEN" }
+if (-not $env:JENKINS_URL) {
+    # The port Docker actually published for Jenkins (8082 with a local override, 8080 by default).
+    Push-Location $repo
+    $mapping = docker compose port jenkins 8080 2>$null
+    Pop-Location
+    if ($mapping -match ":(\d+)\s*$") { $env:JENKINS_URL = "http://localhost:$($Matches[1])" } else { $env:JENKINS_URL = "http://localhost:8080" }
+}
+if ($env:JENKINS_USER -and $env:JENKINS_API_TOKEN) {
+    Write-Host "Jenkins API: $($env:JENKINS_URL) (credentials found; tc10_flaky will trigger several builds)"
+} else {
+    Write-Warning "No JENKINS_USER / JENKINS_API_TOKEN in the shell or in .env: tc10_flaky will build only once and may pass (no incident)."
 }
 
 $branches = New-Object System.Collections.Generic.List[string]
