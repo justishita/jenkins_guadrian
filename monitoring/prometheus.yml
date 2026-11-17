@@ -7,10 +7,13 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
+  # The job label stays `target_app` (the Metrics agent's queries select job="target_app"); the address is the compose
+  # service `target-app` (a hyphen) on the port the app listens on. It said `target_app` after the service was renamed, so
+  # Prometheus saw the app as permanently down and the Metrics agent called every incident infra_network_failure.
   - job_name: target_app
     metrics_path: /metrics
     static_configs:
-      - targets: ["target_app:8000"]
+      - targets: ["target-app:8000"]
 
   # Requires the Jenkins prometheus plugin with useAuthenticatedEndpoint=false
   # (set in jenkins/jenkins.yaml for local dev).

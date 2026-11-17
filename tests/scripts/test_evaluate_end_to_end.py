@@ -149,3 +149,48 @@ def test_nothing_to_score_is_reported_not_crashed(reports, tmp_path, capsys):
     incidents.write_text("[]", encoding="utf-8")
     assert main(["--incidents-file", str(incidents), "--reports-dir", str(reports), "--out", str(tmp_path / "x")]) == 1
     assert "inject some" in capsys.readouterr().out
+
+
+# ---- --branches: score exactly the branches a run injected -----------------------------------------------------
+
+
+def test_branches_file_limits_scoring_and_reports_branches_that_never_made_an_incident(reports, tmp_path, capsys):
+    write_report(reports, "keep", "code_test_failure", three("code_test_failure", "unknown", "code_test_failure", m=True))
+    write_report(reports, "stray", "timeout", three("timeout", "timeout", "timeout"))
+    keep, stray = row("keep", "tc01_unit_test"), row("stray", "tc02_compile_syntax")
+    incidents = tmp_path / "incidents.json"
+    incidents.write_text(json.dumps([keep, stray]), encoding="utf-8")
+    never = "fault/tc10_flaky-20261116T100000000000Z"
+    branches = tmp_path / "fault_branches.txt"
+    branches.write_text("﻿" + keep["branch"] + "\n\n" + never + "\n", encoding="utf-8")  # a PowerShell file starts with a BOM
+    out = tmp_path / "out" / "e2e"
+    assert main(["--incidents-file", str(incidents), "--reports-dir", str(reports), "--branches", str(branches), "--out", str(out)]) == 0
+    saved = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert [s["incident_id"] for s in saved["samples"]] == ["keep"]  # the stray fault branch is not scored
+    assert saved["result"]["branches_without_incident"] == [never]
+    assert never in out.with_suffix(".md").read_text(encoding="utf-8")
+    assert "branches with no incident yet" in capsys.readouterr().out
+
+
+def test_without_a_branches_file_every_fault_incident_is_scored(reports, tmp_path):
+    write_report(reports, "a", "code_test_failure", three("code_test_failure", "unknown", "code_test_failure", m=True))
+    write_report(reports, "b", "timeout", three("timeout", "timeout", "timeout"))
+    incidents = tmp_path / "incidents.json"
+    incidents.write_text(json.dumps([row("a", "tc01_unit_test"), row("b", "tc01_unit_test")]), encoding="utf-8")
+    out = tmp_path / "e2e"
+    assert main(["--incidents-file", str(incidents), "--reports-dir", str(reports), "--out", str(out)]) == 0
+    assert json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))["result"]["scored"] == 2
+
+
+def test_a_branches_file_written_all_on_one_line_still_reads(reports, tmp_path):
+    """A broken writer once put every branch name on one line; the scorer must not match nothing because of it."""
+    write_report(reports, "a", "code_test_failure", three("code_test_failure", "unknown", "code_test_failure", m=True))
+    write_report(reports, "b", "build_compilation_failure", three("build_compilation_failure", "build_compilation_failure", "build_compilation_failure"))
+    a, b = row("a", "tc01_unit_test"), row("b", "tc02_compile_syntax")
+    incidents = tmp_path / "incidents.json"
+    incidents.write_text(json.dumps([a, b]), encoding="utf-8")
+    branches = tmp_path / "one_line.txt"
+    branches.write_text(a["branch"] + " " + b["branch"], encoding="utf-8")
+    out = tmp_path / "e2e"
+    assert main(["--incidents-file", str(incidents), "--reports-dir", str(reports), "--branches", str(branches), "--out", str(out)]) == 0
+    assert json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))["result"]["scored"] == 2

@@ -1,0 +1,577 @@
+{
+  "generated_at": "2026-11-16 18:39 UTC",
+  "result": {
+    "scored": 10,
+    "pending": [
+      "5db6c436"
+    ],
+    "unknown_scenario": [],
+    "coordinator": {
+      "correct": 0,
+      "n": 10,
+      "accuracy": 0.0,
+      "ci95": [
+        0.0,
+        0.278
+      ]
+    },
+    "per_scenario": {
+      "tc01_unit_test": {
+        "expected": "code_test_failure",
+        "correct": 0,
+        "n": 3,
+        "accuracy": 0.0,
+        "ci95": [
+          0.0,
+          0.562
+        ],
+        "verdicts": {
+          "infra_network_failure": 3
+        }
+      },
+      "tc02_compile_syntax": {
+        "expected": "build_compilation_failure",
+        "correct": 0,
+        "n": 2,
+        "accuracy": 0.0,
+        "ci95": [
+          0.0,
+          0.658
+        ],
+        "verdicts": {
+          "infra_network_failure": 2
+        }
+      },
+      "tc02_compile_import": {
+        "expected": "dependency_regression",
+        "correct": 0,
+        "n": 1,
+        "accuracy": 0.0,
+        "ci95": [
+          0.0,
+          0.793
+        ],
+        "verdicts": {
+          "infra_network_failure": 1
+        }
+      },
+      "tc10_flaky": {
+        "expected": "flaky_test",
+        "correct": 0,
+        "n": 4,
+        "accuracy": 0.0,
+        "ci95": [
+          0.0,
+          0.49
+        ],
+        "verdicts": {
+          "infra_network_failure": 4
+        }
+      }
+    },
+    "per_agent": {
+      "jenkins_agent": {
+        "incidents": 10,
+        "reported": 10,
+        "abstained": 0,
+        "missing": 0,
+        "answered": {
+          "correct": 3,
+          "n": 10,
+          "accuracy": 0.3,
+          "ci95": [
+            0.108,
+            0.603
+          ]
+        },
+        "overall": {
+          "correct": 3,
+          "n": 10,
+          "accuracy": 0.3,
+          "ci95": [
+            0.108,
+            0.603
+          ]
+        }
+      },
+      "metrics_agent": {
+        "incidents": 10,
+        "reported": 10,
+        "abstained": 0,
+        "missing": 0,
+        "answered": {
+          "correct": 0,
+          "n": 10,
+          "accuracy": 0.0,
+          "ci95": [
+            0.0,
+            0.278
+          ]
+        },
+        "overall": {
+          "correct": 0,
+          "n": 10,
+          "accuracy": 0.0,
+          "ci95": [
+            0.0,
+            0.278
+          ]
+        }
+      },
+      "code_agent": {
+        "incidents": 10,
+        "reported": 10,
+        "abstained": 10,
+        "missing": 0,
+        "answered": {
+          "correct": 0,
+          "n": 0,
+          "accuracy": null,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "overall": {
+          "correct": 0,
+          "n": 10,
+          "accuracy": 0.0,
+          "ci95": [
+            0.0,
+            0.278
+          ]
+        }
+      }
+    },
+    "misses": {
+      "total": 10,
+      "agent_was_right_but_overruled": 3,
+      "no_agent_was_right": 7,
+      "wrong_and_actionable": 5,
+      "wrong_and_conflict_flagged": 10
+    },
+    "confidence": {
+      "mean_when_right": null,
+      "mean_when_wrong": 0.713
+    },
+    "any_agent_right": {
+      "correct": 3,
+      "n": 10,
+      "accuracy": 0.3,
+      "ci95": [
+        0.108,
+        0.603
+      ]
+    },
+    "branches_without_incident": []
+  },
+  "samples": [
+    {
+      "incident_id": "c85ce952-0bcf-434c-b153-7611ebc2a29c",
+      "scenario": "tc01_unit_test",
+      "expected": "code_test_failure",
+      "branch": "fault/tc01_unit_test-20261116T174735979220Z",
+      "build": 1,
+      "created_at": "2026-11-16 17:52:07.086005+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit c34da37 on fault/tc01_unit_test-20261116T174735979220Z: 2 file(s), 8 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "e267e9ad-6a2e-48e8-9112-42273f30fa6c",
+      "scenario": "tc01_unit_test",
+      "expected": "code_test_failure",
+      "branch": "fault/tc01_unit_test-20261116T181223662962Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:13:29.311449+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": false,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit dfa4fd5 on fault/tc01_unit_test-20261116T181223662962Z: 2 file(s), 8 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "829eeee7-e485-44c3-933b-52b7918ecc76",
+      "scenario": "tc02_compile_syntax",
+      "expected": "build_compilation_failure",
+      "branch": "fault/tc02_compile_syntax-20261116T181250748030Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:18:01.061075+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 53e4246 on fault/tc02_compile_syntax-20261116T181250748030Z: 2 file(s), 8 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
+        },
+        "jenkins_agent": {
+          "failure_type": "build_compilation_failure",
+          "confidence": 0.855,
+          "abstained": false,
+          "correct": true,
+          "summary": "Rule-based classification: build_compilation_failure"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "7ab4a964-4e4c-4e5f-bf36-d3749c63bbd9",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261116T182356231519Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:25:31.952018+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 45b911a on fault/tc10_flaky-20261116T182356231519Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "ce423943-08eb-4d96-953c-d3b9fc06fefc",
+      "scenario": "tc01_unit_test",
+      "expected": "code_test_failure",
+      "branch": "fault/tc01_unit_test-20261116T182423905061Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:25:33.090767+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.72,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit cba3aef on fault/tc01_unit_test-20261116T182423905061Z: 2 file(s), 8 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8696,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 23 of 23 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "b0479896-adfb-4c69-a5ea-07e183f35d69",
+      "scenario": "tc02_compile_syntax",
+      "expected": "build_compilation_failure",
+      "branch": "fault/tc02_compile_syntax-20261116T182956819891Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:32:12.49757+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 951d7ff on fault/tc02_compile_syntax-20261116T182956819891Z: 2 file(s), 8 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
+        },
+        "jenkins_agent": {
+          "failure_type": "build_compilation_failure",
+          "confidence": 0.855,
+          "abstained": false,
+          "correct": true,
+          "summary": "Rule-based classification: build_compilation_failure"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "721fc8eb-f7d9-4cf1-947d-d0ae58d1993c",
+      "scenario": "tc02_compile_import",
+      "expected": "dependency_regression",
+      "branch": "fault/tc02_compile_import-20261116T183023563816Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:32:37.852776+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 6b9753f on fault/tc02_compile_import-20261116T183023563816Z: 2 file(s), 7 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": true,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "67427036-6d46-45b9-b4ac-6d8ea44f0c91",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261116T183050327034Z",
+      "build": 1,
+      "created_at": "2026-11-16 18:33:03.829679+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.72,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 54fe1b1 on fault/tc10_flaky-20261116T183050327034Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.705,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8696,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 23 of 23 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "6454a3ce-5024-4432-926d-3aaf54eeb2a8",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261116T183050327034Z",
+      "build": 2,
+      "created_at": "2026-11-16 18:38:18.684059+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.71,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 54fe1b1 on fault/tc10_flaky-20261116T183050327034Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.805,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8574,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 22 of 22 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "efb125ca-d8ba-45ed-9ee8-46721c7af20b",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261116T182356231519Z",
+      "build": 2,
+      "created_at": "2026-11-16 18:39:02.434007+00",
+      "status": "scored",
+      "verdict": "infra_network_failure",
+      "confidence": 0.72,
+      "correct": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.4,
+          "abstained": true,
+          "correct": null,
+          "summary": "Commit 45b911a on fault/tc10_flaky-20261116T182356231519Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
+        },
+        "jenkins_agent": {
+          "failure_type": "dependency_regression",
+          "confidence": 0.805,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: dependency_regression"
+        },
+        "metrics_agent": {
+          "failure_type": "infra_network_failure",
+          "confidence": 0.8696,
+          "abstained": false,
+          "correct": false,
+          "summary": "Metrics anomaly: target_availability: target down in 23 of 23 samples; 3 other metric(s) stopped reporting, consistent with the outage"
+        }
+      }
+    },
+    {
+      "incident_id": "5db6c436-8040-4157-a7a4-c36c86e1c613",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261116T183050327034Z",
+      "build": 3,
+      "created_at": "2026-11-16 18:39:05.901483+00",
+      "status": "pending",
+      "verdict": null,
+      "confidence": null,
+      "correct": null,
+      "complete": null,
+      "conflicted": null,
+      "actionable": null,
+      "revised_to": null,
+      "agents": {}
+    }
+  ]
+}

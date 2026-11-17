@@ -128,6 +128,7 @@ def test_trigger_posts_eight_builds_with_auth(monkeypatch: pytest.MonkeyPatch) -
         username="user",
         api_token="api-token",
         job_token="job-token",
+        spacing_seconds=0,
     )
 
     assert len(locations) == 8
@@ -137,3 +138,99 @@ def test_trigger_posts_eight_builds_with_auth(monkeypatch: pytest.MonkeyPatch) -
         "/job/target-app/job/fault%252Ftc10_flaky-abc/build?token=job-token"
     )
     assert build_posts[0].get_header("Authorization")
+
+
+# ---- a Jenkinsfile with parameters: /build is refused with 400, /buildWithParameters works --------------------------
+
+
+def test_parameterized_url_swaps_the_endpoint_and_keeps_the_job_token() -> None:
+    from scripts.inject_fault import _parameterized_url
+
+    assert _parameterized_url("http://j/job/target-app/job/x/build") == "http://j/job/target-app/job/x/buildWithParameters"
+    assert _parameterized_url("http://j/job/target-app/job/x/build?token=t") == "http://j/job/target-app/job/x/buildWithParameters?token=t"
+
+
+def test_trigger_falls_back_to_build_with_parameters_when_jenkins_says_nothing_is_submitted(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.error
+
+    posts: list[str] = []
+
+    class _Resp:
+        headers = {"Location": "http://jenkins:8080/queue/item/1/"}
+        status = 201
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b'{"crumb":"c","crumbRequestField":"Jenkins-Crumb"}'
+
+    def fake_urlopen(req, timeout=15):
+        if req.get_method() != "POST":
+            return _Resp()
+        url = req.get_full_url()
+        posts.append(url)
+        if url.split("?")[0].endswith("/build"):
+            raise urllib.error.HTTPError(url, 400, "Bad Request", {}, None)  # "Nothing is submitted"
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    locations = trigger_multibranch_build("fault/tc10_flaky-abc", runs=5, jenkins_url="http://jenkins:8080", username="u", api_token="t", spacing_seconds=0)
+    assert len(locations) == 5  # every run was triggered
+    assert sum(1 for url in posts if url.split("?")[0].endswith("/build")) == 1  # the plain /build was tried once, then abandoned
+    assert all(url.split("?")[0].endswith("/buildWithParameters") for url in posts[1:])
+
+
+def test_a_plain_failure_is_not_retried_through_the_parameter_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.error
+
+    posts: list[str] = []
+
+    class _Resp:
+        headers: dict = {}
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(req, timeout=15):
+        if req.get_method() != "POST":
+            return _Resp()
+        posts.append(req.get_full_url())
+        raise urllib.error.HTTPError(req.get_full_url(), 404, "Not Found", {}, None)  # the branch job does not exist yet
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    assert trigger_multibranch_build("fault/tc10_flaky-abc", runs=3, jenkins_url="http://jenkins:8080", username="u", api_token="t", spacing_seconds=0) == []
+    assert len(posts) == 3 and all(url.split("?")[0].endswith("/build") for url in posts)
+
+
+def test_runs_are_spaced_apart_so_jenkins_does_not_merge_them_into_one_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Identical requests inside Jenkins' 5-second quiet period collapse into one queued build (8 requests started 2-3 builds)."""
+    sleeps: list[float] = []
+
+    class _Resp:
+        headers = {"Location": "http://jenkins:8080/queue/item/1/"}
+        status = 201
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=15: _Resp())
+    monkeypatch.setattr("scripts.inject_fault.time.sleep", sleeps.append)
+    trigger_multibranch_build("fault/tc10_flaky-abc", runs=4, jenkins_url="http://jenkins:8080", username="u", api_token="t")
+    assert sleeps == [7.0, 7.0, 7.0]  # between the runs, not after the last one

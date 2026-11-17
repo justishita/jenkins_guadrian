@@ -7,7 +7,7 @@ says what its numbers can and cannot show. Regenerate with the commands below.
 |---|---|---|---|
 | `coordinator_eval.md` / `.json` | The Coordinator's verdict accuracy, how often it acts, and how often it is wrong *and* acts, against baselines (highest confidence, majority vote, each agent alone, P2's noisy-OR fusion). The 13 labelled scenarios plus a seeded simulation of agent behaviour | `python scripts/evaluate_coordinator.py` | done; the simulation models the inputs, it is **not** measured accuracy of the real agents |
 | Metrics agent (printed report, `--json` for a file) | Scenario benchmark, severity sweep and **200 random held-out cases** against a threshold baseline (and an LLM baseline with `--llm`) | `python -m scripts.score_metrics_agent --json results/metrics_eval.json` | done; the held-out set found and fixed a real defect (leaks that start late) |
-| `e2e_accuracy.md` / `.json` | Real faults injected into the real stack, scored against the injector's ground truth: Coordinator and each agent, every miss, wrong-and-actionable | `powershell -File scripts\inject_all_faults.ps1 -Rounds 2`, wait 10-15 minutes, then `python scripts/evaluate_end_to_end.py` | **pending the live run**; the file here, if present, is a one-incident dry run |
+| `e2e_accuracy.md` / `.json` (and `e2e_run1_before_prometheus_fix.*`) | Real faults injected into the real stack, scored against the injector's ground truth: Coordinator and each agent, every miss, wrong-and-actionable | `powershell -File scripts\inject_all_faults.ps1 -Rounds 2`, wait 10-15 minutes, then `python scripts/evaluate_end_to_end.py` | **pending the live run**; the file here, if present, is a one-incident dry run |
 | `remediation_eval.md` / `.json` | The Code & Remediation agent and the policy gate (P3) | `python scripts/evaluate_remediation.py` | P3 |
 
 ## Headline numbers so far
@@ -23,3 +23,19 @@ says what its numbers can and cannot show. Regenerate with the commands below.
   parameters, not realism.
 - **One real injected fault so far** (a failing unit test) was diagnosed as `infra_network_failure`, wrongly, and the report was
   still actionable. The live run on all four fault types is what turns that single data point into a measurement.
+
+## Run 1 of the end-to-end evaluation, and what it found (`e2e_run1_before_prometheus_fix.md`)
+
+Ten real fault incidents (clean, one fault per branch): the Coordinator was right **0/10**, and said `infra_network_failure`
+every time. The cause was not the models. Prometheus scraped `target_app:8000` but the compose service had been renamed
+`target-app`, so Prometheus saw the app as permanently down and the **Metrics agent reported "target down" (about 0.86) for every
+incident**. That constant signal outvoted the Jenkins agent even where Jenkins was right (3 of the 10). It was invisible until a
+real run exposed it: no scenario test could, because the scenarios feed the agent its own simulated metrics.
+
+Two more findings in the same run, both about agents owned by others, and unaffected by the fix:
+- The **Code agent abstained on all 10** (it reaches GitHub and reads the commit, then answers "unknown").
+- The **Jenkins agent called unit-test and flaky failures `dependency_regression`** (0.70-0.81), and was right on the compile errors.
+
+Fixed on this side: the scrape address (and a test that every Prometheus target is a compose service). The run has to be repeated
+after the fix, because it measured the system with a broken input. Run 1's branches are listed in `fault_branches_run1.txt`
+for cleanup.

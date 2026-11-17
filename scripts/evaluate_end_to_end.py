@@ -17,6 +17,7 @@ remediation engine would have acted on is the dangerous kind.
 
     python scripts/evaluate_end_to_end.py                  # every fault incident in the Docker stack
     python scripts/evaluate_end_to_end.py --since 2026-11-16
+    python scripts/evaluate_end_to_end.py --branches results/fault_branches.txt   # exactly the branches inject_all_faults.ps1 listed
     python scripts/evaluate_end_to_end.py --incidents-file incidents.json   # no Docker (a list of incident rows)
 
 Reads the incident list from the stack's PostgreSQL through ``docker compose exec`` and the reports from
@@ -272,8 +273,13 @@ def render_markdown(samples: list[Sample], result: dict[str, Any], generated_at:
         f"- **Coordinator verdict correct: {pct(result['coordinator'])}**",
         f"- At least one agent named the right cause: {pct(result['any_agent_right'])}",
         f"- Incidents scored: {scored}" + (f"; still without a report: {', '.join(result['pending'])}" if result["pending"] else ""),
-        "",
     ]
+    if result.get("branches_without_incident"):
+        out.append(
+            "- Fault branches with no incident (the build passed, as a flaky test sometimes does, or it has not run yet): "
+            + ", ".join(f"`{name}`" for name in result["branches_without_incident"])
+        )
+    out.append("")
     if scored < 30:
         out += [f"> **Small sample ({scored}).** The interval above is wide on purpose: this shows what went wrong in these runs, "
                 "not a reliable accuracy rate. Treat the misses below as the main result.", ""]
@@ -327,6 +333,7 @@ def render_markdown(samples: list[Sample], result: dict[str, Any], generated_at:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--since", help="only incidents created on or after this date (YYYY-MM-DD)")
+    parser.add_argument("--branches", type=Path, help="text file of fault branch names, one per line: score only incidents from these")
     parser.add_argument("--reports-dir", type=Path, default=REPO / "data" / "reports")
     parser.add_argument("--incidents-file", type=Path, help="JSON list of {id, branch, job_name, build, created_at}; skips Docker")
     parser.add_argument("--out", type=Path, default=REPO / "results" / "e2e_accuracy", help="output path without extension")
@@ -339,12 +346,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.since:
         rows = [r for r in rows if str(r.get("created_at", "")) >= args.since]
+    wanted: set[str] = set()
+    if args.branches:
+        # utf-8-sig: PowerShell writes a byte-order mark at the start of the file
+        # split on any whitespace, so a list written one per line, or all on one line, reads the same
+        wanted = {name for name in re.split(r"\s+", args.branches.read_text(encoding="utf-8-sig")) if name}
+        rows = [r for r in rows if branch_of(r) in wanted]
     if not rows:
         print("no fault incidents found: inject some with scripts/inject_fault.py first")
         return 1
 
     samples = [build_sample(row, args.reports_dir) for row in rows]
     result = score(samples)
+    result["branches_without_incident"] = sorted(wanted - {branch_of(r) for r in rows})
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.with_suffix(".json").write_text(
@@ -358,6 +372,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {scenario:22} {pct(item)}  verdicts: {item['verdicts']}")
     if result["pending"]:
         print(f"  waiting for a report: {', '.join(result['pending'])}")
+    if result["branches_without_incident"]:
+        print(f"  branches with no incident yet: {', '.join(result['branches_without_incident'])}")
     print(f"wrote {args.out.with_suffix('.md')}")
     return 0
 

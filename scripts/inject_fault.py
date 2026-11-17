@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 from typing import NamedTuple
 from urllib.parse import quote
 
@@ -295,6 +296,18 @@ def _multibranch_build_url(jenkins_url: str, branch: str, job_token: str | None 
     return trigger_url
 
 
+def _parameterized_url(trigger_url: str) -> str:
+    """The same job's ``/buildWithParameters`` (every parameter takes its default), keeping any ``?token=``.
+
+    ``target_app/Jenkinsfile`` declares parameters (INCIDENT_ID, REMEDIATION_ATTEMPT), and Jenkins refuses a plain
+    ``/build`` on a parameterized job with ``400 Nothing is submitted``.
+    """
+    path, _, query = trigger_url.partition("?")
+    if path.endswith("/build"):
+        path = path[: -len("/build")] + "/buildWithParameters"
+    return f"{path}?{query}" if query else path
+
+
 def trigger_multibranch_build(
     branch: str,
     *,
@@ -303,12 +316,16 @@ def trigger_multibranch_build(
     username: str | None = None,
     api_token: str | None = None,
     job_token: str | None = None,
+    spacing_seconds: float = 7.0,
 ) -> list[str]:
     """Trigger ~8 builds of the multibranch job via the Jenkins HTTP POST API.
 
     Authentication uses ``JENKINS_USER`` / ``JENKINS_API_TOKEN`` (Basic auth).
     An optional job trigger token is sent as ``?token=`` (``JENKINS_JOB_TOKEN``).
     CSRF crumbs are fetched from ``/crumbIssuer/api/json`` when available.
+
+    The runs are spaced ``spacing_seconds`` apart: Jenkins merges identical requests that arrive within its quiet period
+    (5 seconds) into one queued build, so eight back-to-back requests used to start only two or three builds.
     """
     import base64
     import urllib.error
@@ -344,15 +361,29 @@ def trigger_multibranch_build(
     except Exception as exc:
         LOGGER.debug("Jenkins crumb not available (%s); continuing without it", exc)
 
-    for run_i in range(runs):
-        req = urllib.request.Request(trigger_url, data=b"", method="POST")
+    def post(url: str) -> tuple[str, int]:
+        req = urllib.request.Request(url, data=b"", method="POST")
         for header_name, header_value in headers.items():
             req.add_header(header_name, header_value)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.headers.get("Location", url), resp.status
+
+    url = trigger_url
+    for run_i in range(runs):
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                loc = resp.headers.get("Location", trigger_url)
-                triggered.append(loc)
-                LOGGER.info("Triggered run %d/%d (status %d)", run_i + 1, runs, resp.status)
+            try:
+                loc, status = post(url)
+            except urllib.error.HTTPError as http_err:
+                if http_err.code != 400 or url != trigger_url:
+                    raise
+                # "Nothing is submitted": the job takes parameters, so /build is refused. Use /buildWithParameters from now on.
+                url = _parameterized_url(trigger_url)
+                LOGGER.info("The job takes parameters; triggering through %s", url.split("?")[0].rsplit("/", 1)[-1])
+                loc, status = post(url)
+            triggered.append(loc)
+            LOGGER.info("Triggered run %d/%d (status %d)", run_i + 1, runs, status)
+            if run_i + 1 < runs:
+                time.sleep(spacing_seconds)
         except urllib.error.HTTPError as http_err:
             LOGGER.warning("Trigger run %d returned HTTP %d: %s", run_i + 1, http_err.code, http_err.reason)
         except Exception as exc:

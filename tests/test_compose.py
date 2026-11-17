@@ -91,3 +91,40 @@ def test_new_healthchecks_probe_127_0_0_1_not_localhost(name) -> None:
     reported unhealthy while serving fine."""
     command = SERVICES[name]["healthcheck"]["test"][-1]
     assert "127.0.0.1" in command and "localhost" not in command
+
+
+# ---- Prometheus must scrape services that exist (a stale name made the target "down" and skewed every diagnosis) ----
+
+
+def scrape_targets() -> list[tuple[str, str, int]]:
+    config = yaml.safe_load((ROOT / "monitoring" / "prometheus.yml").read_text(encoding="utf-8"))
+    found = []
+    for job in config["scrape_configs"]:
+        for group in job.get("static_configs", []):
+            for target in group["targets"]:
+                host, _, port = target.rpartition(":")
+                found.append((job["job_name"], host, int(port)))
+    return found
+
+
+def test_every_prometheus_target_is_a_compose_service_or_prometheus_itself() -> None:
+    """The target app's compose service was renamed `target-app`, Prometheus kept scraping `target_app`, the name stopped
+    resolving, and the Metrics agent then reported "target down" (infra_network_failure, ~0.86) for every incident."""
+    for job, host, _ in scrape_targets():
+        assert host == "localhost" or host in SERVICES, f"job {job} scrapes {host}, which is not a compose service"
+
+
+def test_the_target_app_is_scraped_on_the_port_it_listens_on() -> None:
+    dockerfile = (ROOT / "target_app" / "Dockerfile").read_text(encoding="utf-8")
+    exposed = int(re.search(r"^EXPOSE\s+(\d+)", dockerfile, re.MULTILINE).group(1))
+    target = next(t for t in scrape_targets() if t[0] == "target_app")
+    assert (target[1], target[2]) == ("target-app", exposed)
+
+
+def test_the_job_label_the_metrics_agent_queries_still_exists() -> None:
+    from agents.metrics_agent.queries import CATALOG
+
+    jobs = {job for job, _, _ in scrape_targets()}
+    for spec in CATALOG:
+        selected = re.search(r'job="([^"]+)"', spec.promql)
+        assert selected is None or selected.group(1) in jobs, f"{spec.name} queries job {selected.group(1)}"
