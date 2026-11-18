@@ -58,6 +58,8 @@ After Docker restarts, every service comes back by itself (`restart: unless-stop
 .venv/Scripts/python scripts/check_dashboards.py                    # every dashboard panel against the real stack
 .venv/Scripts/python scripts/evaluate_coordinator.py                # Coordinator evaluation -> results/coordinator_eval.md
 .venv/Scripts/python -m scripts.score_metrics_agent                 # Metrics agent evaluation (--heldout N for random cases)
+.venv/Scripts/python scripts/evaluate_performance.py --stack        # run time, sequential vs parallel dispatch, estimated cost per prompt variant, box plots -> results/ (no LLM calls)
+.venv/Scripts/python scripts/evaluate_guardrails.py                 # guardrails vs adversarial cases (held-out and dev) -> results/guardrails_eval.md
 ```
 
 `inject_fault.py` refuses to run on `main` and needs a completely clean tree (untracked files included). To inject all four

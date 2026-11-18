@@ -19,10 +19,11 @@ Then, just before presenting, run both of these. If either fails, do not demo bl
 ```
 
 Expected: the demo prints `All scenarios behaved as expected.` and exits 0. The suite
-reports **1 failed** - `target_app/tests/test_intentional_failure.py`, a deliberate
-`assert False` that exists so Jenkins always has a failure to investigate - and
-**1 skipped**, the metrics agent's PostgreSQL test, which needs `TEST_DATABASE_URL`.
-Everything else passes.
+passes, with a few skips (the metrics agent's PostgreSQL test needs `TEST_DATABASE_URL`, the
+OPA tests need the `opa` binary). The target app no longer carries a deliberately failing test
+(`test_intentional_failure.py`, a temporary Jenkins smoke test, was removed: it made every
+branch build fail, so a correct fix could never pass re-validation). Failures to investigate
+come from `scripts/inject_fault.py` / `scripts/inject_code_faults.py`.
 
 ## What is real and what is simulated
 

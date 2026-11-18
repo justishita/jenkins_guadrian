@@ -36,6 +36,14 @@ def postAgentWebhook(String endpointPath, String result = '') {
 	}
 }
 
+// A build of a remediation branch (ai-fix/<incident>-<attempt>) is a re-validation of a proposed fix, not a new failure:
+// it reports to the validation endpoint, which finds the incident from the branch name (common/fix_branch.py). Nothing
+// else sets INCIDENT_ID when Jenkins builds the branch by itself (branch scan), and reporting the build as a plain failure
+// opens a duplicate incident for the very fix being checked.
+def isRemediationBuild() {
+	return params.INCIDENT_ID?.trim() || (env.BRANCH_NAME ?: '').startsWith('ai-fix/')
+}
+
 pipeline {
 	agent any
 
@@ -139,11 +147,17 @@ pipeline {
 			}
 		}
 		failure {
-			script { postAgentWebhook('/webhooks/jenkins') }
+			script {
+				if (isRemediationBuild()) {
+					postAgentWebhook('/webhooks/jenkins/validation', 'FAILURE')
+				} else {
+					postAgentWebhook('/webhooks/jenkins')
+				}
+			}
 		}
 		success {
 			script {
-				if (params.INCIDENT_ID?.trim()) {
+				if (isRemediationBuild()) {
 					postAgentWebhook('/webhooks/jenkins/validation', 'SUCCESS')
 				}
 			}

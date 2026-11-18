@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" font-family="sans-serif" font-size="12">
+<rect width="760" height="380" fill="white"/>
+<text x="70" y="22" font-size="14" font-weight="bold">Recorded run time per agent (measured)</text>
+<text x="14" y="165.0" transform="rotate(-90 14 165.0)" text-anchor="middle">seconds (log scale)</text>
+<line x1="70" y1="40" x2="70" y2="290" stroke="#444"/>
+<line x1="70" y1="290" x2="740" y2="290" stroke="#444"/>
+<line x1="70" y1="290.0" x2="740" y2="290.0" stroke="#ddd"/>
+<text x="64" y="294.0" text-anchor="end">3.09e-07</text>
+<line x1="70" y1="227.5" x2="740" y2="227.5" stroke="#ddd"/>
+<text x="64" y="231.5" text-anchor="end">7.45e-05</text>
+<line x1="70" y1="165.0" x2="740" y2="165.0" stroke="#ddd"/>
+<text x="64" y="169.0" text-anchor="end">0.018</text>
+<line x1="70" y1="102.5" x2="740" y2="102.5" stroke="#ddd"/>
+<text x="64" y="106.5" text-anchor="end">4.34</text>
+<line x1="70" y1="40.0" x2="740" y2="40.0" stroke="#ddd"/>
+<text x="64" y="44.0" text-anchor="end">1.05e+03</text>
+<line x1="181.7" y1="139.9" x2="181.7" y2="137.2" stroke="#345"/>
+<line x1="181.7" y1="80.1" x2="181.7" y2="77.5" stroke="#345"/>
+<line x1="161.7" y1="139.9" x2="201.7" y2="139.9" stroke="#345"/>
+<line x1="161.7" y1="77.5" x2="201.7" y2="77.5" stroke="#345"/>
+<rect x="141.7" y="80.1" width="80.0" height="57.2" fill="#8ab4f8" stroke="#345"/>
+<line x1="141.7" y1="118.6" x2="221.7" y2="118.6" stroke="#c00" stroke-width="2"/>
+<text x="181.7" y="306" text-anchor="end" transform="rotate(-30 181.7 306)">metrics_agent</text>
+<text x="181.7" y="368" text-anchor="middle" fill="#666">n=7</text>
+<line x1="405.0" y1="131.1" x2="405.0" y2="114.3" stroke="#345"/>
+<line x1="405.0" y1="97.8" x2="405.0" y2="90.7" stroke="#345"/>
+<line x1="385.0" y1="131.1" x2="425.0" y2="131.1" stroke="#345"/>
+<line x1="385.0" y1="90.7" x2="425.0" y2="90.7" stroke="#345"/>
+<rect x="365.0" y="97.8" width="80.0" height="16.5" fill="#8ab4f8" stroke="#345"/>
+<line x1="365.0" y1="112.4" x2="445.0" y2="112.4" stroke="#c00" stroke-width="2"/>
+<circle cx="405.0" cy="84.3" r="2.5" fill="none" stroke="#345"/>
+<circle cx="405.0" cy="83.7" r="2.5" fill="none" stroke="#345"/>
+<text x="405.0" y="306" text-anchor="end" transform="rotate(-30 405.0 306)">code_agent</text>
+<text x="405.0" y="368" text-anchor="middle" fill="#666">n=42</text>
+<line x1="628.3" y1="276.6" x2="628.3" y2="97.0" stroke="#345"/>
+<line x1="628.3" y1="60.8" x2="628.3" y2="53.4" stroke="#345"/>
+<line x1="608.3" y1="276.6" x2="648.3" y2="276.6" stroke="#345"/>
+<line x1="608.3" y1="53.4" x2="648.3" y2="53.4" stroke="#345"/>
+<rect x="588.3" y="60.8" width="80.0" height="36.1" fill="#8ab4f8" stroke="#345"/>
+<line x1="588.3" y1="89.1" x2="668.3" y2="89.1" stroke="#c00" stroke-width="2"/>
+<text x="628.3" y="306" text-anchor="end" transform="rotate(-30 628.3 306)">incident->report</text>
+<text x="628.3" y="368" text-anchor="middle" fill="#666">n=3</text>
+</svg>

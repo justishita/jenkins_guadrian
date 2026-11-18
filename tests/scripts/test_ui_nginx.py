@@ -30,3 +30,11 @@ def test_token_rotation_is_answered_locally_so_the_embedded_page_cannot_reload_i
 def test_the_app_keeps_a_strict_policy_and_only_the_grafana_path_relaxes_it() -> None:
     assert "frame-src 'self'" in CONF and "frame-ancestors 'self'" in CONF
     assert len(re.findall(r"default-src 'self'", CONF)) == 1  # the strict policy is set once, for the app
+
+
+def test_upstreams_are_re_resolved_so_recreating_a_container_does_not_cause_502s() -> None:
+    """A fixed `proxy_pass http://agent-api:8000` froze the old IP: after `compose up -d agent-api` the UI answered 502."""
+    assert "resolver 127.0.0.11" in CONF
+    for line in CONF.splitlines():
+        if line.strip().startswith("proxy_pass "):
+            assert "$" in line, f"proxy_pass must use a variable so the name is re-resolved: {line.strip()}"
