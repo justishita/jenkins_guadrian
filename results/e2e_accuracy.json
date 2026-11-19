@@ -1,30 +1,30 @@
 {
-  "generated_at": "2026-11-17 17:59 UTC",
+  "generated_at": "2026-11-19 14:53 UTC",
   "result": {
-    "scored": 10,
+    "scored": 9,
     "pending": [],
     "unknown_scenario": [],
     "coordinator": {
       "correct": 4,
-      "n": 10,
-      "accuracy": 0.4,
+      "n": 9,
+      "accuracy": 0.4444444444444444,
       "ci95": [
-        0.168,
-        0.687
+        0.189,
+        0.733
       ]
     },
     "per_scenario": {
       "tc01_unit_test": {
         "expected": "code_test_failure",
-        "correct": 0,
+        "correct": 2,
         "n": 2,
-        "accuracy": 0.0,
+        "accuracy": 1.0,
         "ci95": [
-          0.0,
-          0.658
+          0.342,
+          1.0
         ],
         "verdicts": {
-          "dependency_regression": 2
+          "code_test_failure": 2
         }
       },
       "tc02_compile_syntax": {
@@ -42,196 +42,168 @@
       },
       "tc02_compile_import": {
         "expected": "dependency_regression",
-        "correct": 2,
+        "correct": 0,
         "n": 2,
-        "accuracy": 1.0,
+        "accuracy": 0.0,
         "ci95": [
-          0.342,
-          1.0
+          0.0,
+          0.658
         ],
         "verdicts": {
-          "dependency_regression": 2
+          "build_compilation_failure": 2
         }
       },
       "tc10_flaky": {
         "expected": "flaky_test",
         "correct": 0,
-        "n": 4,
+        "n": 3,
         "accuracy": 0.0,
         "ci95": [
           0.0,
-          0.49
+          0.562
         ],
         "verdicts": {
-          "dependency_regression": 4
+          "unknown": 2,
+          "code_test_failure": 1
         }
       }
     },
     "per_agent": {
       "jenkins_agent": {
-        "incidents": 10,
-        "reported": 10,
+        "incidents": 9,
+        "reported": 9,
         "abstained": 0,
         "missing": 0,
         "answered": {
-          "correct": 4,
-          "n": 10,
-          "accuracy": 0.4,
+          "correct": 6,
+          "n": 9,
+          "accuracy": 0.6666666666666666,
           "ci95": [
-            0.168,
-            0.687
+            0.354,
+            0.879
           ]
         },
         "overall": {
-          "correct": 4,
-          "n": 10,
-          "accuracy": 0.4,
+          "correct": 6,
+          "n": 9,
+          "accuracy": 0.6666666666666666,
           "ci95": [
-            0.168,
-            0.687
+            0.354,
+            0.879
           ]
         }
       },
       "metrics_agent": {
-        "incidents": 10,
-        "reported": 10,
-        "abstained": 6,
+        "incidents": 9,
+        "reported": 9,
+        "abstained": 8,
         "missing": 0,
         "answered": {
           "correct": 0,
-          "n": 4,
+          "n": 1,
           "accuracy": 0.0,
           "ci95": [
             0.0,
-            0.49
+            0.793
           ]
         },
         "overall": {
           "correct": 0,
-          "n": 10,
+          "n": 9,
           "accuracy": 0.0,
           "ci95": [
             0.0,
-            0.278
+            0.299
           ]
         }
       },
       "code_agent": {
-        "incidents": 10,
-        "reported": 10,
-        "abstained": 10,
+        "incidents": 9,
+        "reported": 9,
+        "abstained": 0,
         "missing": 0,
         "answered": {
-          "correct": 0,
-          "n": 0,
-          "accuracy": null,
+          "correct": 2,
+          "n": 9,
+          "accuracy": 0.2222222222222222,
           "ci95": [
-            0.0,
-            0.0
+            0.063,
+            0.547
           ]
         },
         "overall": {
-          "correct": 0,
-          "n": 10,
-          "accuracy": 0.0,
+          "correct": 2,
+          "n": 9,
+          "accuracy": 0.2222222222222222,
           "ci95": [
-            0.0,
-            0.278
+            0.063,
+            0.547
           ]
         }
       }
     },
     "misses": {
-      "total": 6,
-      "agent_was_right_but_overruled": 0,
-      "no_agent_was_right": 6,
-      "wrong_and_actionable": 6,
+      "total": 5,
+      "agent_was_right_but_overruled": 2,
+      "no_agent_was_right": 3,
+      "wrong_and_actionable": 1,
       "wrong_and_conflict_flagged": 4
     },
     "confidence": {
-      "mean_when_right": 0.775,
-      "mean_when_wrong": 0.637
+      "mean_when_right": 0.865,
+      "mean_when_wrong": 0.642
     },
     "any_agent_right": {
-      "correct": 4,
-      "n": 10,
-      "accuracy": 0.4,
+      "correct": 6,
+      "n": 9,
+      "accuracy": 0.6666666666666666,
       "ci95": [
-        0.168,
-        0.687
+        0.354,
+        0.879
+      ]
+    },
+    "coordinator_lenient": {
+      "correct": 6,
+      "n": 9,
+      "accuracy": 0.6666666666666666,
+      "ci95": [
+        0.354,
+        0.879
       ]
     },
     "branches_without_incident": []
   },
   "samples": [
     {
-      "incident_id": "9a1d8e1a-07f9-438c-b1f7-5c0d7972e88c",
+      "incident_id": "dd847778-4bc9-440d-a34c-9971d5fe40fc",
       "scenario": "tc01_unit_test",
       "expected": "code_test_failure",
-      "branch": "fault/tc01_unit_test-20261117T172649552689Z",
+      "branch": "fault/tc01_unit_test-20261119T143538010177Z",
       "build": 1,
-      "created_at": "2026-11-17 17:29:09.838892+00",
+      "created_at": "2026-11-19 14:37:38.533741+00",
       "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.7,
-      "correct": false,
-      "complete": true,
-      "conflicted": false,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit 0083779 on fault/tc01_unit_test-20261117T172649552689Z: 2 file(s), 8 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
-          "abstained": false,
-          "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
-        },
-        "metrics_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.0,
-          "abstained": true,
-          "correct": null,
-          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
-        }
-      }
-    },
-    {
-      "incident_id": "5ea93958-2859-480b-924e-877cc92ec7da",
-      "scenario": "tc02_compile_import",
-      "expected": "dependency_regression",
-      "branch": "fault/tc02_compile_import-20261117T172745234764Z",
-      "build": 1,
-      "created_at": "2026-11-17 17:29:10.524366+00",
-      "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.7,
+      "verdict": "code_test_failure",
+      "confidence": 0.95,
       "correct": true,
+      "lenient": true,
       "complete": true,
       "conflicted": false,
       "actionable": true,
       "revised_to": null,
       "agents": {
         "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit c73adb9 on fault/tc02_compile_import-20261117T172745234764Z: 2 file(s), 7 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
           "abstained": false,
           "correct": true,
-          "summary": "Rule-based classification: dependency_regression"
+          "summary": "Commit 60f897c on fault/tc01_unit_test-20261119T143538010177Z: 2 file(s), 8 line(s): 1 other, 1 test. This commit failed at the test stage, so the change likely broke an assertion "
+        },
+        "jenkins_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.9425,
+          "abstained": false,
+          "correct": true,
+          "summary": "The build failed during the Test stage due to an assertion error in the test_create_and_list_orders test case."
         },
         "metrics_agent": {
           "failure_type": "unknown",
@@ -243,31 +215,232 @@
       }
     },
     {
-      "incident_id": "58c3c408-37e0-4793-ba6e-b2108466d968",
+      "incident_id": "ad3e94e2-99a4-48ff-b78b-c779f0eb3347",
       "scenario": "tc02_compile_syntax",
       "expected": "build_compilation_failure",
-      "branch": "fault/tc02_compile_syntax-20261117T172718233193Z",
+      "branch": "fault/tc02_compile_syntax-20261119T143609074701Z",
       "build": 1,
-      "created_at": "2026-11-17 17:30:47.207276+00",
+      "created_at": "2026-11-19 14:39:43.538456+00",
       "status": "scored",
       "verdict": "build_compilation_failure",
-      "confidence": 0.85,
+      "confidence": 0.79,
       "correct": true,
+      "lenient": true,
       "complete": true,
-      "conflicted": false,
+      "conflicted": true,
       "actionable": true,
       "revised_to": null,
       "agents": {
         "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit 8b2fa00 on fault/tc02_compile_syntax-20261117T172718233193Z: 2 file(s), 8 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit d995d8a on fault/tc02_compile_syntax-20261119T143609074701Z: 2 file(s), 8 line(s): 1 other, 1 source. This commit failed at the test stage, so the change likely broke an ass"
         },
         "jenkins_agent": {
           "failure_type": "build_compilation_failure",
-          "confidence": 0.855,
+          "confidence": 0.9425,
+          "abstained": false,
+          "correct": true,
+          "summary": "The build failed during the Test stage due to a SyntaxError in the application code, which prevented test collection."
+        },
+        "metrics_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.0,
+          "abstained": true,
+          "correct": null,
+          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
+        }
+      }
+    },
+    {
+      "incident_id": "9dc692a4-10bf-44da-9d7b-79ef6cc6cf92",
+      "scenario": "tc02_compile_import",
+      "expected": "dependency_regression",
+      "branch": "fault/tc02_compile_import-20261119T143658561509Z",
+      "build": 1,
+      "created_at": "2026-11-19 14:39:46.391714+00",
+      "status": "scored",
+      "verdict": "build_compilation_failure",
+      "confidence": 0.79,
+      "correct": false,
+      "lenient": true,
+      "complete": true,
+      "conflicted": true,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit f1646e2 on fault/tc02_compile_import-20261119T143658561509Z: 2 file(s), 7 line(s): 1 other, 1 source. This commit failed at the test stage, so the change likely broke an ass"
+        },
+        "jenkins_agent": {
+          "failure_type": "build_compilation_failure",
+          "confidence": 0.9425,
+          "abstained": false,
+          "correct": false,
+          "summary": "The build failed during the Test stage due to a ModuleNotFoundError when importing a test module."
+        },
+        "metrics_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.0,
+          "abstained": true,
+          "correct": null,
+          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
+        }
+      }
+    },
+    {
+      "incident_id": "db7a0eda-d0c5-494a-9710-8e454acfb7f2",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261119T143731756975Z",
+      "build": 1,
+      "created_at": "2026-11-19 14:40:56.885184+00",
+      "status": "scored",
+      "verdict": "unknown",
+      "confidence": 0.4,
+      "correct": false,
+      "lenient": false,
+      "complete": true,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit 28f850b on fault/tc10_flaky-20261119T143731756975Z: 2 file(s), 12 line(s): 1 other, 1 test. This commit failed at the test stage, so the change likely broke an assertion or "
+        },
+        "jenkins_agent": {
+          "failure_type": "flaky_test",
+          "confidence": 0.4925,
+          "abstained": false,
+          "correct": true,
+          "summary": "The build failed during the Test stage due to an AssertionError in the test_flaky_random_order_check test, which is identified as a flaky test."
+        },
+        "metrics_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.0,
+          "abstained": true,
+          "correct": null,
+          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
+        }
+      }
+    },
+    {
+      "incident_id": "66d1a2b6-72bb-42a1-94c3-08a6b206c0de",
+      "scenario": "tc01_unit_test",
+      "expected": "code_test_failure",
+      "branch": "fault/tc01_unit_test-20261119T143806087164Z",
+      "build": 1,
+      "created_at": "2026-11-19 14:40:58.550102+00",
+      "status": "scored",
+      "verdict": "code_test_failure",
+      "confidence": 0.95,
+      "correct": true,
+      "lenient": true,
+      "complete": true,
+      "conflicted": false,
+      "actionable": true,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": true,
+          "summary": "Commit d26e2b1 on fault/tc01_unit_test-20261119T143806087164Z: 2 file(s), 8 line(s): 1 other, 1 test. This commit failed at the test stage, so the change likely broke an assertion "
+        },
+        "jenkins_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.9425,
+          "abstained": false,
+          "correct": true,
+          "summary": "The build failed during the Test stage due to an assertion error in the test_create_and_list_orders test case."
+        },
+        "metrics_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.0,
+          "abstained": true,
+          "correct": null,
+          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
+        }
+      }
+    },
+    {
+      "incident_id": "768994ea-f7fc-42a7-b078-62fa9daf91cb",
+      "scenario": "tc02_compile_import",
+      "expected": "dependency_regression",
+      "branch": "fault/tc02_compile_import-20261119T143914450607Z",
+      "build": 1,
+      "created_at": "2026-11-19 14:41:24.508583+00",
+      "status": "scored",
+      "verdict": "build_compilation_failure",
+      "confidence": 0.77,
+      "correct": false,
+      "lenient": true,
+      "complete": false,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit 5336f16 on fault/tc02_compile_import-20261119T143914450607Z: 2 file(s), 7 line(s): 1 other, 1 source. This commit failed at the test stage, so the change likely broke an ass"
+        },
+        "jenkins_agent": {
+          "failure_type": "build_compilation_failure",
+          "confidence": 0.9175,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: build_compilation_failure"
+        },
+        "metrics_agent": {
+          "failure_type": "unknown",
+          "confidence": 0.0,
+          "abstained": true,
+          "correct": null,
+          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
+        }
+      }
+    },
+    {
+      "incident_id": "16852e42-c123-4238-ab9b-3f1cdcf621e0",
+      "scenario": "tc02_compile_syntax",
+      "expected": "build_compilation_failure",
+      "branch": "fault/tc02_compile_syntax-20261119T143838965150Z",
+      "build": 1,
+      "created_at": "2026-11-19 14:41:27.267068+00",
+      "status": "scored",
+      "verdict": "build_compilation_failure",
+      "confidence": 0.77,
+      "correct": true,
+      "lenient": true,
+      "complete": false,
+      "conflicted": true,
+      "actionable": false,
+      "revised_to": null,
+      "agents": {
+        "code_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit af5af1e on fault/tc02_compile_syntax-20261119T143838965150Z: 2 file(s), 8 line(s): 1 other, 1 source. This commit failed at the test stage, so the change likely broke an ass"
+        },
+        "jenkins_agent": {
+          "failure_type": "build_compilation_failure",
+          "confidence": 0.9175,
           "abstained": false,
           "correct": true,
           "summary": "Rule-based classification: build_compilation_failure"
@@ -282,34 +455,35 @@
       }
     },
     {
-      "incident_id": "9a4c2785-bc05-4d07-af98-2fd71015fbcc",
-      "scenario": "tc01_unit_test",
-      "expected": "code_test_failure",
-      "branch": "fault/tc01_unit_test-20261117T172845455381Z",
-      "build": 1,
-      "created_at": "2026-11-17 17:31:20.500386+00",
+      "incident_id": "4b4d8dea-9910-40f1-b3af-f4ad4d50fb93",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261119T143731756975Z",
+      "build": 2,
+      "created_at": "2026-11-19 14:42:03.071079+00",
       "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.7,
+      "verdict": "code_test_failure",
+      "confidence": 0.95,
       "correct": false,
-      "complete": true,
+      "lenient": false,
+      "complete": false,
       "conflicted": false,
-      "actionable": true,
+      "actionable": false,
       "revised_to": null,
       "agents": {
         "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit afc90f9 on fault/tc01_unit_test-20261117T172845455381Z: 2 file(s), 8 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
           "abstained": false,
           "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
+          "summary": "Commit 28f850b on fault/tc10_flaky-20261119T143731756975Z: 2 file(s), 12 line(s): 1 other, 1 test. This commit failed at the test stage, so the change likely broke an assertion or "
+        },
+        "jenkins_agent": {
+          "failure_type": "code_test_failure",
+          "confidence": 0.9175,
+          "abstained": false,
+          "correct": false,
+          "summary": "Rule-based classification: code_test_failure"
         },
         "metrics_agent": {
           "failure_type": "unknown",
@@ -321,236 +495,42 @@
       }
     },
     {
-      "incident_id": "270c4238-8977-45b9-93f6-75e4687b727e",
-      "scenario": "tc02_compile_import",
-      "expected": "dependency_regression",
-      "branch": "fault/tc02_compile_import-20261117T172945751247Z",
+      "incident_id": "cdf5159b-7306-4ed1-b591-df7c4f4ce7b2",
+      "scenario": "tc10_flaky",
+      "expected": "flaky_test",
+      "branch": "fault/tc10_flaky-20261119T143947474997Z",
       "build": 1,
-      "created_at": "2026-11-17 17:31:28.150996+00",
+      "created_at": "2026-11-19 14:42:30.407224+00",
       "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.7,
-      "correct": true,
+      "verdict": "unknown",
+      "confidence": 0.3,
+      "correct": false,
+      "lenient": false,
       "complete": true,
-      "conflicted": false,
-      "actionable": true,
+      "conflicted": true,
+      "actionable": false,
       "revised_to": null,
       "agents": {
         "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit ec3c45a on fault/tc02_compile_import-20261117T172945751247Z: 2 file(s), 7 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
+          "failure_type": "code_test_failure",
+          "confidence": 0.6,
+          "abstained": false,
+          "correct": false,
+          "summary": "Commit bc65267 on fault/tc10_flaky-20261119T143947474997Z: 2 file(s), 12 line(s): 1 other, 1 test. This commit failed at the test stage, so the change likely broke an assertion or "
         },
         "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
+          "failure_type": "flaky_test",
+          "confidence": 0.4925,
           "abstained": false,
           "correct": true,
-          "summary": "Rule-based classification: dependency_regression"
-        },
-        "metrics_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.0,
-          "abstained": true,
-          "correct": null,
-          "summary": "Metrics do not explain this failure: no usable metric data in the investigation window."
-        }
-      }
-    },
-    {
-      "incident_id": "aefbbe47-4412-4909-8369-3d107e90e16f",
-      "scenario": "tc02_compile_syntax",
-      "expected": "build_compilation_failure",
-      "branch": "fault/tc02_compile_syntax-20261117T172913595858Z",
-      "build": 1,
-      "created_at": "2026-11-17 17:32:15.7475+00",
-      "status": "scored",
-      "verdict": "build_compilation_failure",
-      "confidence": 0.85,
-      "correct": true,
-      "complete": true,
-      "conflicted": false,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit 3a325f6 on fault/tc02_compile_syntax-20261117T172913595858Z: 2 file(s), 8 line(s): 1 other, 1 source. The code evidence is not strong enough to name a root cause (best hypot"
-        },
-        "jenkins_agent": {
-          "failure_type": "build_compilation_failure",
-          "confidence": 0.855,
-          "abstained": false,
-          "correct": true,
-          "summary": "Rule-based classification: build_compilation_failure"
-        },
-        "metrics_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.04,
-          "abstained": true,
-          "correct": null,
-          "summary": "Metrics do not explain this failure: 2 metric(s) checked, none anomalous."
-        }
-      }
-    },
-    {
-      "incident_id": "514462cd-bf44-4f88-bd13-88e0af2e891a",
-      "scenario": "tc10_flaky",
-      "expected": "flaky_test",
-      "branch": "fault/tc10_flaky-20261117T172813287898Z",
-      "build": 1,
-      "created_at": "2026-11-17 17:32:31.988535+00",
-      "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.55,
-      "correct": false,
-      "complete": true,
-      "conflicted": true,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit 2d8c827 on fault/tc10_flaky-20261117T172813287898Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
-          "abstained": false,
-          "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
+          "summary": "The build failed during the Test stage due to an AssertionError in the test_flaky_random_order_check test, which exhibits high historical flakiness."
         },
         "metrics_agent": {
           "failure_type": "timeout",
-          "confidence": 0.319,
+          "confidence": 0.2697,
           "abstained": false,
           "correct": false,
-          "summary": "Metrics anomaly: latency_p95: peak 0.4625 vs baseline median 0.00475 (z=11.0, threshold 6); recovered 90s before the failure"
-        }
-      }
-    },
-    {
-      "incident_id": "a7e7fb1b-21ea-4809-8831-ddee2f5ddf32",
-      "scenario": "tc10_flaky",
-      "expected": "flaky_test",
-      "branch": "fault/tc10_flaky-20261117T172813287898Z",
-      "build": 2,
-      "created_at": "2026-11-17 17:32:51.599465+00",
-      "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.66,
-      "correct": false,
-      "complete": true,
-      "conflicted": true,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit 2d8c827 on fault/tc10_flaky-20261117T172813287898Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.805,
-          "abstained": false,
-          "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
-        },
-        "metrics_agent": {
-          "failure_type": "timeout",
-          "confidence": 0.3124,
-          "abstained": false,
-          "correct": false,
-          "summary": "Metrics anomaly: latency_p95: peak 0.4625 vs baseline median 0.00475 (z=11.0, threshold 6); recovered 105s before the failure"
-        }
-      }
-    },
-    {
-      "incident_id": "629c4a85-d83e-4423-9d31-85881f417e64",
-      "scenario": "tc10_flaky",
-      "expected": "flaky_test",
-      "branch": "fault/tc10_flaky-20261117T173021665607Z",
-      "build": 1,
-      "created_at": "2026-11-17 17:32:58.725397+00",
-      "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.55,
-      "correct": false,
-      "complete": true,
-      "conflicted": true,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit eed221f on fault/tc10_flaky-20261117T173021665607Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.705,
-          "abstained": false,
-          "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
-        },
-        "metrics_agent": {
-          "failure_type": "timeout",
-          "confidence": 0.3124,
-          "abstained": false,
-          "correct": false,
-          "summary": "Metrics anomaly: latency_p95: peak 0.4625 vs baseline median 0.00475 (z=11.0, threshold 6); recovered 105s before the failure"
-        }
-      }
-    },
-    {
-      "incident_id": "5354c26c-0254-4da8-a048-bb6edff31bc7",
-      "scenario": "tc10_flaky",
-      "expected": "flaky_test",
-      "branch": "fault/tc10_flaky-20261117T173021665607Z",
-      "build": 2,
-      "created_at": "2026-11-17 17:33:16.00852+00",
-      "status": "scored",
-      "verdict": "dependency_regression",
-      "confidence": 0.66,
-      "correct": false,
-      "complete": true,
-      "conflicted": true,
-      "actionable": true,
-      "revised_to": null,
-      "agents": {
-        "code_agent": {
-          "failure_type": "unknown",
-          "confidence": 0.4,
-          "abstained": true,
-          "correct": null,
-          "summary": "Commit eed221f on fault/tc10_flaky-20261117T173021665607Z: 2 file(s), 12 line(s): 1 other, 1 test. The code evidence is not strong enough to name a root cause (best hypothesis 0.40"
-        },
-        "jenkins_agent": {
-          "failure_type": "dependency_regression",
-          "confidence": 0.805,
-          "abstained": false,
-          "correct": false,
-          "summary": "Rule-based classification: dependency_regression"
-        },
-        "metrics_agent": {
-          "failure_type": "timeout",
-          "confidence": 0.3023,
-          "abstained": false,
-          "correct": false,
-          "summary": "Metrics anomaly: latency_p95: peak 0.4625 vs baseline median 0.00475 (z=11.0, threshold 6); recovered 135s before the failure"
+          "summary": "Metrics anomaly: latency_p95: peak 0.4625 vs baseline median 0.00475 (z=11.0, threshold 6); recovered 180s before the failure"
         }
       }
     }
