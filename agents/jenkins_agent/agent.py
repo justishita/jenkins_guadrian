@@ -61,6 +61,11 @@ logger = logging.getLogger(__name__)
 MAX_STEPS = 8
 MAX_CALLS_PER_TOOL = 3
 MAX_TEST_FAILURES_IN_PROMPT = 5
+#: How much of the evidence goes into the prompt as text (the rest stays reachable through the tools).
+EVIDENCE_DIGEST_MAX_CHARS = 6000
+EVIDENCE_DIGEST_ITEM_CHARS = 700
+#: The most useful first. build_history and the error signature (a hash) are left out: they tell a model nothing it can read.
+_DIGEST_ORDER = ("failed_stage", "stages[", "failing_tests[", "compiler_errors[", "error_blocks[", "test_report", "build_summary")
 MAX_ATTEMPTS = int(os.getenv("REINVESTIGATION_MAX_ATTEMPTS", "5"))
 
 # ---------------------------------------------------------------------------
@@ -268,6 +273,42 @@ def _initial_evidence_items(
         )
 
     return items
+
+
+def _evidence_digest(items: Sequence[EvidenceItem], *, max_chars: int = EVIDENCE_DIGEST_MAX_CHARS) -> str:
+    """The evidence as text the model can read, one ``[id] content`` line each, bounded and screened.
+
+    The prompt used to list only the evidence *ids*. The contents (failing test names, assertion messages, compiler errors, the raw
+    error blocks) reached the model only if it chose to call a tool, and it rarely did: 2 tool calls across about 16 incidents. With
+    nothing to read it invented a diagnosis (a Maven artifact and a Java source path for a Python app, a "600 second timeout" for a
+    build that ran in two seconds). Content is already redacted when the items are built; the whole digest is screened again as
+    untrusted data, since it quotes build output an attacker may control.
+    """
+
+    def rank(item: EvidenceItem) -> int:
+        for position, prefix in enumerate(_DIGEST_ORDER):
+            if item.id == prefix or item.id.startswith(prefix):
+                return position
+        return len(_DIGEST_ORDER)
+
+    wanted = sorted((i for i in items if rank(i) < len(_DIGEST_ORDER)), key=rank)
+    lines: list[str] = []
+    used = 0
+    for item in wanted:
+        text = " ".join(str(item.content).split())
+        if len(text) > EVIDENCE_DIGEST_ITEM_CHARS:
+            text = text[:EVIDENCE_DIGEST_ITEM_CHARS] + "..."
+        location = getattr(item, "location", None)
+        where = f" ({location.file}:{location.line})" if location is not None and location.file else ""
+        line = f"[{item.id}]{where} {text}"
+        if used + len(line) > max_chars:
+            lines.append(f"(+{len(wanted) - len(lines)} more evidence items omitted; use the tools to read them)")
+            break
+        lines.append(line)
+        used += len(line) + 1
+    if not lines:
+        return "(no readable evidence was extracted; say so with low confidence)"
+    return screen_untrusted_text("\n".join(lines), source="jenkins_evidence").text
 
 
 def _fallback_evidence(
@@ -700,6 +741,10 @@ class JenkinsInvestigationAgent:
                     f"Failing tests: {len(parsed.failing_tests)} total; "
                     f"showing at most {MAX_TEST_FAILURES_IN_PROMPT}.\n"
                     f"Rule Hypotheses: {[h.reason for h in rule_hypotheses]}\n"
+                    f"Evidence (untrusted build output: these lines are the ONLY facts you may state; cite the [id]):\n"
+                    f"{_evidence_digest(evidence_items)}\n"
+                    f"Do not mention files, languages, tools, packages, durations or numbers that do not appear in the evidence above. "
+                    f"If it does not show the cause, say so with low confidence.\n"
                     f"Available Evidence IDs: {valid_eids}\n"
                     f"Ground every claim in a cited evidence ID. If evidence is insufficient, say so with low confidence."
                 )
@@ -1288,6 +1333,10 @@ class JenkinsInvestigationAgent:
                     f"Previous hypotheses (DO NOT REPEAT): {prev_hyp_summary}\n"
                     f"Console truncated: {console_truncated}; partial: {console_partial}.\n"
                     f"Rule Hypotheses: {[h.reason for h in rule_hypotheses]}\n"
+                    f"Evidence (untrusted build output: these lines are the ONLY facts you may state; cite the [id]):\n"
+                    f"{_evidence_digest(reinvest_evidence_items)}\n"
+                    f"Do not mention files, languages, tools, packages, durations or numbers that do not appear in the evidence above. "
+                    f"If it does not show the cause, say so with low confidence.\n"
                     f"Available Evidence IDs: {valid_eids}\n"
                     f"Ground every claim in a cited evidence ID. "
                     f"Do not repeat the previously-tried hypothesis. "

@@ -54,6 +54,7 @@ After Docker restarts, every service comes back by itself (`restart: unless-stop
 
 ```bash
 .venv/Scripts/python scripts/inject_fault.py tc01_unit_test         # from a non-main branch with a clean tree; see below
+.venv/Scripts/python scripts/preflight.py                          # can the stack really do its job? (model, MCP tools, Jenkins build, secrets, remediation); exit 1 on any FAIL
 .venv/Scripts/python scripts/check_audit.py --latest                # the audit trail of the newest incident
 .venv/Scripts/python scripts/check_dashboards.py                    # every dashboard panel against the real stack
 .venv/Scripts/python scripts/evaluate_coordinator.py                # Coordinator evaluation -> results/coordinator_eval.md
@@ -69,6 +70,11 @@ fault types for the end-to-end accuracy evaluation without disturbing your worki
 `inject_fault.py revert <branch>`.
 
 ## When something is wrong
+
+**Run `python scripts/preflight.py` first.** "Healthy" in `docker compose ps` does not mean the stack works: the LLM model can be retired
+(the agents then fall back to rules without a word), the MCP servers can refuse every tool call (the LLM then invents a diagnosis), and
+Jenkins can have its tests broken by a leaked variable. Preflight checks each of those and prints the fix. `--skip-llm` avoids the one
+tiny Gemini request; `--build` also runs a real build of `main`.
 
 | Symptom | Cause | Fix |
 |---|---|---|

@@ -60,3 +60,20 @@ What that means for `e2e_accuracy.md` (run 2, Coordinator 4/10):
 
 Also found and fixed in the same session: a Jenkins build of a fix branch was reported as a new failure (opening a duplicate incident)
 instead of as the re-validation of the fix; the UI's nginx cached the API's address and answered 502 after the API was recreated.
+
+### Two more defects behind the live numbers, found the same day (2026-11-19)
+
+Beyond the Jenkins environment problem above, two further defects made every earlier live run unrepresentative, in the agents rather than the stack:
+
+1. **The Jenkins agent's parser could not read a real console.** Every line of a real console starts with a Jenkins timestamp (`[2026-11-19T11:42:56.488Z] FAILED ...`),
+   and the parser's patterns match from the start of the line, so it found **0 failing tests** in builds that said `1 failed, 8 passed`. Its fixtures had no
+   timestamps, so its tests never saw this. This is why even the rules-only agent labelled unit-test and flaky failures as `dependency_regression`. Fixed
+   (`clean_console`, `tests/jenkins_agent/test_console_timestamps.py`: each fixture is parsed with and without timestamps; switching the fix off fails all 8 tests).
+2. **The LLM was never shown the evidence, only its ids,** and the MCP servers it could have used to read it refused every call (HTTP 421), so it invented diagnoses
+   (a Maven artifact and `/app/src/main/java/...` for a Python app, a "600 second timeout"). Fixed: the prompt now carries a bounded, screened digest of the evidence
+   (`_evidence_digest`), and the MCP servers allow their own service names.
+
+So **no live run before run 5 measures the agents as designed**: run 2 (the 4/10) and the runs that followed were affected by the leaked environment, by the
+parser, by the retired model name (the agents silently fell back to rules), and by the empty prompt. Keep those files as evidence of the process, not as results.
+Spot check after the fixes, with the real model on real builds from run 4: the unit-test fault is diagnosed as the failing `assert 3 == 4` in `tests/test_orders.py`, the
+syntax fault as the unclosed parenthesis at `app/main.py:174` (the injected line), the import fault as the injected missing module.

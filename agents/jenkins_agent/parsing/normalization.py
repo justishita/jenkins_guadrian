@@ -132,6 +132,18 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
 
 
+#: The Jenkins ``timestamps()`` option puts ``[2026-11-19T11:42:56.488Z] `` in front of every console line. The parsers below match
+#: ``^\s*FAILED``, ``^\s*E `` and ``file:line:`` at the START of a line, so with the prefix on they found no failing tests at all in a real
+#: build (every real console of this project has it) while the test fixtures, which have no timestamps, parsed fine. The agent then labelled
+#: unit-test and flaky failures from lint noise.
+CONSOLE_TIMESTAMP_RE = re.compile(r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\] ?", re.MULTILINE)
+
+
+def clean_console(text: str) -> str:
+    """Console text as the parsers expect it: no ANSI sequences and no per-line Jenkins timestamp prefix."""
+    return CONSOLE_TIMESTAMP_RE.sub("", strip_ansi(text))
+
+
 def normalize_line(line: str) -> str:
     """Replace volatile Jenkins/build identifiers with stable placeholders."""
     normalized = strip_ansi(line)
@@ -163,7 +175,7 @@ def extract_error_blocks(
     if max_blocks == 0:
         return []
 
-    lines = strip_ansi(text).splitlines()
+    lines = clean_console(text).splitlines()
     compiled_patterns = _compile_patterns(
         DEFAULT_ERROR_PATTERNS if patterns is None else patterns
     )
@@ -198,7 +210,7 @@ def _pytest_message(block: str, fallback: str = "") -> str:
 
 def parse_pytest_failures(text: str) -> list[FailingTest]:
     """Extract pytest failures from detailed sections or short-summary lines."""
-    lines = strip_ansi(text).splitlines()
+    lines = clean_console(text).splitlines()
     summary: dict[str, tuple[str, int | None, str]] = {}
     for line in lines:
         match = PYTEST_SUMMARY_RE.match(line)
@@ -253,7 +265,7 @@ def parse_python_compile_errors(text: str) -> list[CompileError]:
     last_file: str | None = None
     last_line: int | None = None
 
-    for line in strip_ansi(text).splitlines():
+    for line in clean_console(text).splitlines():
         frame = PYTHON_FRAME_RE.match(line)
         if frame:
             last_file = frame.group("file")
@@ -406,7 +418,7 @@ def parse_build(
         ]
         failed_stage = failed_stages[-1] if failed_stages else None
 
-    normalized_text = strip_ansi(text).replace("\r\n", "\n")
+    normalized_text = clean_console(text).replace("\r\n", "\n")
     cleaned_text = CARRIAGE_RETURN_PROGRESS_RE.sub("", normalized_text)
     lines = cleaned_text.splitlines()
     error_blocks = extract_error_blocks(cleaned_text)

@@ -6,9 +6,11 @@ Exposes analytical calculations and database lookup tools via FastMCP.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
 from agents.jenkins_agent.history import find_related_incidents as find_related
@@ -18,9 +20,26 @@ from common.redaction import redact
 
 logger = logging.getLogger(__name__)
 
+def _transport_security(service: str) -> TransportSecuritySettings:
+    """DNS-rebinding protection stays ON, but this server is reached by its compose service name (mcp-analytics:8082).
+
+    The SDK only allows localhost when the server is built with a localhost host (and this module sets 0.0.0.0 afterwards, which
+    does not change that), so every call from the agents was refused with HTTP 421 "Invalid Host header". All the tools failed, and
+    an LLM that is told nothing about the build invents a diagnosis (Maven artifacts for a Python app). Add more host names with
+    MCP_ALLOWED_HOSTS (comma separated), for example a VM's name if the server is reached from outside the compose network.
+    """
+    extra = [name.strip() for name in os.getenv("MCP_ALLOWED_HOSTS", "").split(",") if name.strip()]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[f"{service}:*", service, "localhost:*", "127.0.0.1:*", "[::1]:*", *extra],
+        allowed_origins=[],
+    )
+
+
 mcp = FastMCP("analytics_mcp")
 mcp.settings.host = "0.0.0.0"
 mcp.settings.port = 8082
+mcp.settings.transport_security = _transport_security("mcp-analytics")
 
 
 class ErrorSignatureResult(BaseModel):

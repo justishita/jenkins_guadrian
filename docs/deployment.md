@@ -82,6 +82,16 @@ A real deployment needs Jenkins to reach the repository and the repository's pip
 
 ## Checks that make "deployed" true
 
+First, on the VM, in the project folder:
+
+```bash
+python3 scripts/preflight.py --build      # standard library only; exit code 1 if anything FAILs
+```
+
+It checks that every container is healthy **and** that the stack can do its job: the Gemini model answers, the MCP tools accept the agents,
+a build of `main` passes its tests and Deploy, Jenkins cannot see other services' secrets, Prometheus sees the app, remediation is enabled
+and the GitHub token can push. Keep its output as evidence. All of the failures it catches happened silently on the laptop.
+
 Run these **on the VM** and keep the output (a screenshot or a pasted terminal) as the evidence:
 
 ```bash
