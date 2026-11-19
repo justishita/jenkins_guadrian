@@ -61,6 +61,14 @@ If Docker Hub is slow from the cloud region, nothing special is needed (the over
 networks that cannot reach it). The UI builds its static files inside the image on the VM, so `ui/Dockerfile.prebuilt` is **not**
 used there.
 
+## Jenkins and the Docker socket
+
+Jenkins builds and runs the demo app through the host's Docker socket (the pipeline's Deploy stage). The container needs the socket's
+group: on the VM set `DOCKER_GID` in `.env` to `getent group docker | cut -d: -f3` (on Docker Desktop it is `0`). Without it the Deploy
+stage fails with `permission denied` on `/var/run/docker.sock`. Note what this means: anyone who can push a branch that Jenkins builds can
+control the host's Docker. Restrict who can push, and keep secrets out of the build environment (the compose file already passes Jenkins
+only the variables its own config reads).
+
 ## Connect GitHub and Jenkins
 
 A real deployment needs Jenkins to reach the repository and the repository's pipeline to reach Jenkins and the API:

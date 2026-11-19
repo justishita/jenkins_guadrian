@@ -41,3 +41,22 @@ Two more findings in the same run, both about agents owned by others, and unaffe
 Fixed on this side: the scrape address (and a test that every Prometheus target is a compose service). The run has to be repeated
 after the fix, because it measured the system with a broken input. Run 1's branches are listed in `fault_branches_run1.txt`
 for cleanup.
+
+## Caveat found afterwards: run 2 is confounded for the unit-test and flaky faults (2026-11-19)
+
+While completing the fix -> approval -> pull request -> re-validation check live, Jenkins's test stage was found to **die at test
+collection on every branch**, including `main`: the Jenkins container was given the whole `.env` (`env_file`), so the target app
+saw the backend's `DATABASE_URL` (`postgresql+asyncpg://...`) and its own settings check raised `ValidationError ... Settings`
+before any test ran. So **no test in `test_orders.py` had ever run in this stack's Jenkins**.
+
+What that means for `e2e_accuracy.md` (run 2, Coordinator 4/10):
+- `tc01_unit_test` (0/2) and `tc10_flaky` (0/4): the injected assertion and the flaky test never executed; the build failed on the
+  collection error instead. These six rows measure how the agents read that error, **not** the injected faults. Treat them as invalid.
+- `tc02_compile_syntax` (2/2) fails in a stage before the tests, so it is probably unaffected. `tc02_compile_import` (2/2) fails at
+  import/collection, so it may be affected; unconfirmed.
+- Fixed in `docker-compose.yml` (Jenkins now receives only the variables its own config reads) and guarded by `tests/test_compose.py`.
+  After the fix the same pipeline ran **9 tests green**. The live evaluation should be repeated before quoting a live number
+  (`powershell -File scripts\inject_all_faults.ps1 -Rounds 2`, then `evaluate_end_to_end.py --branches results\fault_branches.txt`).
+
+Also found and fixed in the same session: a Jenkins build of a fix branch was reported as a new failure (opening a duplicate incident)
+instead of as the re-validation of the fix; the UI's nginx cached the API's address and answered 502 after the API was recreated.

@@ -128,3 +128,23 @@ def test_the_job_label_the_metrics_agent_queries_still_exists() -> None:
     for spec in CATALOG:
         selected = re.search(r'job="([^"]+)"', spec.promql)
         assert selected is None or selected.group(1) in jobs, f"{spec.name} queries job {selected.group(1)}"
+
+
+# ---- Jenkins builds run branch code: they must not inherit the stack's secrets (and one of them broke every build) ----
+
+
+def test_jenkins_does_not_receive_the_whole_env_file() -> None:
+    """`env_file: .env` put DATABASE_URL (postgresql+asyncpg://...) into every build; the target app's settings check rejects
+    it, so pytest died at collection and no test had ever run. It also handed branch code every secret in .env."""
+    assert "env_file" not in SERVICES["jenkins"]
+
+
+def test_jenkins_gets_every_variable_its_own_config_reads_and_nothing_that_belongs_to_other_services() -> None:
+    config = (ROOT / "jenkins" / "jenkins.yaml").read_text(encoding="utf-8") + (ROOT / "jenkins" / "jobs.groovy").read_text(encoding="utf-8")
+    needed = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)\}", config)) | set(re.findall(r"getenv\('([A-Z][A-Z0-9_]*)'\)", config))
+    provided = set(SERVICES["jenkins"].get("environment", {}))
+    # No variable is treated as optional: GITHUB_REPO is "owner/repo" while jobs.groovy wants the owner and the name apart, so
+    # its fallbacks build a malformed repository name ("Repository name must be in format owner/repo") when these are missing.
+    assert needed <= provided, f"jenkins config reads {sorted(needed - provided)} but the service does not pass it"
+    for forbidden in ("DATABASE_URL", "GEMINI_API_KEY", "POSTGRES_PASSWORD", "RABBITMQ_PASSWORD", "APPROVAL_API_TOKEN", "A2A_SHARED_TOKEN", "UI_SESSION_SECRET"):
+        assert forbidden not in provided, f"{forbidden} must not reach Jenkins builds"

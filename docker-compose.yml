@@ -39,8 +39,23 @@ services:
   jenkins:
     restart: unless-stopped
     build: ./jenkins
-    env_file:
-      - .env
+    # Only what jenkins/jenkins.yaml and jenkins/jobs.groovy read. This service used to take the whole .env (env_file), which
+    # put the database URL, the Gemini key, the broker and approval secrets into the environment of every pipeline build, and
+    # builds run branch code. It also broke the builds: the backend's DATABASE_URL (postgresql+asyncpg://...) is rejected by
+    # the target app's own settings check, so every test run died at collection and no test had ever run. The three secrets
+    # that remain (GITHUB_TOKEN, JENKINS_ADMIN_PASSWORD, WEBHOOK_SHARED_SECRET) are needed at start-up to create Jenkins'
+    # credentials; moving them to files would remove them from the environment too.
+    environment:
+      JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER:-}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-}
+      JENKINS_URL: ${JENKINS_URL:-http://localhost:8080}
+      GITHUB_USERNAME: ${GITHUB_USERNAME:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_REPO: ${GITHUB_REPO:-}
+      GITHUB_REPO_OWNER: ${GITHUB_REPO_OWNER:-}
+      GITHUB_REPO_NAME: ${GITHUB_REPO_NAME:-}
+      GITHUB_CREDENTIALS_ID: ${GITHUB_CREDENTIALS_ID:-}
+      WEBHOOK_SHARED_SECRET: ${WEBHOOK_SHARED_SECRET:-}
     ports:
       - "8080:8080"
       - "50000:50000"
