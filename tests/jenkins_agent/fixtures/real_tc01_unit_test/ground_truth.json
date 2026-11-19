@@ -1,0 +1,2 @@
+{"expected_failure_type": "code_test_failure", "file": "tests/test_orders.py", "line": 33, "test_name": "test_create_and_list_orders",
+ "note": "A real Jenkins console (timestamps(), pip install output, git plugin echoes, pytest -q) from the live evaluation, 2026-11-19. Unit-test fault injected by scripts/inject_fault.py."}

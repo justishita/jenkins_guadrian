@@ -1,0 +1,2 @@
+{"expected_failure_type": "dependency_regression", "also_accepted": ["build_compilation_failure"],
+ "note": "Real Jenkins console from the live evaluation, 2026-11-19 (an import of a missing module). The injector's scenario file labels this fault dependency_regression; the Jenkins agent's rules and its own tests call an import error a build_compilation_failure. Both are accepted here and the evaluation reports the strict and the lenient figure."}

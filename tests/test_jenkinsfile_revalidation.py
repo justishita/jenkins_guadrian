@@ -41,3 +41,13 @@ def test_a_failing_fix_build_is_a_failed_re_validation_not_a_new_incident() -> N
 
 def test_the_parameters_stay_declared_so_an_explicit_trigger_keeps_working() -> None:
     assert "name: 'INCIDENT_ID'" in JENKINSFILE and "name: 'REMEDIATION_ATTEMPT'" in JENKINSFILE
+
+
+def test_failed_stage_is_not_shadowed_by_an_environment_block() -> None:
+    """A value declared in `environment {}` shadows later `env.FAILED_STAGE = ...` assignments: the stage guards never skipped Build and
+    Deploy after a failed Test, and every incident arrived with failed_stage "" (found live, 2026-11-19)."""
+    assert not re.search(r"environment\s*\{[^}]*FAILED_STAGE", JENKINSFILE)
+    for stage in ("Test", "Build", "Deploy"):
+        body = re.search(rf"stage\('{stage}'\) \{{(.*?)\n\t\t\}}", JENKINSFILE, re.DOTALL).group(1)
+        assert "when { expression { !env.FAILED_STAGE } }" in body, f"{stage} must be skipped once an earlier stage failed"
+    assert JENKINSFILE.count("env.FAILED_STAGE = '") >= 6  # each stage still records where it is, and clears it on success

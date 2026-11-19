@@ -52,6 +52,11 @@ EXPECTED = {
     "tc02_compile_import": "dependency_regression",
     "tc10_flaky": "flaky_test",
 }
+#: Labels the project's own files disagree about. `scenarios/jenkins_tc02_compile_import.json` (the injector's ground truth) calls a missing-module
+#: import a dependency_regression; the Jenkins agent's rules and its tests (`test_collection_import_error_is_compilation_failure_not_test_failure`)
+#: call it a build_compilation_failure. The headline stays strict (the injector's label); the lenient figure is printed next to it so that
+#: neither definition is chosen after seeing the results.
+ALSO_ACCEPTED: dict[str, set[str]] = {"tc02_compile_import": {"build_compilation_failure"}}
 AGENTS = ("jenkins_agent", "metrics_agent", "code_agent")
 BRANCH = re.compile(r"^fault/(?P<scenario>.+)-\d{8}T\d+Z$")
 INCIDENT_SQL = (
@@ -81,6 +86,7 @@ class Sample:
     verdict: str | None = None
     confidence: float | None = None
     correct: bool | None = None
+    lenient: bool | None = None  # correct, or the other label the project's files accept for this fault
     complete: bool | None = None
     conflicted: bool | None = None
     actionable: bool | None = None
@@ -161,6 +167,7 @@ def build_sample(row: dict[str, Any], reports_dir: Path) -> Sample:
     sample.verdict = shown.get("verdict")
     sample.confidence = shown.get("confidence")
     sample.correct = sample.verdict == expected
+    sample.lenient = sample.verdict in ({expected} | ALSO_ACCEPTED.get(scenario, set()))
     sample.complete = bool(shown.get("complete"))
     sample.conflicted = bool(shown.get("conflicted"))
     sample.actionable = bool(shown.get("actionable"))
@@ -248,6 +255,7 @@ def score(samples: list[Sample]) -> dict[str, Any]:
         "confidence": {"mean_when_right": mean([s.confidence for s in right if s.confidence is not None]),
                        "mean_when_wrong": mean([s.confidence for s in wrong if s.confidence is not None])},
         "any_agent_right": rate(sum(1 for s in scored if any(f.correct for f in s.agents.values())), len(scored)),
+        "coordinator_lenient": rate(sum(1 for s in scored if s.lenient), len(scored)),
     }
 
 
@@ -271,6 +279,12 @@ def render_markdown(samples: list[Sample], result: dict[str, Any], generated_at:
         "## Headline",
         "",
         f"- **Coordinator verdict correct: {pct(result['coordinator'])}**",
+        *(
+            [f"- Counting `build_compilation_failure` as right for the import fault too (the project's files disagree about that label; see `ALSO_ACCEPTED`): "
+             f"{pct(result['coordinator_lenient'])}"]
+            if result["coordinator_lenient"]["correct"] != result["coordinator"]["correct"]
+            else []
+        ),
         f"- At least one agent named the right cause: {pct(result['any_agent_right'])}",
         f"- Incidents scored: {scored}" + (f"; still without a report: {', '.join(result['pending'])}" if result["pending"] else ""),
     ]

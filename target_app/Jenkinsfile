@@ -59,9 +59,10 @@ pipeline {
 		string(name: 'REMEDIATION_ATTEMPT', defaultValue: '0', description: 'Remediation attempt number')
 	}
 
-	environment {
-		FAILED_STAGE = ''
-	}
+	// FAILED_STAGE is deliberately NOT declared in an environment {} block. A value declared there shadows the later
+	// `env.FAILED_STAGE = 'Test'` assignments, so it stayed '' for every later stage and for the failure webhook: the `when` guards
+	// never skipped Build and Deploy after a failed Test (broken code was deployed, and parallel builds raced for one container name)
+	// and every incident reported failed_stage "". Unset reads as false in `!env.FAILED_STAGE`, so no initial value is needed.
 
 	stages {
 		stage('Checkout') {

@@ -36,7 +36,9 @@ STAGE_NAMES = {
     "deploy": {"deploy", "deployment"},
 }
 
-ASSERTION_RE = re.compile(r"\bAssertionError\b", re.IGNORECASE)
+# pytest -q prints `FAILED tests/x.py::test - assert 3 == 4`: the message starts with `assert`, and the word AssertionError is on another
+# line of the report, so requiring the word missed every real assertion failure.
+ASSERTION_RE = re.compile(r"\bAssertionError\b|^\s*assert\b", re.IGNORECASE | re.MULTILINE)
 COMPILATION_RE = re.compile(
     r"\b(?:SyntaxError|ImportError|ModuleNotFoundError)\b|\b(?:fatal\s+)?error:",
     re.IGNORECASE,
@@ -74,8 +76,12 @@ FLAKY_HISTORY_RE = re.compile(
     r"\bpassed\b.*(?:same commit|commit unchanged|same revision)",
     re.IGNORECASE,
 )
+# A real pytest report headlines a collection error with an underscore rule (`____ ERROR collecting x.py ____`), then repeats it in the short
+# summary (`ERROR tests/x.py`) and ends with `Interrupted: 1 error during collection`. Only a bare `ERROR collecting` line was recognised,
+# so a SyntaxError raised while pytest imported the app was classified `unknown` (0.2) in a real build.
 PYTEST_COLLECTION_RE = re.compile(
-    r"^\s*(?:ERROR\s+collecting\s+|ImportError while importing test module)",
+    r"^\s*(?:_{3,}\s*)?ERROR\s+collecting\s+|ImportError while importing test module|"
+    r"Interrupted:\s*\d+\s+errors?\s+during\s+collection|^ERROR\s+\S+\.py\b",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -104,6 +110,11 @@ def _compiler_errors(parsed: ParsedBuild) -> list[str]:
     ]
 
 
+#: The shell trace of the pipeline's own install step (`+ .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt`)
+#: matched DEPENDENCY_RE's `pip ... version` in every build and made every failure look like a dependency regression (0.65).
+PIP_COMMAND_NOISE_RE = re.compile(r"--disable-pip-version-check|^\s*(?:\[[^\]]*\]\s*)?\+\s.*$", re.MULTILINE)
+
+
 def _dependency_evidence(parsed: ParsedBuild) -> list[str]:
     evidence_ids = [
         f"compiler_errors[{index}]"
@@ -113,7 +124,7 @@ def _dependency_evidence(parsed: ParsedBuild) -> list[str]:
     evidence_ids.extend(
         f"error_blocks[{index}]"
         for index, block in enumerate(parsed.error_blocks)
-        if DEPENDENCY_RE.search(block)
+        if DEPENDENCY_RE.search(PIP_COMMAND_NOISE_RE.sub('', block))
     )
     return list(dict.fromkeys(evidence_ids))
 

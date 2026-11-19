@@ -64,6 +64,7 @@ PYTEST_SUMMARY_RE = re.compile(
     r"^\s*FAILED\s+(?P<file>.+?\.py)::(?P<name>[^\s]+)(?:\s+-\s+(?P<message>.*))?$"
 )
 PYTEST_HEADER_RE = re.compile(r"^\s*_{3,}\s*(.*?)\s*_{3,}\s*$")
+PYTEST_SECTION_RE = re.compile(r"^=+ .+ =+$")
 FILE_LINE_RE = re.compile(r"(?P<file>(?:[A-Za-z]:)?[^:\n]*?\.py):(?P<line>\d+)(?=[:\s])")
 PYTHON_FRAME_RE = re.compile(r'^\s*File ["\'](?P<file>.+?)["\'], line (?P<line>\d+)')
 PYTHON_EXCEPTION_RE = re.compile(
@@ -84,6 +85,10 @@ TIMEOUT_RE = re.compile(
     r"timeout|timed out|read timed out|connectionrefused|connection refused|connection reset",
     re.IGNORECASE,
 )
+#: Lines that mention "timeout" in EVERY build and say nothing about this failure: the git plugin's command echoes
+#: (`> git init ... # timeout=10`), `[Pipeline] timeout` markers and the "Timeout set to expire" banner. Counting them made every failed Test
+#: stage look like a timeout (0.85) in the rules, whatever actually failed.
+TIMEOUT_NOISE_RE = re.compile(r"^\s*>\s*git\b|#\s*timeout=\d+|\[Pipeline\]|Timeout set to expire|\btimeout\s*\(", re.IGNORECASE)
 AUTH_SIGNAL_RE = re.compile(
     r"\b(?:401|403)\b|permission denied|authentication failed|invalid token|"
     r"could not read username|publickey|access denied",
@@ -232,10 +237,18 @@ def parse_pytest_failures(text: str) -> list[FailingTest]:
     failures: dict[tuple[str, str | None], FailingTest] = {}
     for header_index, (start, name) in enumerate(headers):
         end = headers[header_index + 1][0] if header_index + 1 < len(headers) else len(lines)
+        # The last block used to run to the end of the output, through "short test summary info" and "warnings summary", and took the
+        # last file:line it found: a frame inside site-packages (starlette/testclient.py) instead of the test file.
+        for position in range(start + 1, end):
+            if PYTEST_SECTION_RE.match(lines[position].strip()):
+                end = position
+                break
         block = "\n".join(lines[start:end])
         locations = list(FILE_LINE_RE.finditer(block))
-        file_name = locations[-1].group("file").strip() if locations else None
-        line_number = int(locations[-1].group("line")) if locations else None
+        in_project = [m for m in locations if "site-packages" not in m.group("file") and "/.venv/" not in m.group("file")]
+        chosen = in_project or locations
+        file_name = chosen[-1].group("file").strip() if chosen else None
+        line_number = int(chosen[-1].group("line")) if chosen else None
         summary_entry = next(
             (
                 entry
@@ -434,7 +447,7 @@ def parse_build(
             for line in lines
             if (match := EXIT_CODE_RE.search(line))
         ],
-        timeouts=list(dict.fromkeys(line.strip() for line in lines if TIMEOUT_RE.search(line))),
+        timeouts=list(dict.fromkeys(line.strip() for line in lines if TIMEOUT_RE.search(line) and not TIMEOUT_NOISE_RE.search(line))),
         auth_signals=list(dict.fromkeys(line.strip() for line in lines if AUTH_SIGNAL_RE.search(line))),
         error_signature=compute_error_signature(failed_stage, error_blocks),
     )

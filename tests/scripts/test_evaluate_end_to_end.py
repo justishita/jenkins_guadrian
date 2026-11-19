@@ -194,3 +194,18 @@ def test_a_branches_file_written_all_on_one_line_still_reads(reports, tmp_path):
     out = tmp_path / "e2e"
     assert main(["--incidents-file", str(incidents), "--reports-dir", str(reports), "--branches", str(branches), "--out", str(out)]) == 0
     assert json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))["result"]["scored"] == 2
+
+
+def test_the_import_fault_is_scored_strictly_and_leniently_because_the_project_labels_it_two_ways(reports):
+    """scenarios/jenkins_tc02_compile_import.json says dependency_regression; the Jenkins agent's rules and tests say build_compilation_failure.
+    The headline stays strict, the other label is counted separately, and no other fault gets an alternate label."""
+    assert SCRIPT["ALSO_ACCEPTED"] == {"tc02_compile_import": {"build_compilation_failure"}}
+    write_report(reports, "aaaa1111", "build_compilation_failure", three("build_compilation_failure", "unknown", "unknown", m=True, c=True))
+    write_report(reports, "bbbb2222", "code_test_failure", three("code_test_failure", "unknown", "unknown", m=True, c=True))
+    strict_wrong = build_sample(row("aaaa1111", "tc02_compile_import"), reports)
+    other_fault = build_sample(row("bbbb2222", "tc02_compile_syntax"), reports)  # wrong for the syntax fault, and nothing excuses it
+    assert strict_wrong.correct is False and strict_wrong.lenient is True
+    assert other_fault.correct is False and other_fault.lenient is False
+    result = score([strict_wrong, other_fault])
+    assert result["coordinator"]["correct"] == 0 and result["coordinator_lenient"]["correct"] == 1
+    assert "Counting `build_compilation_failure` as right for the import fault" in render_markdown([strict_wrong, other_fault], result, "now")
