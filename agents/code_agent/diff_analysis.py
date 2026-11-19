@@ -65,7 +65,8 @@ TEST_PATH_RE = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*\.py$|_test\.py$|\.test\
 
 #: `name==1.2.3`, `name>=1.2`, `"name": "^1.2.3"`. Captures the name and the specifier.
 PINNED_REQUIREMENT_RE = re.compile(
-    r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?P<operator>==|>=|<=|~=|>|<)\s*(?P<version>[0-9][^\s;#,\]\)]*)"
+    # `uvicorn[standard]==0.34.0`: pip extras sit between the name and the operator and are not part of the package name
+    r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?P<operator>==|>=|<=|~=|>|<)\s*(?P<version>[0-9][^\s;#,\]\)]*)"
 )
 JSON_DEPENDENCY_RE = re.compile(
     r'^\s*"(?P<name>[@A-Za-z0-9][^"]*)"\s*:\s*"(?P<version>[^"]+)"'

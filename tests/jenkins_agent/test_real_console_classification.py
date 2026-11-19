@@ -83,6 +83,20 @@ def test_a_genuine_dependency_failure_is_still_a_dependency_failure() -> None:
     assert FailureTaxonomy.DEPENDENCY_REGRESSION in types
 
 
+def test_a_pin_to_a_version_that_does_not_exist_is_a_dependency_regression_on_pips_own_words() -> None:
+    """Found on the live Azure run (TC-03): the real console has no ModuleNotFoundError line, only pip's two ERROR lines."""
+    log = (
+        "[2026-11-19T17:46:30.000Z] + .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt\n"
+        "[2026-11-19T17:46:31.000Z] ERROR: Ignored the following yanked versions: 0.17.0\n"
+        "[2026-11-19T17:46:31.000Z] ERROR: Could not find a version that satisfies the requirement uvicorn==0.99.0 (from versions: 0.0.1, 0.34.0)\n"
+        "[2026-11-19T17:46:31.000Z] ERROR: No matching distribution found for uvicorn==0.99.0\n"
+        "[2026-11-19T17:46:32.000Z] ERROR: script returned exit code 1\n"
+    )
+    hypotheses = rule_based_classify(parse_build(log, failed_stage="Setup"))
+    assert hypotheses, "no rule hypothesis at all"
+    assert hypotheses[0].failure_type == FailureTaxonomy.DEPENDENCY_REGRESSION
+
+
 def test_a_real_timeout_message_still_counts() -> None:
     log = "[2026-11-19T11:00:00.000Z] FAILED tests/test_x.py::test_slow - Failed: Timeout >600.0s\n[2026-11-19T11:00:01.000Z] ReadTimeout: read timed out\n"
     assert parse_build(log, failed_stage="Test").timeouts

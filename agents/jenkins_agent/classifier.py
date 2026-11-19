@@ -52,7 +52,10 @@ PYTHON_COMPILE_SPECIFIC_RE = re.compile(
     re.IGNORECASE,
 )
 DEPENDENCY_RE = re.compile(
-    r"\bModuleNotFoundError\b|(?:pip|python\s+-m\s+pip).*"
+    r"\bModuleNotFoundError\b|"
+    # pip's own words for a pin that does not exist or cannot be resolved: neither line contains the word "pip"
+    r"Could not find a version that satisfies the requirement|No matching distribution found|ResolutionImpossible|"
+    r"(?:pip|python\s+-m\s+pip).*"
     r"(?:resolution|resolve|conflict|incompatible|version)|"
     r"(?:resolution|dependency|version).*(?:conflict|incompatible|failed)",
     re.IGNORECASE,

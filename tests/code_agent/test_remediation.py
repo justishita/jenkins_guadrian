@@ -89,6 +89,24 @@ def test_only_the_pin_that_moved_is_touched() -> None:
 	assert [edit.after for edit in plan.edits] == ["httpx==0.28.1"]
 
 
+def test_a_pin_with_extras_is_parsed_by_package_name() -> None:
+	"""Found on the live Azure run: the real manifest has `uvicorn[standard]==...`, which the parser used to skip,
+	so the Code agent saw a manifest change but no dependency change and answered unknown."""
+	from agents.code_agent.diff_analysis import _parse_dependency
+
+	assert _parse_dependency("uvicorn[standard]==0.34.0") == ("uvicorn", "==0.34.0")
+	assert _parse_dependency("httpx==0.28.1") == ("httpx", "==0.28.1")
+	assert _parse_dependency("pkg[a,b]>=1.2") == ("pkg", ">=1.2")
+
+
+def test_a_moved_pin_with_extras_is_moved_back_exactly() -> None:
+	patch = "@@ -11,1 +11,1 @@\n-uvicorn[standard]==0.34.0\n+uvicorn[standard]==0.99.0"
+	plan = propose_fix(report(DEP), [change("target_app/requirements.txt", patch)], base_ref=BASE)
+
+	assert isinstance(plan, FixPlan)
+	assert [(edit.before, edit.after) for edit in plan.edits] == [("uvicorn[standard]==0.99.0", "uvicorn[standard]==0.34.0")]
+
+
 def test_an_added_dependency_has_nothing_to_restore() -> None:
 	added = change("target_app/requirements.txt", "@@ -0,0 +1,1 @@\n+requests==2.32.0")
 
