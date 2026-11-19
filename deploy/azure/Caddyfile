@@ -1,0 +1,10 @@
+# HTTPS in front of the web UI. Caddy gets a Let's Encrypt certificate for $DOMAIN by itself (needs ports 80 and 443 reachable from the
+# internet, and the name to point at this VM: the Azure DNS label <label>.<region>.cloudapp.azure.com does).
+# It runs with --network host, so 127.0.0.1:3001 is the UI container's published port.
+#
+# Nothing else is exposed: the API (8000), Jenkins (8080) and the dev tools are not reachable from outside. The UI proxies the API and
+# the embedded Grafana itself, behind its own sign-in.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy 127.0.0.1:3001
+}
