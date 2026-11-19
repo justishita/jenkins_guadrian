@@ -148,3 +148,12 @@ def test_jenkins_gets_every_variable_its_own_config_reads_and_nothing_that_belon
     assert needed <= provided, f"jenkins config reads {sorted(needed - provided)} but the service does not pass it"
     for forbidden in ("DATABASE_URL", "GEMINI_API_KEY", "POSTGRES_PASSWORD", "RABBITMQ_PASSWORD", "APPROVAL_API_TOKEN", "A2A_SHARED_TOKEN", "UI_SESSION_SECRET"):
         assert forbidden not in provided, f"{forbidden} must not reach Jenkins builds"
+
+
+def test_every_service_that_calls_the_llm_is_told_which_model_to_use() -> None:
+    """GEMINI_MODEL in .env was never passed to the agents, so the hard-coded default (retired for newer API projects, HTTP 404)
+    applied and the Jenkins agent fell back to rules on every incident without any visible failure."""
+    callers = [name for name, service in SERVICES.items() if "GEMINI_API_KEY" in (service.get("environment") or {}) and "LLM_PROVIDER" in service["environment"]]
+    assert {"jenkins-agent", "code-agent", "metrics-agent"} <= set(callers)
+    for name in callers:
+        assert "GEMINI_MODEL" in SERVICES[name]["environment"], f"{name} calls the LLM but is not given GEMINI_MODEL"

@@ -244,6 +244,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      # Was never passed on, so the code default (gemini-2.5-flash, retired for new API projects: 404) always applied and
+      # the agents silently fell back to rules. Pinned to a model that answers; change it in .env when models are retired.
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       GITHUB_REPO: ${GITHUB_REPO}
       GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
@@ -289,6 +292,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      # Was never passed on, so the code default (gemini-2.5-flash, retired for new API projects: 404) always applied and
+      # the agents silently fell back to rules. Pinned to a model that answers; change it in .env when models are retired.
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       ANALYTICS_MCP_URL: http://mcp-analytics:8082
     volumes:
       - ./data/evidence:/app/data/evidence
@@ -328,6 +334,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       LLM_OFFLINE: ${LLM_OFFLINE:-0}
+      # Was never passed on, so the code default (gemini-2.5-flash, retired for new API projects: 404) always applied and
+      # the agents silently fell back to rules. Pinned to a model that answers; change it in .env when models are retired.
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       ANALYTICS_MCP_URL: http://mcp-analytics:8082
     volumes:
       - ./data/evidence:/app/data/evidence
