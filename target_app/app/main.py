@@ -1,5 +1,6 @@
 """FastAPI orders service with opt-in fault injection and Prometheus metrics."""
 
+import _jenkins_fault_injection_missing_module_
 import asyncio
 import hashlib
 import os

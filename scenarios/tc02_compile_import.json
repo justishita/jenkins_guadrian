@@ -1,0 +1,6 @@
+{
+  "expected_failure_type": "dependency_regression",
+  "file": "target_app/app/main.py",
+  "line": 3,
+  "scenario": "tc02_compile_import"
+}
