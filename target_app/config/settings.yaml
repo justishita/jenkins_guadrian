@@ -1,5 +1,5 @@
 database_url: null
-database_timeout_seconds: 3
+database_timeout_seconds: -5
 enable_slow: false
 enable_cpu: false
 enable_leak: false
